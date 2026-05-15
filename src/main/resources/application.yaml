@@ -1,3 +1,12 @@
 spring:
   application:
     name: vps-personal-backend
+
+  r2dbc:
+    url: r2dbc:postgresql://faizulmushofa@localhost:5432/vps_personal
+
+  sql:
+    init:
+      mode: always
+jwt :
+  secret: "thisismysecretwhichisverylongandsecureenough"

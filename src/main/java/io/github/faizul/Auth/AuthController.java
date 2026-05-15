@@ -1,21 +1,60 @@
 package io.github.faizul.Auth;
 
-import io.github.faizul.Auth.Dtos.RegisterRequest;
-import io.github.faizul.Auth.Dtos.RegisterResponse;
+import io.github.faizul.Auth.Dtos.*;
+import io.github.faizul.Utils.Cookie.CookieFactory;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("api/auth")
 public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public Mono<RegisterResponse> register(@RequestBody RegisterRequest request){
-        return authService.register(request);
+    public Mono<ResponseEntity<RegisterResponse>> register(@RequestBody RegisterRequest request){
+        return authService.register(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
+
+    @PostMapping("/login")
+    public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest request, ServerHttpResponse response){
+        return authService.login(request)
+                .map(e -> {
+                    response.addCookie(
+                            CookieFactory.createRefreshTokenCookie(e.refreshToken())
+                    );
+                    return ResponseEntity.ok(
+                            new LoginResponse(
+                                    "Login Succesfully",
+                                    e.accessToken()
+                            )
+                    );
+                });
+    }
+
+    @PostMapping("/refresh")
+    public Mono<ResponseEntity<RefreshResponse>> refresh(
+            @CookieValue("refreshToken") String refreshToken,
+            ServerHttpResponse response
+    ){
+        return authService.refresh(refreshToken)
+                .map(e -> {
+                    response.addCookie(
+                            CookieFactory.createRefreshTokenCookie(e.Token())
+                    );
+                    return ResponseEntity.ok(
+                            new RefreshResponse(
+                                    e.message()
+                            )
+                    );
+                });
+    }
+
+
+
 }

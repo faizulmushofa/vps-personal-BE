@@ -1,0 +1,129 @@
+package io.github.faizul.Seeder;
+
+import io.github.faizul.Role.Role;
+import io.github.faizul.Role.RoleRepository;
+import io.github.faizul.Role.Roles;
+import io.github.faizul.User.User;
+import io.github.faizul.User.UserRepository;
+import io.github.faizul.UserRole.UserRole;
+import io.github.faizul.UserRole.UserRoleRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.core.publisher.Mono;
+
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class DatabaseSeeder implements CommandLineRunner {
+
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final DatabaseClient databaseClient;
+
+    @Override
+    public void run(String... args) throws Exception {
+        log.info("Starting database seeder...");
+        createSchema()
+                .then(seedRoles())
+                .then(seedUsers())
+                .subscribe(
+                        success -> log.info("Successfully seeded users and roles!"),
+                        error -> log.error("Error seeding database: {}", error.getMessage()),
+                        () -> log.info("Database seeding completed.")
+                );
+    }
+
+    private Mono<Void> seedRoles() {
+        return roleRepository.count()
+                .flatMap(count -> {
+                    if (count == 0) {
+                        log.info("Seeding roles (ADMIN, USER)...");
+                        Role adminRole = Role.builder().name(Roles.ADMIN).build();
+                        Role userRole = Role.builder().name(Roles.USER).build();
+                        return roleRepository.save(adminRole)
+                                .then(roleRepository.save(userRole));
+                    }
+                    return Mono.empty();
+                }).then();
+    }
+
+    private Mono<Void> seedUsers() {
+        return userRepository.count()
+                .flatMap(count -> {
+                    if (count == 0) {
+                        log.info("Seeding users (Admin and Regular User)...");
+                        User admin = User.builder()
+                                .username("admin")
+                                .email("admin@example.com")
+                                .password(passwordEncoder.encode("password"))
+                                .build();
+
+                        User user = User.builder()
+                                .username("user")
+                                .email("user@example.com")
+                                .password(passwordEncoder.encode("password"))
+                                .build();
+
+                        return userRepository.save(admin)
+                                .zipWith(roleRepository.findByName(Roles.ADMIN))
+                                .flatMap(tuple -> userRoleRepository.save(
+                                        UserRole.builder()
+                                                .userId(tuple.getT1().getId())
+                                                .roleId(tuple.getT2().getId())
+                                                .build()
+                                ))
+                                .then(userRepository.save(user))
+                                .zipWith(roleRepository.findByName(Roles.USER))
+                                .flatMap(tuple -> userRoleRepository.save(
+                                        UserRole.builder()
+                                                .userId(tuple.getT1().getId())
+                                                .roleId(tuple.getT2().getId())
+                                                .build()
+                                ));
+                    }
+                    return Mono.empty();
+                }).then();
+    }
+
+    private Mono<Void> createSchema() {
+        String schema = """
+                CREATE TABLE IF NOT EXISTS users (
+                    id BIGSERIAL PRIMARY KEY,
+                    username VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    password VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    deleted_at TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS roles (
+                    id BIGSERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS user_roles (
+                    user_id BIGINT NOT NULL,
+                    role_id BIGINT NOT NULL,
+                    PRIMARY KEY (user_id, role_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS refresh_token (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    token VARCHAR(255) NOT NULL,
+                    revoked BOOLEAN DEFAULT FALSE,
+                    expired_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                """;
+        log.info("Initializing database schema...");
+        return databaseClient.sql(schema).then();
+    }
+}

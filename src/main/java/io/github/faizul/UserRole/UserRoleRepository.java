@@ -1,6 +1,5 @@
-package io.github.faizul.User;
+package io.github.faizul.UserRole;
 
-import io.github.faizul.UserRole.UserRole;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 
 public interface UserRoleRepository extends ReactiveCrudRepository<UserRole,Long> {

@@ -1,7 +1,7 @@
 package io.github.faizul.Auth.Dtos;
 
-public record LoginResponse(
+public record ResponseRefreshInternal(
         String message,
-        String accessToken
+        String Token
 ) {
 }
