@@ -1,12 +1,7 @@
-package io.github.faizul.Utils.Mappings;
+package io.github.faizul.Auth;
 
 import io.github.faizul.Auth.Dtos.RegisterRequest;
-import io.github.faizul.Auth.Dtos.RegisterResponse;
-import io.github.faizul.User.Dtos.UserDto;
 import io.github.faizul.User.User;
-import reactor.core.publisher.Mono;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 public class AuthMapper {
 

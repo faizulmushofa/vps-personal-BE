@@ -1,4 +1,4 @@
-package io.github.faizul.Utils.Cookie;
+package io.github.faizul.Infra.Web;
 
 import org.springframework.http.ResponseCookie;
 import java.time.Duration;

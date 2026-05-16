@@ -1,10 +1,7 @@
-package io.github.faizul.Utils.Mappings;
+package io.github.faizul.User;
 
 import io.github.faizul.User.Dtos.UserDto;
-import io.github.faizul.User.User;
 import lombok.RequiredArgsConstructor;
-
-import java.time.LocalDateTime;
 
 @RequiredArgsConstructor
 public class UserMapper {

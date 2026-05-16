@@ -1,7 +1,6 @@
-package io.github.faizul.Config.Security;
+package io.github.faizul.Infra.Security;
 
 import io.github.faizul.User.User;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -10,11 +9,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 
-@RequiredArgsConstructor
 public class UserDetailImp implements UserDetails {
 
-    private User user;
-    private List<SimpleGrantedAuthority> authorities;
+    private final User user;
+    private final List<SimpleGrantedAuthority> authorities;
 
     public UserDetailImp(User user, List<SimpleGrantedAuthority> authorities) {
     this.user = user;

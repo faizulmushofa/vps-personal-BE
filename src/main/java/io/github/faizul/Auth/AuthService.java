@@ -4,8 +4,6 @@ import io.github.faizul.Auth.Dtos.*;
 import io.github.faizul.Jwt.JwtService;
 import io.github.faizul.User.UserRepository;
 import io.github.faizul.User.UserService;
-import io.github.faizul.UserRole.UserRoleService;
-import io.github.faizul.Utils.Mappings.AuthMapper;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;

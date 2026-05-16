@@ -1,7 +1,7 @@
 package io.github.faizul.Auth;
 
 import io.github.faizul.Auth.Dtos.*;
-import io.github.faizul.Utils.Cookie.CookieFactory;
+import io.github.faizul.Infra.Web.CookieFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
