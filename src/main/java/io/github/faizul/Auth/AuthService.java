@@ -27,25 +27,17 @@ public class AuthService {
 
     }
 
-    public Mono<Response> login(LoginRequest request){
+    public Mono<Response> login(LoginRequest request) {
+
         return userRepository.findByEmail(request.email())
-                .flatMap(e -> {
-                    if (e == null) {
-                        return Mono.error(new UsernameNotFoundException("Invalid email or password"));
-                    }
-                    if (!passwordEncoder.matches(request.password(), e.getPassword())) {
-                        return Mono.error(new UsernameNotFoundException("Invalid email or password"));
-                    }
+                .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
+                .filter(user -> passwordEncoder.matches(request.password(), user.getPassword()))
+                .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
+                .flatMap(user -> {
+                    String accessToken = jwtService.generateAccessToken(user);
 
-                    String accessToken = jwtService.generateAccessToken(e);
-
-                    return jwtService.generateRefreshToken(e)
-                            .map( refreshToken -> new Response(
-                                    accessToken,
-                                    refreshToken
-                            ));
-
-
+                    return jwtService.generateRefreshToken(user)
+                            .map(refreshToken -> new Response(accessToken, refreshToken));
                 });
     }
 

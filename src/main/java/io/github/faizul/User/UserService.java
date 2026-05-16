@@ -53,7 +53,7 @@ public class UserService {
                 .map(UserMapper::UserToDto);
     }
 
-    private Mono<UserDto> getUserById(Long id){
+    public Mono<UserDto> getUserById(Long id){
         return this.userRepository.existsById(id)
                 .flatMap(exist -> {
                     if (!exist){

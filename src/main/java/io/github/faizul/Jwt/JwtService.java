@@ -90,6 +90,31 @@ public class JwtService {
                 .build().parseSignedClaims(token)
                 .getPayload();
     }
+    private boolean isTokenExpired(String token) {
+        return extractAllClaims(token)
+                .getExpiration()
+                .before(new Date());
+    }
+
+    private Claims extractAllClaims(String token) {
+        SecretKey secretKey = Keys.hmacShaKeyFor(SECRET.getBytes());
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+    public boolean isValid(String token) {
+
+        try {
+            return !isTokenExpired(token);
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
 
 
 }
