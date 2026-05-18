@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package upload;
+
+import "common/chunk.proto";
+import "common/response.proto";
+
+option java_multiple_files = true;
+option java_package = "io.github.storagenode.grpc.upload";
+
+service UploadService {
+
+  rpc UploadBatch(stream common.UploadChunkRequest)
+      returns (common.UploadBatchResponse);
+
+  rpc FinalizeUpload(common.FinalizeRequest)
+      returns (common.FinalizeResponse);
+}

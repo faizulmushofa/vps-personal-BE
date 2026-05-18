@@ -10,5 +10,5 @@ import java.util.UUID;
  */
 public interface StorageClient {
     Mono<Void> sendBatch(UUID fileId, int startChunk, int endChunk);
-    Mono<Void> sendFinalSignal(UUID fileId);
+    Mono<Void> sendFinalSignal(UUID fileId, int totalChunks);
 }

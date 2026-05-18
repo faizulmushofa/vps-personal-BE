@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storage Upload</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section id="loginPage" class="panel">
+      <div class="header">
+        <p class="eyebrow">Backend Storage</p>
+        <h1>Login</h1>
+      </div>
+
+      <form id="loginForm" class="form">
+        <label>
+          Email
+          <input id="email" type="email" autocomplete="email" required>
+        </label>
+
+        <label>
+          Password
+          <input id="password" type="password" autocomplete="current-password" required>
+        </label>
+
+        <button id="loginButton" type="submit">Masuk</button>
+      </form>
+    </section>
+
+    <section id="uploadPage" class="panel hidden">
+      <div class="header row">
+        <div>
+          <p class="eyebrow">Backend Storage</p>
+          <h1>Upload File</h1>
+        </div>
+
+        <button id="logoutButton" class="secondary" type="button">Logout</button>
+      </div>
+
+      <form id="uploadForm" class="form">
+        <label>
+          Pilih file
+          <input id="file" type="file" required>
+        </label>
+
+        <button id="uploadButton" type="submit">Kirim File</button>
+      </form>
+
+      <div class="progress">
+        <div id="progressBar"></div>
+      </div>
+    </section>
+
+    <pre id="status" class="status"></pre>
+
+    <section class="debug-panel">
+      <div class="debug-header">
+        <strong>Request Debugger</strong>
+        <button id="clearDebugButton" class="secondary small" type="button">Clear</button>
+      </div>
+      <pre id="debugLog" class="debug-log"></pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

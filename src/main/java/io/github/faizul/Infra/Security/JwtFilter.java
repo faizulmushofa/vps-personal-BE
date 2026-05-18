@@ -6,6 +6,8 @@ import io.github.faizul.Role.RoleRepository;
 import io.github.faizul.User.UserRepository;
 import io.github.faizul.UserRole.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -17,8 +19,11 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtFilter implements WebFilter {
 
     private final UserRepository userRepository;
@@ -36,21 +41,29 @@ public class JwtFilter implements WebFilter {
         }
 
         if (!jwtService.isValid(token)) {
-            return chain.filter(exchange);
+            exchange.getResponse().getHeaders().add("X-Auth-Debug", "invalid-token");
+            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return exchange.getResponse().setComplete();
         }
 
         String email = jwtService.extractEmail(token);
 
         return authenticate(email)
+                // Kalau user tidak ditemukan di DB (token valid tapi user dihapus) → reject 401.
+                .onErrorResume(e -> {
+                    log.warn("JWT authentication failed: {}", e.getMessage());
+                    exchange.getResponse().getHeaders().add("X-Auth-Debug", "authentication-error");
+                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    return Mono.empty();
+                })
                 .flatMap(authentication ->
-
                         chain.filter(exchange)
                                 .contextWrite(
                                         ReactiveSecurityContextHolder.withAuthentication(authentication)
                                 )
-                )
-                .onErrorResume(e -> chain.filter(exchange));
+                );
     }
+
     private String resolveToken(ServerWebExchange exchange) {
 
         String header = exchange.getRequest()
@@ -62,34 +75,33 @@ public class JwtFilter implements WebFilter {
         }
 
         return null;
-
     }
+
     private Mono<Authentication> authenticate(String email) {
 
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new RuntimeException("User not found")))
-                .flatMap(user ->
+                .flatMap(user -> userRoleRepository.findByUserId(user.getId())
+                        .flatMap(userRole -> roleRepository.findById(userRole.getRoleId()))
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName().name()))
+                        .collectList()
+                        .onErrorResume(e -> {
+                            log.warn("Role lookup failed for user {}: {}", user.getId(), e.getMessage());
+                            return Mono.just(List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                        })
+                        .map(authorities -> {
+                            List<SimpleGrantedAuthority> effectiveAuthorities = authorities.isEmpty()
+                                    ? List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                                    : authorities;
 
-                        userRoleRepository.findByUserId(user.getId())
-                                .flatMap(userRole ->
-                                        roleRepository.findById(userRole.getRoleId())
-                                )
-                                .map(role ->
-                                        new SimpleGrantedAuthority(role.getName().name())
-                                )
-                                .collectList()
-                                .map(authorities -> {
+                            UserDetails userDetails = new UserDetailImp(user, effectiveAuthorities);
 
-                                    UserDetails userDetails =
-                                            new UserDetailImp(user,authorities);
-
-                                    return new UsernamePasswordAuthenticationToken(
-                                            userDetails,
-                                            null,
-                                            authorities
-                                    );
-                                })
-                );
+                            return (Authentication) new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    effectiveAuthorities
+                            );
+                        }));
     }
 
 }

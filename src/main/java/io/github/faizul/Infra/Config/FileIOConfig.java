@@ -5,22 +5,21 @@ import org.springframework.context.annotation.Configuration;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 @Configuration
 public class FileIOConfig {
-    final int threadSize = 8;
 
-    @Bean(destroyMethod = "shutdown")
-    public ExecutorService fileWriterExecutor() {
-        return Executors.newFixedThreadPool(threadSize);
-    }
     @Bean
-    public Scheduler fileWriteScheduler(ExecutorService fileWriteExecutor) {
-        return Schedulers.fromExecutorService(fileWriteExecutor);
+    public Scheduler fileWriteScheduler() {
+        return Schedulers.newBoundedElastic(10, 100000, "file-writer");
     }
 
+    @Bean
+    public Scheduler fileCleanupScheduler() {
+        return Schedulers.newBoundedElastic(10, 100000, "file-cleaner");
+    }
 
-
+    @Bean
+    public Scheduler grpcDispatchScheduler() {
+        return Schedulers.newBoundedElastic(20, 10000, "grpc-dispatcher");
+    }
 }

@@ -6,13 +6,14 @@ import io.github.faizul.Infra.Security.CurrentUserContext;
 import io.github.faizul.File.Dtos.UploadSessionResponse;
 import io.github.faizul.File.Dtos.InitRequest;
 import io.github.faizul.File.Dtos.InitResponse;
+import io.github.faizul.Infra.Config.StorageConfig;
 import io.github.faizul.UploadUnit.Helper.Chunk;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.FileSystemUtils;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
+import reactor.core.scheduler.Scheduler;
 
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -26,6 +27,8 @@ public class UploadServiceImp implements UploadService {
     private final FileRepository fileRepository;
     private final UploadSessionRepository uploadSessionRepository;
     private final CurrentUserContext currentUserContext;
+    private final Scheduler fileCleanupScheduler;
+    private final StorageConfig storageConfig;
 
     @Override
     public Mono<InitResponse> create(InitRequest request) {
@@ -40,7 +43,7 @@ public class UploadServiceImp implements UploadService {
         }
 
         String storageName = UUID.randomUUID() + extension;
-        String tempPath = "temp/" + fileId;
+        String tempPath = storageConfig.tempDir(fileId).toString();
 
         return currentUserContext.getUserId()
                 .flatMap(userId -> {
@@ -126,7 +129,7 @@ public class UploadServiceImp implements UploadService {
                                             // Ignore
                                         }
                                     })
-                                    .subscribeOn(Schedulers.boundedElastic())
+                                    .subscribeOn(fileCleanupScheduler)
                                     .thenReturn(savedSession)
                             );
                 })

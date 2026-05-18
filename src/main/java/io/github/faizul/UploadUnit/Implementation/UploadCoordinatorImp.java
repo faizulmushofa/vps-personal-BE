@@ -8,6 +8,7 @@ import io.github.faizul.UploadUnit.UploadUnitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.multipart.FilePart;
+import reactor.core.publisher.Flux;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -88,7 +89,8 @@ public class UploadCoordinatorImp implements UploadCoordinator {
     private Mono<Void> handleCompletion(UUID fileId, int totalChunks) {
         log.info("[COMPLETION DETECTED] All chunks received for file {}", fileId);
         
-        return storageClient.sendFinalSignal(fileId)
+        return flushUnsentBatches(fileId, totalChunks)
+                .then(storageClient.sendFinalSignal(fileId, totalChunks))
                 .retryWhen(Retry.backoff(3,Duration.ofSeconds(1)))
                 .then(uploadService.updateUploadProgress(fileId, totalChunks))
                 .then(uploadService.markAsCompleted(fileId))
@@ -98,5 +100,29 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                     log.error("[COMPLETION ERROR] Failed to finalize file {}: {}", fileId, e.getMessage());
                     return Mono.error(e);
                 });
+    }
+
+    private Mono<Void> flushUnsentBatches(UUID fileId, int totalChunks) {
+        int totalBatches = (int) Math.ceil((double) totalChunks / BATCH_SIZE);
+
+        return Flux.range(0, totalBatches)
+                .concatMap(batchIndex -> {
+                    int batchStart = batchIndex * BATCH_SIZE;
+                    int batchEnd = Math.min(batchStart + BATCH_SIZE - 1, totalChunks - 1);
+
+                    return uploadUnitService.claimBatch(fileId, batchIndex)
+                            .flatMap(claimed -> {
+                                if (!claimed) {
+                                    return Mono.empty();
+                                }
+
+                                log.info("[COMPLETION FLUSH] Sending unsent batch {}-{} for file {}", batchStart, batchEnd, fileId);
+
+                                return storageClient.sendBatch(fileId, batchStart, batchEnd)
+                                        .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
+                                        .then(cleanupService.cleanupBatch(fileId, batchStart, batchEnd));
+                            });
+                })
+                .then();
     }
 }

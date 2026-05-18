@@ -25,13 +25,16 @@ public class JwtService {
     @Value("${jwt.secret}")
     private String SECRET;
 
+    @Value("${jwt.access-token-expiry-hours:24}")
+    private long accessTokenExpiryHours;
+
     public String generateAccessToken(User user){
         return Jwts.builder()
                 .subject(user.getEmail())
                 .claim("UserId",user.getId())
                 .issuedAt(new Date())
                 .expiration(Date.from(
-                        Instant.now().plus(Duration.ofMinutes(30))
+                        Instant.now().plus(Duration.ofHours(accessTokenExpiryHours))
                 ))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
                 .compact();

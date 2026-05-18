@@ -36,12 +36,12 @@ public class InMemoryImp implements UploadUnitTracker {
     @Override
     public boolean claimBatch(UUID fileId, int batchIndex) {
         Set<Integer> batches = claimedBatches.computeIfAbsent(fileId, k -> ConcurrentHashMap.newKeySet());
-        return batches.add(batchIndex); // Akan false jika sudah ada thread lain yang claim
+        return batches.add(batchIndex); 
     }
 
     @Override
     public boolean claimCompletion(UUID fileId) {
-        return claimedCompletions.putIfAbsent(fileId, true) == null; // Akan false jika thread lain sudah claim
+        return claimedCompletions.putIfAbsent(fileId, true) == null; 
     }
 
     @Override

@@ -1,5 +1,6 @@
 package io.github.faizul.UploadUnit.Implementation;
 
+import io.github.faizul.Infra.Config.StorageConfig;
 import io.github.faizul.UploadUnit.Helper.UploadFileSystem;
 import io.github.faizul.UploadUnit.UploadUnitWriter;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,6 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.UUID;
 
 @Component
@@ -18,11 +18,12 @@ public class UploadUnitWriterImp implements UploadUnitWriter {
 
     private final Scheduler fileWriteScheduler;
     private final UploadFileSystem fileSystem;
+    private final StorageConfig storageConfig;
 
     @Override
     public Mono<Void> write(UUID fileId, int index, FilePart part) {
 
-        Path dir = Paths.get("temp", fileId.toString());
+        Path dir = storageConfig.tempDir(fileId);
         Path target = dir.resolve("chunk-" + index);
 
         return Mono.fromCallable(() -> fileSystem.prepare(dir, target))

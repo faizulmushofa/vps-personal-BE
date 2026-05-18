@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
@@ -16,7 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table("upload_sessions")
-public class UploadSession {
+public class UploadSession implements Persistable<UUID> {
 
     @Id
     private UUID id;
@@ -35,5 +36,10 @@ public class UploadSession {
 
     @CreatedDate
     private Instant createdAt;
+
+    @Override
+    public boolean isNew() {
+        return createdAt == null;
+    }
 
 }
