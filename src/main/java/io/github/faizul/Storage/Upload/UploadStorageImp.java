@@ -2,9 +2,11 @@ package io.github.faizul.Storage.Upload;
 
 import com.google.protobuf.ByteString;
 import io.github.faizul.Infra.Config.StorageConfig;
-import io.github.storagenode.grpc.common.FinalizeRequest;
-import io.github.storagenode.grpc.common.UploadBatchResponse;
-import io.github.storagenode.grpc.common.UploadChunkRequest;
+import io.github.storagenode.grpc.upload.FinalizeRequest;
+import io.github.storagenode.grpc.upload.UploadBatchResponse;
+import io.github.storagenode.grpc.upload.UploadChunkRequest;
+import io.github.storagenode.grpc.upload.DeleteFileRequest;
+import io.github.storagenode.grpc.upload.DeleteFileResponse;
 import io.github.storagenode.grpc.upload.UploadServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
@@ -24,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component
-public class UploadClientService implements StorageClient {
+public class UploadStorageImp implements UploadStorageService {
 
     // Ukuran aman untuk gRPC: 256 KB per payload
     private static final int GRPC_PAYLOAD_SIZE = 256 * 1024; 
@@ -32,7 +34,7 @@ public class UploadClientService implements StorageClient {
     private final UploadServiceGrpc.UploadServiceStub uploadStub;
     private final StorageConfig storageConfig;
 
-    public UploadClientService(GrpcChannelFactory channels, StorageConfig storageConfig) {
+    public UploadStorageImp(GrpcChannelFactory channels, StorageConfig storageConfig) {
         ManagedChannel channel = channels.createChannel("storage-node");
         this.uploadStub = UploadServiceGrpc.newStub(channel);
         this.storageConfig = storageConfig;
@@ -132,10 +134,45 @@ public class UploadClientService implements StorageClient {
         });
     }
 
-    private Mono<io.github.storagenode.grpc.common.FinalizeResponse> finalizeUpload(FinalizeRequest request) {
+    private Mono<io.github.storagenode.grpc.upload.FinalizeResponse> finalizeUpload(FinalizeRequest request) {
         return Mono.create(sink -> uploadStub.finalizeUpload(request, new StreamObserver<>() {
             @Override
-            public void onNext(io.github.storagenode.grpc.common.FinalizeResponse response) {
+            public void onNext(io.github.storagenode.grpc.upload.FinalizeResponse response) {
+                sink.success(response);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                sink.error(throwable);
+            }
+
+            @Override
+            public void onCompleted() {
+            }
+        }));
+    }
+
+    @Override
+    public Mono<Void> deleteFile(String fileId) {
+        log.info("Sending Delete Signal to gRPC for file: {}", fileId);
+        DeleteFileRequest request = DeleteFileRequest.newBuilder()
+                .setFileId(fileId)
+                .build();
+
+        return deleteFileRpc(request)
+                .timeout(Duration.ofSeconds(30))
+                .flatMap(response -> {
+                    if (response.getSuccess()) {
+                        return Mono.empty();
+                    }
+                    return Mono.error(new IllegalStateException(response.getMessage()));
+                });
+    }
+
+    private Mono<DeleteFileResponse> deleteFileRpc(DeleteFileRequest request) {
+        return Mono.create(sink -> uploadStub.deleteFile(request, new StreamObserver<>() {
+            @Override
+            public void onNext(DeleteFileResponse response) {
                 sink.success(response);
             }
 

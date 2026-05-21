@@ -22,13 +22,13 @@ public class JwtService {
 
     private final RefreshTokenRepository refreshTokenRepository;
 
-    @Value("${jwt.secret}")
-    private String SECRET;
+    private String SECRET = System.getenv("SECRET_KEY");
 
     @Value("${jwt.access-token-expiry-hours:24}")
     private long accessTokenExpiryHours;
 
     public String generateAccessToken(User user){
+        System.out.println("KUNCI YANG DIBACA SPRING BOOT: >" + SECRET + "<");
         return Jwts.builder()
                 .subject(user.getEmail())
                 .claim("UserId",user.getId())

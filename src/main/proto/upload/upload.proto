@@ -2,17 +2,45 @@ syntax = "proto3";
 
 package upload;
 
-import "common/chunk.proto";
-import "common/response.proto";
-
 option java_multiple_files = true;
 option java_package = "io.github.storagenode.grpc.upload";
 
 service UploadService {
+  rpc UploadBatch(stream UploadChunkRequest) returns (UploadBatchResponse);
+  rpc FinalizeUpload(FinalizeRequest) returns (FinalizeResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+}
 
-  rpc UploadBatch(stream common.UploadChunkRequest)
-      returns (common.UploadBatchResponse);
+message UploadChunkRequest {
+  string file_id = 1;
+  int32 chunk_index = 2;
+  int32 total_chunks = 3;
+  bytes data = 4;
+}
 
-  rpc FinalizeUpload(common.FinalizeRequest)
-      returns (common.FinalizeResponse);
+message UploadBatchResponse {
+  string file_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message FinalizeRequest {
+  string file_id = 1;
+  int32 total_chunks = 2;
+}
+
+message FinalizeResponse {
+  string file_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message DeleteFileRequest {
+  string file_id = 1;
+}
+
+message DeleteFileResponse {
+  string file_id = 1;
+  bool success = 2;
+  string message = 3;
 }

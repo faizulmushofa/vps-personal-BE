@@ -1,10 +1,11 @@
 package io.github.faizul.Ai;
 
-import io.github.faizul.Ai.Dtos.Request;
-import io.github.faizul.Ai.Dtos.Response;
+import io.github.faizul.Ai.Dto.Request;
+import io.github.faizul.Ai.Dto.Response;
+import reactor.core.publisher.Mono;
 
 public interface AiService {
 
-    Response summary(Request request);
+    Mono<Response> summary(Request request);
 
 }

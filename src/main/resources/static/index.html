@@ -3,66 +3,205 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Storage Upload</title>
+  <title>Premium VPS Personal Cloud Storage</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- Dark mode particles/glows in background -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+
   <main class="shell">
-    <section id="loginPage" class="panel">
+    <!-- Login Panel -->
+    <section id="loginPage" class="panel glass">
       <div class="header">
-        <p class="eyebrow">Backend Storage</p>
-        <h1>Login</h1>
+        <div class="logo-area">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="eyebrow">Cloud Storage</span>
+        </div>
+        <h1>Selamat Datang</h1>
+        <p class="sub-heading">Silakan masuk ke personal cloud storage Anda</p>
       </div>
 
       <form id="loginForm" class="form">
-        <label>
-          Email
-          <input id="email" type="email" autocomplete="email" required>
-        </label>
-
-        <label>
-          Password
-          <input id="password" type="password" autocomplete="current-password" required>
-        </label>
-
-        <button id="loginButton" type="submit">Masuk</button>
-      </form>
-    </section>
-
-    <section id="uploadPage" class="panel hidden">
-      <div class="header row">
-        <div>
-          <p class="eyebrow">Backend Storage</p>
-          <h1>Upload File</h1>
+        <div class="input-group">
+          <label for="email">Email</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <input id="email" type="email" placeholder="nama@email.com" autocomplete="email" required>
+          </div>
         </div>
 
-        <button id="logoutButton" class="secondary" type="button">Logout</button>
-      </div>
+        <div class="input-group">
+          <label for="password">Password</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+          </div>
+        </div>
 
-      <form id="uploadForm" class="form">
-        <label>
-          Pilih file
-          <input id="file" type="file" required>
-        </label>
-
-        <button id="uploadButton" type="submit">Kirim File</button>
+        <button id="loginButton" type="submit">
+          <span>Masuk</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
       </form>
+    </section>
 
-      <div class="progress">
-        <div id="progressBar"></div>
+    <!-- Main Dashboard Panel -->
+    <section id="uploadPage" class="panel glass dashboard hidden">
+      <header class="dashboard-header">
+        <div class="logo-area">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <div>
+            <span class="eyebrow">Personal Space</span>
+            <h1 class="user-greeting">Dashboard Cloud</h1>
+          </div>
+        </div>
+
+        <button id="logoutButton" class="secondary btn-logout" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+          </svg>
+          <span>Logout</span>
+        </button>
+      </header>
+
+      <div class="dashboard-grid">
+        <!-- Left Side: Upload & Info -->
+        <div class="dashboard-sidebar">
+          <!-- Upload Card -->
+          <div class="side-card glass-card">
+            <h3>Upload Baru</h3>
+            <form id="uploadForm" class="upload-area">
+              <label class="drop-zone" id="dropZone">
+                <svg class="cloud-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+                <span class="drop-title">Seret file ke sini</span>
+                <span class="drop-subtitle">atau klik untuk menelusuri</span>
+                <input id="file" type="file" required style="display:none">
+              </label>
+              <div id="selectedFileInfo" class="selected-file-info hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span id="selectedFileName" class="filename-text">file-name.png</span>
+              </div>
+              <button id="uploadButton" type="submit" class="primary-btn full-width">Kirim File</button>
+            </form>
+          </div>
+
+          <!-- Transfer Progress Card -->
+          <div id="transfersCard" class="side-card glass-card hidden">
+            <h3>Progres Transfer</h3>
+            <div class="transfer-item">
+              <div class="transfer-info">
+                <span id="transferTypeLabel" class="badge">UPLOAD</span>
+                <span id="transferFileName" class="transfer-name">file.zip</span>
+              </div>
+              <div class="progress-bar-container">
+                <div id="progressBar" class="progress-bar-fill"></div>
+              </div>
+              <div class="transfer-status">
+                <span id="transferPercent">0%</span>
+                <button id="cancelTransferBtn" class="btn-cancel-action hidden">Batal</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="side-card glass-card">
+            <h3>Tindakan Cepat</h3>
+            <div class="btn-row">
+              <button id="getAllButton" type="button" class="secondary flex-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                File Saya
+              </button>
+              <button id="getAllAdminButton" type="button" class="secondary flex-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm14 14v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Semua File
+              </button>
+            </div>
+            <div class="form search-form" style="margin-top: 14px;">
+              <div class="input-wrapper search-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input id="searchFiles" type="text" placeholder="Cari file...">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: File List -->
+        <div class="dashboard-main glass-card">
+          <div class="list-header">
+            <h3>Daftar Penyimpanan</h3>
+            <span class="file-count-badge" id="fileCountBadge">0 file</span>
+          </div>
+
+          <div class="file-grid-container">
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="loading-state hidden">
+              <div class="spinner"></div>
+              <span>Memuat file...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <p>Belum ada file tersimpan</p>
+              <span class="subtext">Gunakan panel kiri untuk mengunggah berkas pertama Anda.</span>
+            </div>
+
+            <!-- Grid List -->
+            <div id="fileList" class="file-grid"></div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <pre id="status" class="status"></pre>
-
-    <section class="debug-panel">
-      <div class="debug-header">
-        <strong>Request Debugger</strong>
-        <button id="clearDebugButton" class="secondary small" type="button">Clear</button>
-      </div>
-      <pre id="debugLog" class="debug-log"></pre>
+    <!-- Request Debugger Panel -->
+    <section class="debug-panel glass">
+      <details>
+        <summary class="debug-header">
+          <div class="debug-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <strong>Request Debugger</strong>
+          </div>
+          <button id="clearDebugButton" class="secondary small btn-clear-debug" type="button">Clear</button>
+        </summary>
+        <pre id="debugLog" class="debug-log"></pre>
+      </details>
     </section>
   </main>
+
+  <!-- Global Alert / Status Box -->
+  <div id="toastAlert" class="toast hidden">
+    <div class="toast-content">
+      <svg id="toastIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span id="status">Silakan login dulu.</span>
+    </div>
+    <button class="toast-close" onclick="document.getElementById('toastAlert').classList.add('hidden')">×</button>
+  </div>
 
   <script src="/app.js"></script>
 </body>

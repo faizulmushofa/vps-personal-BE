@@ -1,20 +1,18 @@
 spring:
   application:
     name: vps-personal-backend
-
   r2dbc:
-    url: r2dbc:postgresql://faizulmushofa@localhost:5432/vps_personal
-
+    url: ${DATABASE_URL}
   sql:
     init:
       mode: always
-  grpc:
-    client:
-      channels:
-        storage-node:
-          address: static://localhost:9090
-          negotiation-type: plaintext
 
-jwt :
-  secret: "thisismysecretwhichisverylongandsecureenough"
+grpc:
+  client:
+    channels:
+      storage-node:
+        address: static://localhost:9090
+        negotiation-type: plaintext
+
+jwt:
   access-token-expiry-hours: 24

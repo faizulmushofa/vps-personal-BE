@@ -1,7 +1,7 @@
 package io.github.faizul.UploadUnit.Implementation;
 
 import io.github.faizul.File.UploadService.UploadService;
-import io.github.faizul.Storage.Upload.StorageClient;
+import io.github.faizul.Storage.Upload.UploadStorageService;
 import io.github.faizul.UploadUnit.IOCleaningService;
 import io.github.faizul.UploadUnit.UploadCoordinator;
 import io.github.faizul.UploadUnit.UploadUnitService;
@@ -23,7 +23,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
 
     private final UploadUnitService uploadUnitService;
     private final UploadService uploadService; 
-    private final StorageClient storageClient;
+    private final UploadStorageService uploadStorageClient;
     private final IOCleaningService cleanupService;
 
     private static final int BATCH_SIZE = 5;
@@ -76,7 +76,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
     private Mono<Void> handleBatchTrigger(UUID fileId, int batchStart, int batchEnd, int currentReceived) {
         log.info("[BATCH TRIGGER] Initiating batch {}-{} for file {}", batchStart, batchEnd, fileId);
         
-        return storageClient.sendBatch(fileId, batchStart, batchEnd)
+        return uploadStorageClient.sendBatch(fileId, batchStart, batchEnd)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .then(cleanupService.cleanupBatch(fileId, batchStart, batchEnd))
                 .then(uploadService.updateUploadProgress(fileId, currentReceived))
@@ -90,7 +90,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
         log.info("[COMPLETION DETECTED] All chunks received for file {}", fileId);
         
         return flushUnsentBatches(fileId, totalChunks)
-                .then(storageClient.sendFinalSignal(fileId, totalChunks))
+                .then(uploadStorageClient.sendFinalSignal(fileId, totalChunks))
                 .retryWhen(Retry.backoff(3,Duration.ofSeconds(1)))
                 .then(uploadService.updateUploadProgress(fileId, totalChunks))
                 .then(uploadService.markAsCompleted(fileId))
@@ -118,7 +118,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
 
                                 log.info("[COMPLETION FLUSH] Sending unsent batch {}-{} for file {}", batchStart, batchEnd, fileId);
 
-                                return storageClient.sendBatch(fileId, batchStart, batchEnd)
+                                return uploadStorageClient.sendBatch(fileId, batchStart, batchEnd)
                                         .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                                         .then(cleanupService.cleanupBatch(fileId, batchStart, batchEnd));
                             });

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package download;
+
+option java_multiple_files = true;
+option java_package = "io.github.storagenode.grpc.download";
+
+service DownloadService {
+  rpc DownloadFile(DownloadRequest) returns (stream DownloadResponse);
+}
+
+message DownloadRequest {
+  string file_id = 1;
+}
+
+message DownloadResponse {
+  string file_id = 1;
+  int32 chunk_index = 2;
+  int32 total_chunks = 3;
+  bytes data = 4;
+}

@@ -142,6 +142,19 @@ public class DatabaseSeeder implements CommandLineRunner {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS download_sessions (
+                    id UUID PRIMARY KEY,
+                    file_id UUID NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    status VARCHAR(64) NOT NULL,
+                    total_bytes BIGINT NOT NULL,
+                    bytes_sent BIGINT NOT NULL,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
                 """;
         log.info("Initializing database schema...");
         return databaseClient.sql(schema).then();

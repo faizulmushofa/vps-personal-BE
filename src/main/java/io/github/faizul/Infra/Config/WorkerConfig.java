@@ -6,7 +6,7 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 @Configuration
-public class FileIOConfig {
+public class WorkerConfig {
 
     @Bean
     public Scheduler fileWriteScheduler() {
@@ -21,5 +21,10 @@ public class FileIOConfig {
     @Bean
     public Scheduler grpcDispatchScheduler() {
         return Schedulers.newBoundedElastic(20, 10000, "grpc-dispatcher");
+    }
+
+    @Bean
+    public Scheduler aiScheduler() {
+        return Schedulers.newBoundedElastic(20, 10000, "ai-dispatcher");
     }
 }

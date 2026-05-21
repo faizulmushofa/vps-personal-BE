@@ -6,7 +6,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-public interface FileRepository extends ReactiveCrudRepository<File,Long> {
+public interface FileRepository extends ReactiveCrudRepository<File, UUID> {
     Mono<File> findById(UUID id);
     Flux<File> findByUserId(Long userId);
 }
