@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.NoSuchElementException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,10 +23,10 @@ public class UserService {
         String hashedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(hashedPassword);
 
-        return userRepository.existsByEmail(user.getEmail())
+            return userRepository.existsByEmail(user.getEmail())
                 .flatMap( exist -> {
                     if (exist){
-                        return Mono.error(new RuntimeException("Email already exist"));
+                        return Mono.error(new IllegalArgumentException("Email already exist"));
                     }
 
                    return this.userRepository.save(user)
@@ -40,7 +41,7 @@ public class UserService {
         return userRepository.existsById(id)
                 .flatMap(exist -> {
                     if (!exist){
-                        return Mono.error(new RuntimeException("Id Not Found"));
+                        return Mono.error(new NoSuchElementException("Id Not Found"));
                     }
 
                     return userRepository.deleteById(id);
@@ -56,7 +57,7 @@ public class UserService {
         return this.userRepository.existsById(id)
                 .flatMap(exist -> {
                     if (!exist){
-                        return Mono.error(new RuntimeException("Id Not Found"));
+                        return Mono.error(new NoSuchElementException("Id Not Found"));
                     }
                     return this.userRepository.findById(id)
                             .map(UserMapper::UserToDto);

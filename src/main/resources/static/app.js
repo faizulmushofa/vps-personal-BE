@@ -4,6 +4,7 @@ const tokenKey = "accessToken";
 let accessToken = localStorage.getItem(tokenKey) || "";
 let activeTransferController = null; // Holds AbortController for active transfers
 let loadedFiles = []; // Holds list of currently loaded files for client-side search
+let currentViewIsShared = false; // Tracks if current view is shared files
 
 // UI Elements
 const loginPage = document.getElementById("loginPage");
@@ -386,6 +387,32 @@ async function handleDelete(fileId) {
   }
 }
 
+// SHARING FLOW
+async function handleShare(fileId) {
+  const email = prompt("Masukkan Email User yang akan diberi akses:");
+  if (!email) return;
+  
+  showToast("Membagikan file...", "info");
+  try {
+    const response = await debugFetch("share-file", `/api/files/share/${fileId}`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email })
+    });
+    if (response.status === 401 || response.status === 403) {
+      clearSession("Akses ditolak.");
+      return;
+    }
+    if (!response.ok) {
+      showToast("Gagal membagikan file.", "error");
+      return;
+    }
+    showToast("File berhasil dibagikan!", "success");
+  } catch (err) {
+    showToast("Kesalahan jaringan saat membagikan.", "error");
+  }
+}
+
 // REACTIVE DOWNLOAD STREAMING FLOW WITH DYNAMIC PROGRESS AND ACTIVE CANCELATION
 async function handleDownload(fileId, fileName, fileSize) {
   const activeToken = getToken();
@@ -515,10 +542,11 @@ async function handleDownload(fileId, fileName, fileSize) {
 
 // FETCH FILE LISTINGS
 async function fetchMyFiles() {
-  await fetchFiles("/api/files", "get-all-user");
+  await fetchFiles("/api/files", "get-all-user", false);
 }
 
-async function fetchFiles(url, label) {
+async function fetchFiles(url, label, isShared = false) {
+  currentViewIsShared = isShared;
   const activeToken = getToken();
   if (!activeToken) {
     clearSession("Masuk ke sistem diperlukan.");
@@ -604,11 +632,18 @@ function renderFiles(files) {
           </svg>
           <span>Download</span>
         </button>
+        ${!currentViewIsShared ? `
+        <button class="btn-share-action" data-id="${f.id}" title="Bagikan File">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+        </button>
         <button class="btn-delete-action" data-id="${f.id}" title="Hapus File">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
           </svg>
         </button>
+        ` : ''}
       </div>
     `;
 
@@ -617,9 +652,15 @@ function renderFiles(files) {
       handleDownload(f.id, f.originalFileName, f.size);
     };
 
-    card.querySelector(".btn-delete-action").onclick = () => {
-      handleDelete(f.id);
-    };
+    if (!currentViewIsShared) {
+      card.querySelector(".btn-share-action").onclick = () => {
+        handleShare(f.id);
+      };
+
+      card.querySelector(".btn-delete-action").onclick = () => {
+        handleDelete(f.id);
+      };
+    }
 
     fileList.appendChild(card);
   });
@@ -639,7 +680,8 @@ document.getElementById("loginForm").addEventListener("submit", handleLogin);
 document.getElementById("logoutButton").addEventListener("click", handleLogout);
 document.getElementById("uploadForm").addEventListener("submit", handleUpload);
 document.getElementById("getAllButton").addEventListener("click", fetchMyFiles);
-document.getElementById("getAllAdminButton").addEventListener("click", () => fetchFiles("/api/files/admin", "get-all-admin"));
+document.getElementById("getSharedButton").addEventListener("click", () => fetchFiles("/api/files/share/shared-with-me", "get-shared", true));
+document.getElementById("getAllAdminButton").addEventListener("click", () => fetchFiles("/api/files/admin", "get-all-admin", false));
 document.getElementById("clearDebugButton").addEventListener("click", () => {
   debugLog.textContent = "";
 });

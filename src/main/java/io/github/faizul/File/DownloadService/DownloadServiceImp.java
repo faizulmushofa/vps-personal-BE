@@ -5,10 +5,13 @@ import io.github.faizul.Infra.Security.CurrentUserContext;
 import io.github.faizul.File.Dtos.DownloadInitRequest;
 import io.github.faizul.File.Dtos.DownloadInitResponse;
 import io.github.faizul.File.Dtos.DownloadStatusResponse;
+import io.github.faizul.File.ShareService.FileSharedRepository;
 import io.github.faizul.Storage.Download.DownloadStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -21,6 +24,7 @@ import java.util.UUID;
 public class DownloadServiceImp implements DownloadService {
 
     private final FileRepository fileRepository;
+    private final FileSharedRepository fileSharedRepository;
     private final DownloadSessionRepository downloadSessionRepository;
     private final DownloadStorageService downloadStorageService;
     private final CurrentUserContext currentUserContext;
@@ -29,43 +33,53 @@ public class DownloadServiceImp implements DownloadService {
     public Mono<DownloadInitResponse> init(DownloadInitRequest request) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(request.fileId())
-                        .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                         .flatMap(file -> {
-                            if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new RuntimeException("Access Denied"));
-                            }
+                            Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
+                                Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                            
+                            return accessCheck.flatMap(hasAccess -> {
+                                if (!hasAccess) {
+                                    return Mono.error(new AccessDeniedException("Access Denied"));
+                                }
 
-                            UUID sessionId = UUID.randomUUID();
-                            DownloadSession session = DownloadSession.builder()
-                                    .id(sessionId)
-                                    .fileId(file.getId())
-                                    .userId(userId)
-                                    .status(FileStatus.INIT)
-                                    .totalBytes(file.getSize())
-                                    .bytesSent(0L)
-                                    .startedAt(Instant.now())
-                                    .build();
+                                UUID sessionId = UUID.randomUUID();
+                                DownloadSession session = DownloadSession.builder()
+                                        .id(sessionId)
+                                        .fileId(file.getId())
+                                        .userId(userId)
+                                        .status(FileStatus.INIT)
+                                        .totalBytes(file.getSize())
+                                        .bytesSent(0L)
+                                        .startedAt(Instant.now())
+                                        .build();
 
-                            return downloadSessionRepository.save(session)
-                                    .map(savedSession -> new DownloadInitResponse(
-                                            savedSession.getId(),
-                                            file.getId(),
-                                            file.getOriginalFileName(),
-                                            file.getSize(),
-                                            savedSession.getStatus()
-                                    ));
+                                return downloadSessionRepository.save(session)
+                                        .map(savedSession -> new DownloadInitResponse(
+                                                savedSession.getId(),
+                                                file.getId(),
+                                                file.getOriginalFileName(),
+                                                file.getSize(),
+                                                savedSession.getStatus()
+                                        ));
+                            });
                         }));
     }
 
     private Mono<DownloadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
-                    if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new RuntimeException("Access Denied"));
-                    }
-                    return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
-                            .switchIfEmpty(Mono.error(new RuntimeException("Download Session Not Found")));
+                    Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
+                        Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                    
+                    return accessCheck.flatMap(hasAccess -> {
+                        if (!hasAccess) {
+                            return Mono.error(new AccessDeniedException("Access Denied"));
+                        }
+                        return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
+                                .switchIfEmpty(Mono.error(new NoSuchElementException("Download Session Not Found")));
+                    });
                 });
     }
 
@@ -80,7 +94,7 @@ public class DownloadServiceImp implements DownloadService {
                                     .concatMap(chunk -> downloadSessionRepository.findById(savedSession.getId())
                                             .flatMap(s -> {
                                                 if (s.getStatus() == FileStatus.CANCELED) {
-                                                    return Mono.error(new RuntimeException("Download canceled by user"));
+                                                    return Mono.error(new IllegalArgumentException("Download canceled by user"));
                                                 }
                                                 s.setBytesSent(s.getBytesSent() + chunk.data().length);
                                                 return downloadSessionRepository.save(s);

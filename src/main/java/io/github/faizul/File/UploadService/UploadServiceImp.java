@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.FileSystemUtils;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
@@ -73,13 +75,13 @@ public class UploadServiceImp implements UploadService {
 
     private Mono<UploadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
                     if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new RuntimeException("Access Denied"));
+                        return Mono.error(new AccessDeniedException("Access Denied"));
                     }
                     return uploadSessionRepository.findByFileId(fileId)
-                            .switchIfEmpty(Mono.error(new RuntimeException("Upload Session Not Found")));
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Upload Session Not Found")));
                 });
     }
 
