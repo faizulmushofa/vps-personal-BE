@@ -6,5 +6,7 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 public interface UploadCoordinator {
+
     public Mono<Void> handleChunkUpload(UUID fileId, int chunkIndex, FilePart filePart);
+    
 }

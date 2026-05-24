@@ -59,10 +59,8 @@ public class FileServiceImp implements FileService {
                                 })
                 )
                 .flatMap(file ->
-                        // Delete dari storage node
                         uploadStorageClient.deleteFile(file.getId().toString())
                                 .then(
-                                        // Delete dari database
                                         fileRepository.deleteById(file.getId())
                                 )
                 );

@@ -11,7 +11,7 @@ public interface UploadUnitService {
     Mono<Boolean> isUnitReceived(UUID fileId,int index);
     Mono<Integer> getReceivedUnit(UUID fileId);
     Mono<Boolean> isComplete(UUID fileId, int totalChunks);
-    Mono<Boolean> isBatchReady(UUID fileId, int startChunk, int endChunk);
+    Mono<Boolean> isBatchReady(UUID fileId, int startChunk,int endChunk);
     Mono<Boolean> claimBatch(UUID fileId, int batchIndex);
     Mono<Boolean> claimCompletion(UUID fileId);
     Mono<Void> cleanupMemory(UUID fileId);
