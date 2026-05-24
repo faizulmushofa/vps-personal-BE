@@ -7,6 +7,8 @@ import io.github.faizul.User.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -26,16 +28,16 @@ public class ShareServiceImp implements ShareService {
     public Mono<Void> shareFile(UUID fileId, String targetEmail) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new RuntimeException("Only owner can share the file"));
+                                return Mono.error(new AccessDeniedException("Only owner can share the file"));
                             }
                             return userRepository.findByEmail(targetEmail)
-                                    .switchIfEmpty(Mono.error(new RuntimeException("User with email not found")))
+                                    .switchIfEmpty(Mono.error(new NoSuchElementException("User with email not found")))
                                     .flatMap(targetUser -> {
                                         if (userId.equals(targetUser.getId())) {
-                                            return Mono.error(new RuntimeException("Cannot share with yourself"));
+                                            return Mono.error(new IllegalArgumentException("Cannot share with yourself"));
                                         }
                                         return fileSharedRepository.existsByFileIdAndUserId(fileId, targetUser.getId())
                                                 .flatMap(exists -> {
@@ -54,10 +56,10 @@ public class ShareServiceImp implements ShareService {
     public Mono<Void> unshareFile(UUID fileId, Long targetUserId) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new RuntimeException("Only owner can unshare the file"));
+                                return Mono.error(new AccessDeniedException("Only owner can unshare the file"));
                             }
                             return fileSharedRepository.deleteByFileIdAndUserId(fileId, targetUserId);
                         }));
@@ -80,7 +82,7 @@ public class ShareServiceImp implements ShareService {
     @Override
     public Mono<Boolean> hasReadAccess(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
                     if (file.getUserId().equals(userId)) {
                         return Mono.just(true);

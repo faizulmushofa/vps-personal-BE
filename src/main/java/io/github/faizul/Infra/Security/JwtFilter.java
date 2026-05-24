@@ -14,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -80,7 +81,7 @@ public class JwtFilter implements WebFilter {
     private Mono<Authentication> authenticate(String email) {
 
         return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new RuntimeException("User not found")))
+                .switchIfEmpty(Mono.error(new BadCredentialsException("User not found")))
                 .flatMap(user -> userRoleRepository.findByUserId(user.getId())
                         .flatMap(userRole -> roleRepository.findById(userRole.getRoleId()))
                         .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName().name()))

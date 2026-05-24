@@ -7,6 +7,7 @@ import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.security.authentication.BadCredentialsException;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
@@ -61,11 +62,11 @@ public class JwtService {
 
     public Mono<RefreshToken> refresh(String oldToken){
         return refreshTokenRepository.findByToken(oldToken)
-                .switchIfEmpty(Mono.error(new RuntimeException("Invalid Token"))
+                .switchIfEmpty(Mono.error(new BadCredentialsException("Invalid Token"))
                 ).flatMap(existing ->
                         {
                             if (existing.getRevoked()) {
-                                return Mono.error(new RuntimeException("Token has been revoked"));
+                                return Mono.error(new BadCredentialsException("Token has been revoked"));
                             }
 
                             existing.setRevoked(true);

@@ -10,6 +10,8 @@ import io.github.faizul.Storage.Download.DownloadStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -31,14 +33,14 @@ public class DownloadServiceImp implements DownloadService {
     public Mono<DownloadInitResponse> init(DownloadInitRequest request) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(request.fileId())
-                        .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                         .flatMap(file -> {
                             Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                                 Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
                             
                             return accessCheck.flatMap(hasAccess -> {
                                 if (!hasAccess) {
-                                    return Mono.error(new RuntimeException("Access Denied"));
+                                    return Mono.error(new AccessDeniedException("Access Denied"));
                                 }
 
                                 UUID sessionId = UUID.randomUUID();
@@ -66,17 +68,17 @@ public class DownloadServiceImp implements DownloadService {
 
     private Mono<DownloadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
                     Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                         Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
                     
                     return accessCheck.flatMap(hasAccess -> {
                         if (!hasAccess) {
-                            return Mono.error(new RuntimeException("Access Denied"));
+                            return Mono.error(new AccessDeniedException("Access Denied"));
                         }
                         return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
-                                .switchIfEmpty(Mono.error(new RuntimeException("Download Session Not Found")));
+                                .switchIfEmpty(Mono.error(new NoSuchElementException("Download Session Not Found")));
                     });
                 });
     }
@@ -92,7 +94,7 @@ public class DownloadServiceImp implements DownloadService {
                                     .concatMap(chunk -> downloadSessionRepository.findById(savedSession.getId())
                                             .flatMap(s -> {
                                                 if (s.getStatus() == FileStatus.CANCELED) {
-                                                    return Mono.error(new RuntimeException("Download canceled by user"));
+                                                    return Mono.error(new IllegalArgumentException("Download canceled by user"));
                                                 }
                                                 s.setBytesSent(s.getBytesSent() + chunk.data().length);
                                                 return downloadSessionRepository.save(s);

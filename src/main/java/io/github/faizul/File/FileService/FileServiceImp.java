@@ -6,6 +6,8 @@ import io.github.faizul.Storage.Upload.UploadStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -26,11 +28,11 @@ public class FileServiceImp implements FileService {
                 .flatMap(userId ->
                         fileRepository.findById(uuid)
                                 .switchIfEmpty(
-                                        Mono.error(new RuntimeException("File Not Found!"))
+                                        Mono.error(new NoSuchElementException("File Not Found!"))
                                 )
                                 .flatMap(file -> {
                                     if (!file.getUserId().equals(userId)) {
-                                        return Mono.error(new RuntimeException("Access Denied"));
+                                        return Mono.error(new AccessDeniedException("Access Denied"));
                                     }
                                     return Mono.just(file);
                                 })
@@ -49,11 +51,11 @@ public class FileServiceImp implements FileService {
                 .flatMap(userId ->
                         fileRepository.findById(uuid)
                                 .switchIfEmpty(
-                                        Mono.error(new RuntimeException("File Not Found!"))
+                                        Mono.error(new NoSuchElementException("File Not Found!"))
                                 )
                                 .flatMap(file -> {
                                     if (!file.getUserId().equals(userId)) {
-                                        return Mono.error(new RuntimeException("Access Denied"));
+                                        return Mono.error(new AccessDeniedException("Access Denied"));
                                     }
                                     return Mono.just(file);
                                 })
