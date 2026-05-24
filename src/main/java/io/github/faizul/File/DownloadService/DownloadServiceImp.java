@@ -5,6 +5,7 @@ import io.github.faizul.Infra.Security.CurrentUserContext;
 import io.github.faizul.File.Dtos.DownloadInitRequest;
 import io.github.faizul.File.Dtos.DownloadInitResponse;
 import io.github.faizul.File.Dtos.DownloadStatusResponse;
+import io.github.faizul.File.ShareService.FileSharedRepository;
 import io.github.faizul.Storage.Download.DownloadStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class DownloadServiceImp implements DownloadService {
 
     private final FileRepository fileRepository;
+    private final FileSharedRepository fileSharedRepository;
     private final DownloadSessionRepository downloadSessionRepository;
     private final DownloadStorageService downloadStorageService;
     private final CurrentUserContext currentUserContext;
@@ -31,29 +33,34 @@ public class DownloadServiceImp implements DownloadService {
                 .flatMap(userId -> fileRepository.findById(request.fileId())
                         .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
                         .flatMap(file -> {
-                            if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new RuntimeException("Access Denied"));
-                            }
+                            Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
+                                Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                            
+                            return accessCheck.flatMap(hasAccess -> {
+                                if (!hasAccess) {
+                                    return Mono.error(new RuntimeException("Access Denied"));
+                                }
 
-                            UUID sessionId = UUID.randomUUID();
-                            DownloadSession session = DownloadSession.builder()
-                                    .id(sessionId)
-                                    .fileId(file.getId())
-                                    .userId(userId)
-                                    .status(FileStatus.INIT)
-                                    .totalBytes(file.getSize())
-                                    .bytesSent(0L)
-                                    .startedAt(Instant.now())
-                                    .build();
+                                UUID sessionId = UUID.randomUUID();
+                                DownloadSession session = DownloadSession.builder()
+                                        .id(sessionId)
+                                        .fileId(file.getId())
+                                        .userId(userId)
+                                        .status(FileStatus.INIT)
+                                        .totalBytes(file.getSize())
+                                        .bytesSent(0L)
+                                        .startedAt(Instant.now())
+                                        .build();
 
-                            return downloadSessionRepository.save(session)
-                                    .map(savedSession -> new DownloadInitResponse(
-                                            savedSession.getId(),
-                                            file.getId(),
-                                            file.getOriginalFileName(),
-                                            file.getSize(),
-                                            savedSession.getStatus()
-                                    ));
+                                return downloadSessionRepository.save(session)
+                                        .map(savedSession -> new DownloadInitResponse(
+                                                savedSession.getId(),
+                                                file.getId(),
+                                                file.getOriginalFileName(),
+                                                file.getSize(),
+                                                savedSession.getStatus()
+                                        ));
+                            });
                         }));
     }
 
@@ -61,11 +68,16 @@ public class DownloadServiceImp implements DownloadService {
         return fileRepository.findById(fileId)
                 .switchIfEmpty(Mono.error(new RuntimeException("File Not Found")))
                 .flatMap(file -> {
-                    if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new RuntimeException("Access Denied"));
-                    }
-                    return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
-                            .switchIfEmpty(Mono.error(new RuntimeException("Download Session Not Found")));
+                    Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
+                        Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                    
+                    return accessCheck.flatMap(hasAccess -> {
+                        if (!hasAccess) {
+                            return Mono.error(new RuntimeException("Access Denied"));
+                        }
+                        return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
+                                .switchIfEmpty(Mono.error(new RuntimeException("Download Session Not Found")));
+                    });
                 });
     }
 

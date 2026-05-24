@@ -155,6 +155,15 @@ public class DatabaseSeeder implements CommandLineRunner {
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS file_shared (
+                    id BIGSERIAL PRIMARY KEY,
+                    file_id UUID NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE(file_id, user_id)
+                );
                 """;
         log.info("Initializing database schema...");
         return databaseClient.sql(schema).then();
