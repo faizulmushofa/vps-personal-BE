@@ -41,15 +41,15 @@ public class UploadStorageImp implements UploadStorageService {
     }
 
     @Override
-    public Mono<Void> sendBatch(UUID fileId, int startChunk, int endChunk) {
-        Path dir = storageConfig.tempDir(fileId);
+    public Mono<Void> sendBatch(Long userId, UUID fileId, int startChunk, int endChunk) {
+        Path dir = storageConfig.tempDir(userId, fileId);
 
         // 1. Looping reaktif dari startChunk ke endChunk
         return Flux.range(startChunk, endChunk - startChunk + 1)
                 // 2. Baca tiap file chunk dan pecah menjadi aliran bytes 256KB
                 .concatMap(index -> {
                     Path chunkPath = dir.resolve("chunk-" + index);
-                    return streamFileInSlices(fileId, chunkPath, index);
+                    return streamFileInSlices(userId, fileId, chunkPath, index);
                 })
                 // 3. Pipa (Pipeline) ke Klien gRPC
                 .as(this::uploadBatch)
@@ -57,10 +57,11 @@ public class UploadStorageImp implements UploadStorageService {
     }
 
     @Override
-    public Mono<Void> sendFinalSignal(UUID fileId, int totalChunks) {
+    public Mono<Void> sendFinalSignal(Long userId, UUID fileId, int totalChunks) {
         log.info("Sending Final Signal to gRPC for file: {}", fileId);
         FinalizeRequest request = FinalizeRequest.newBuilder()
                 .setFileId(fileId.toString())
+                .setUserId(userId.toString())
                 .setTotalChunks(totalChunks)
                 .build();
 
@@ -78,7 +79,7 @@ public class UploadStorageImp implements UploadStorageService {
      * Membaca file dari hardisk dengan "sedotan kecil" (256KB) 
      * secara Non-Blocking.
      */
-    private Flux<UploadChunkRequest> streamFileInSlices(UUID fileId, Path filePath, int chunkIndex) {
+    private Flux<UploadChunkRequest> streamFileInSlices(Long userId, UUID fileId, Path filePath, int chunkIndex) {
         FileSystemResource resource = new FileSystemResource(filePath);
         
         return DataBufferUtils.read(resource, bufferFactory, GRPC_PAYLOAD_SIZE)
@@ -91,6 +92,7 @@ public class UploadStorageImp implements UploadStorageService {
 
                     return UploadChunkRequest.newBuilder()
                             .setFileId(fileId.toString())
+                            .setUserId(userId.toString())
                             .setChunkIndex(chunkIndex)
                             .setData(ByteString.copyFrom(bytes))
                             .build();
@@ -153,10 +155,11 @@ public class UploadStorageImp implements UploadStorageService {
     }
 
     @Override
-    public Mono<Void> deleteFile(String fileId) {
+    public Mono<Void> deleteFile(Long userId, String fileId) {
         log.info("Sending Delete Signal to gRPC for file: {}", fileId);
         DeleteFileRequest request = DeleteFileRequest.newBuilder()
                 .setFileId(fileId)
+                .setUserId(userId.toString())
                 .build();
 
         return deleteFileRpc(request)

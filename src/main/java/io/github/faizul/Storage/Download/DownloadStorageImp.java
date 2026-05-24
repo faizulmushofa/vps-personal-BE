@@ -26,10 +26,11 @@ public class DownloadStorageImp implements DownloadStorageService {
     }
 
     @Override
-    public Flux<FileChunk> downloadFile(UUID id) {
+    public Flux<FileChunk> downloadFile(Long userId, UUID id) {
         return Flux.<FileChunk>create(sink -> {
             DownloadRequest request = DownloadRequest.newBuilder()
                     .setFileId(id.toString())
+                    .setUserId(userId.toString())
                     .build();
 
             StreamObserver<DownloadResponse> responseObserver = new StreamObserver<>() {

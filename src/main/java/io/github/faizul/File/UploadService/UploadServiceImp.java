@@ -45,10 +45,9 @@ public class UploadServiceImp implements UploadService {
         }
 
         String storageName = UUID.randomUUID() + extension;
-        String tempPath = storageConfig.tempDir(fileId).toString();
-
         return currentUserContext.getUserId()
                 .flatMap(userId -> {
+                    String tempPath = storageConfig.tempDir(userId, fileId).toString();
                     File file = File.builder()
                             .id(fileId)
                             .userId(userId)

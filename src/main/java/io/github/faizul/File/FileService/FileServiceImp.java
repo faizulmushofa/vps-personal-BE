@@ -61,7 +61,7 @@ public class FileServiceImp implements FileService {
                                 })
                 )
                 .flatMap(file ->
-                        uploadStorageClient.deleteFile(file.getId().toString())
+                        uploadStorageClient.deleteFile(file.getUserId(), file.getId().toString())
                                 .then(
                                         fileRepository.deleteById(file.getId())
                                 )

@@ -16,6 +16,7 @@ message UploadChunkRequest {
   int32 chunk_index = 2;
   int32 total_chunks = 3;
   bytes data = 4;
+  string user_id = 5;
 }
 
 message UploadBatchResponse {
@@ -27,6 +28,7 @@ message UploadBatchResponse {
 message FinalizeRequest {
   string file_id = 1;
   int32 total_chunks = 2;
+  string user_id = 3;
 }
 
 message FinalizeResponse {
@@ -37,6 +39,7 @@ message FinalizeResponse {
 
 message DeleteFileRequest {
   string file_id = 1;
+  string user_id = 2;
 }
 
 message DeleteFileResponse {

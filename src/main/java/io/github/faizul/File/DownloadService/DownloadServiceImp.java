@@ -86,40 +86,41 @@ public class DownloadServiceImp implements DownloadService {
     @Override
     public Flux<byte[]> streamFile(UUID fileId) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> getValidSession(fileId, userId))
-                .flatMapMany(session -> {
-                    session.setStatus(FileStatus.STREAMING);
-                    return downloadSessionRepository.save(session)
-                            .flatMapMany(savedSession -> downloadStorageService.downloadFile(fileId)
-                                    .concatMap(chunk -> downloadSessionRepository.findById(savedSession.getId())
-                                            .flatMap(s -> {
-                                                if (s.getStatus() == FileStatus.CANCELED) {
-                                                    return Mono.error(new IllegalArgumentException("Download canceled by user"));
-                                                }
-                                                s.setBytesSent(s.getBytesSent() + chunk.data().length);
-                                                return downloadSessionRepository.save(s);
-                                            })
-                                            .thenReturn(chunk.data())
-                                    )
-                                    .doOnComplete(() -> downloadSessionRepository.findById(savedSession.getId())
-                                            .flatMap(s -> {
-                                                if (s.getStatus() != FileStatus.CANCELED && s.getStatus() != FileStatus.FAILED) {
-                                                    s.setStatus(FileStatus.COMPLETED);
-                                                    s.setCompletedAt(Instant.now());
-                                                }
-                                                return downloadSessionRepository.save(s);
-                                            }).subscribe()
-                                    )
-                                    .doOnError(err -> downloadSessionRepository.findById(savedSession.getId())
-                                            .flatMap(s -> {
-                                                if (s.getStatus() != FileStatus.CANCELED) {
-                                                    s.setStatus(FileStatus.FAILED);
-                                                }
-                                                return downloadSessionRepository.save(s);
-                                            }).subscribe()
-                                    )
-                            );
-                });
+                .flatMapMany(userId -> getValidSession(fileId, userId)
+                        .flatMap(session -> {
+                            session.setStatus(FileStatus.STREAMING);
+                            return downloadSessionRepository.save(session);
+                        })
+                        .flatMapMany(savedSession -> downloadStorageService.downloadFile(userId, fileId)
+                                .concatMap(chunk -> downloadSessionRepository.findById(savedSession.getId())
+                                        .flatMap(s -> {
+                                            if (s.getStatus() == FileStatus.CANCELED) {
+                                                return Mono.error(new IllegalArgumentException("Download canceled by user"));
+                                            }
+                                            s.setBytesSent(s.getBytesSent() + chunk.data().length);
+                                            return downloadSessionRepository.save(s);
+                                        })
+                                        .thenReturn(chunk.data())
+                                )
+                                .doOnComplete(() -> downloadSessionRepository.findById(savedSession.getId())
+                                        .flatMap(s -> {
+                                            if (s.getStatus() != FileStatus.CANCELED && s.getStatus() != FileStatus.FAILED) {
+                                                s.setStatus(FileStatus.COMPLETED);
+                                                s.setCompletedAt(Instant.now());
+                                            }
+                                            return downloadSessionRepository.save(s);
+                                        }).subscribe()
+                                )
+                                .doOnError(err -> downloadSessionRepository.findById(savedSession.getId())
+                                        .flatMap(s -> {
+                                            if (s.getStatus() != FileStatus.CANCELED) {
+                                                s.setStatus(FileStatus.FAILED);
+                                            }
+                                            return downloadSessionRepository.save(s);
+                                        }).subscribe()
+                                )
+                        )
+                );
     }
 
     @Override
