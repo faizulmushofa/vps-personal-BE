@@ -1,4 +1,6 @@
-package io.github.faizul.Exception;
+package io.github.faizul.exception;
+
+import io.github.faizul.exception.*;
 
 import lombok.Builder;
 import lombok.Data;

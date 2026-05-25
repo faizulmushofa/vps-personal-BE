@@ -1,6 +1,9 @@
-package io.github.faizul.File.Dtos;
+package io.github.faizul.File.dtos;
 
-import io.github.faizul.File.UploadService.FileStatus;
+import io.github.faizul.File.dtos.*;
+import io.github.faizul.File.core.*;
+
+import io.github.faizul.File.upload.FileStatus;
 
 import java.time.Instant;
 import java.util.UUID;

@@ -1,4 +1,7 @@
-package io.github.faizul.User.Dtos;
+package io.github.faizul.User.dtos;
+
+import io.github.faizul.User.dtos.*;
+import io.github.faizul.User.*;
 
 import java.time.LocalDateTime;
 

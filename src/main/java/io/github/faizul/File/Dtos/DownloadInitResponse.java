@@ -1,6 +1,9 @@
-package io.github.faizul.File.Dtos;
+package io.github.faizul.File.dtos;
 
-import io.github.faizul.File.DownloadService.FileStatus;
+import io.github.faizul.File.dtos.*;
+import io.github.faizul.File.core.*;
+
+import io.github.faizul.File.download.FileStatus;
 import java.util.UUID;
 
 public record DownloadInitResponse(

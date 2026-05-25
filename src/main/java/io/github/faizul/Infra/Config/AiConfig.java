@@ -1,4 +1,6 @@
-package io.github.faizul.Infra.Config;
+package io.github.faizul.infra.config;
+
+import io.github.faizul.infra.config.*;
 
 import com.google.genai.Client;
 import lombok.RequiredArgsConstructor;

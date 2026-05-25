@@ -1,6 +1,9 @@
 package io.github.faizul.UploadUnit.Implementation;
 
-import io.github.faizul.Infra.Config.StorageConfig;
+import io.github.faizul.infra.config.*;
+import io.github.faizul.security.filter.*;
+
+import io.github.faizul.infra.config.StorageConfig;
 import io.github.faizul.UploadUnit.Helper.UploadFileSystem;
 import io.github.faizul.UploadUnit.UploadUnitWriter;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +22,7 @@ public class UploadUnitWriterImp implements UploadUnitWriter {
     private final Scheduler fileWriteScheduler;
     private final UploadFileSystem fileSystem;
     private final StorageConfig storageConfig;
-    private final io.github.faizul.Infra.Security.CurrentUserContext currentUserContext;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
 
     @Override
     public Mono<Void> write(UUID fileId, int index, FilePart part) {

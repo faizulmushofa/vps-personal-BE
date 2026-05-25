@@ -1,7 +1,10 @@
-package io.github.faizul.Infra.Config;
+package io.github.faizul.infra.config;
 
-import io.github.faizul.Infra.Security.JwtFilter;
-import io.github.faizul.Infra.Security.RequestDebugFilter;
+import io.github.faizul.infra.config.*;
+import io.github.faizul.security.filter.*;
+
+import io.github.faizul.security.filter.JwtFilter;
+import io.github.faizul.security.filter.RequestDebugFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.context.annotation.Bean;
