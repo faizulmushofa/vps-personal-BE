@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: vps-personal-backend-test
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/testdb
+    username: testuser
+    password: testpassword
+  sql:
+    init:
+      mode: never
+
+  grpc:
+    security:
+      service-token: test-secret-token
+    client:
+      channels:
+        storage-node:
+          address: static://localhost:9095
+          negotiation-type: plaintext
+
+jwt:
+  access-token-expiry-hours: 24
+
+DATABASE_URL: r2dbc:postgresql://localhost:5432/testdb
+GEMINI_API_KEY: test_key
+STORAGE_NODE_URL: localhost:9095

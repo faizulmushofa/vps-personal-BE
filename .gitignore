@@ -35,3 +35,9 @@ build/
 
 ### Env ###
 .env
+.DS_Store
+
+### Security ###
+*.p12
+*.jks
+*.keystore

@@ -8,11 +8,14 @@ spring:
       mode: always
 
   grpc:
+    security:
+      service-token: ${SERVICE_TOKEN}
     client:
       channels:
         storage-node:
-          address: static://${STORAGE_NODE_URL}
+          address: ${STORAGE_NODE_URL}
           negotiation-type: tls
+          secure: false
 
 jwt:
-  access-token-expiry-hours: 24
+  access-token-expiry-hours: 1
