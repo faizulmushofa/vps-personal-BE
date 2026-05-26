@@ -1,6 +1,8 @@
 package io.github.faizul.User;
 
-import io.github.faizul.User.Dtos.UserDto;
+import io.github.faizul.User.dtos.*;
+
+import io.github.faizul.User.dtos.UserDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

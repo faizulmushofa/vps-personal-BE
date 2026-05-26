@@ -1,6 +1,10 @@
-package io.github.faizul.Storage.Download;
+package io.github.faizul.Storage.download;
 
-import io.github.faizul.File.Dtos.FileChunk;
+import io.github.faizul.Storage.download.*;
+import io.github.faizul.File.dtos.*;
+import io.github.faizul.File.core.*;
+
+import io.github.faizul.File.dtos.FileChunk;
 import io.github.storagenode.grpc.download.DownloadRequest;
 import io.github.storagenode.grpc.download.DownloadResponse;
 import io.github.storagenode.grpc.download.DownloadServiceGrpc;

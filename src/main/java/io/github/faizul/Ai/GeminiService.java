@@ -1,7 +1,9 @@
 package io.github.faizul.Ai;
 
-import io.github.faizul.Ai.Dto.Request;
-import io.github.faizul.Ai.Dto.Response;
+import io.github.faizul.Ai.dtos.*;
+
+import io.github.faizul.Ai.dtos.AiRequest;
+import io.github.faizul.Ai.dtos.AiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
@@ -16,18 +18,18 @@ public class GeminiService implements AiService {
     private final Scheduler aiScheduler;
 
     @Override
-    public Mono<Response> summary(Request request) {
+    public Mono<AiResponse> summary(AiRequest request) {
         return Mono.fromCallable(() -> chatClient.prompt()
                 .user(request.teks())
                 .call()
                 .content()
         )
         .subscribeOn(aiScheduler)
-        .map(Response::new)
+        .map(AiResponse::new)
         .onErrorResume(Exception.class, e -> {
             System.err.println("GAGAL menjalankan program: " + e.getMessage());
             e.printStackTrace();
-            return Mono.just(new Response("Gagal menghasilkan ringkasan karena masalah teknis."));
+            return Mono.just(new AiResponse("Gagal menghasilkan ringkasan karena masalah teknis."));
         });
     }
 

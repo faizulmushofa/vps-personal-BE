@@ -1,7 +1,10 @@
 package io.github.faizul.User;
 
-import io.github.faizul.User.Dtos.UserDto;
-import io.github.faizul.UserRole.UserRoleService;
+import io.github.faizul.User.dtos.*;
+import io.github.faizul.security.userrole.*;
+
+import io.github.faizul.User.dtos.UserDto;
+import io.github.faizul.security.userrole.UserRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
