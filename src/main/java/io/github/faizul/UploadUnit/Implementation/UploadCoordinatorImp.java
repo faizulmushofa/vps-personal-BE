@@ -4,6 +4,7 @@ import io.github.faizul.File.UploadService.UploadService;
 import io.github.faizul.Storage.Upload.UploadStorageService;
 import io.github.faizul.UploadUnit.IOCleaningService;
 import io.github.faizul.UploadUnit.UploadCoordinator;
+import io.github.faizul.Infra.Security.CurrentUserContext;
 import io.github.faizul.UploadUnit.UploadUnitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,13 +26,15 @@ public class UploadCoordinatorImp implements UploadCoordinator {
     private final UploadService uploadService; 
     private final UploadStorageService uploadStorageClient;
     private final IOCleaningService cleanupService;
+    private final CurrentUserContext currentUserContext;
 
     private static final int BATCH_SIZE = 5;
 
     @Override
     public Mono<Void> handleChunkUpload(UUID fileId, int chunkIndex, FilePart filePart) {
         
-        return uploadUnitService.receiveUnit(fileId, chunkIndex, filePart)
+        return currentUserContext.getUserId()
+            .flatMap(userId -> uploadUnitService.receiveUnit(fileId, chunkIndex, filePart)
                 .then(uploadService.getStatus(fileId))
                 .flatMap(sessionResponse -> {
                     
@@ -44,7 +47,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                                     return uploadUnitService.claimCompletion(fileId)
                                             .flatMap(claimed -> {
                                                 if (claimed) {
-                                                    return handleCompletion(fileId, totalChunks);
+                                                    return handleCompletion(userId, fileId, totalChunks);
                                                 }
                                                 return Mono.empty();
                                             });
@@ -62,7 +65,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                                                         .flatMap(claimed -> {
                                                             if (claimed) {
                                                                 return uploadUnitService.getReceivedUnit(fileId)
-                                                                        .flatMap(received -> handleBatchTrigger(fileId, batchStart, batchEnd, received));
+                                                                        .flatMap(received -> handleBatchTrigger(userId, fileId, batchStart, batchEnd, received));
                                                             }
                                                             return Mono.empty();
                                                         });
@@ -70,15 +73,15 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                                             return Mono.empty();
                                         });
                             });
-                });
+                }));
     }
 
-    private Mono<Void> handleBatchTrigger(UUID fileId, int batchStart, int batchEnd, int currentReceived) {
+    private Mono<Void> handleBatchTrigger(Long userId, UUID fileId, int batchStart, int batchEnd, int currentReceived) {
         log.info("[BATCH TRIGGER] Initiating batch {}-{} for file {}", batchStart, batchEnd, fileId);
         
-        return uploadStorageClient.sendBatch(fileId, batchStart, batchEnd)
+        return uploadStorageClient.sendBatch(userId, fileId, batchStart, batchEnd)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
-                .then(cleanupService.cleanupBatch(fileId, batchStart, batchEnd))
+                .then(cleanupService.cleanupBatch(userId, fileId, batchStart, batchEnd))
                 .then(uploadService.updateUploadProgress(fileId, currentReceived))
                 .onErrorResume(e -> {
                     log.error("[BATCH ERROR] Failed to process batch {}-{} for file {}: {}", batchStart, batchEnd, fileId, e.getMessage());
@@ -86,15 +89,15 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                 });
     }
 
-    private Mono<Void> handleCompletion(UUID fileId, int totalChunks) {
+    private Mono<Void> handleCompletion(Long userId, UUID fileId, int totalChunks) {
         log.info("[COMPLETION DETECTED] All chunks received for file {}", fileId);
         
-        return flushUnsentBatches(fileId, totalChunks)
-                .then(uploadStorageClient.sendFinalSignal(fileId, totalChunks))
+        return flushUnsentBatches(userId, fileId, totalChunks)
+                .then(uploadStorageClient.sendFinalSignal(userId, fileId, totalChunks))
                 .retryWhen(Retry.backoff(3,Duration.ofSeconds(1)))
                 .then(uploadService.updateUploadProgress(fileId, totalChunks))
                 .then(uploadService.markAsCompleted(fileId))
-                .then(cleanupService.cleanupTempFiles(fileId))
+                .then(cleanupService.cleanupTempFiles(userId, fileId))
                 .then(uploadUnitService.cleanupMemory(fileId)) 
                 .onErrorResume(e -> {
                     log.error("[COMPLETION ERROR] Failed to finalize file {}: {}", fileId, e.getMessage());
@@ -102,7 +105,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                 });
     }
 
-    private Mono<Void> flushUnsentBatches(UUID fileId, int totalChunks) {
+    private Mono<Void> flushUnsentBatches(Long userId, UUID fileId, int totalChunks) {
         int totalBatches = (int) Math.ceil((double) totalChunks / BATCH_SIZE);
 
         return Flux.range(0, totalBatches)
@@ -118,9 +121,9 @@ public class UploadCoordinatorImp implements UploadCoordinator {
 
                                 log.info("[COMPLETION FLUSH] Sending unsent batch {}-{} for file {}", batchStart, batchEnd, fileId);
 
-                                return uploadStorageClient.sendBatch(fileId, batchStart, batchEnd)
+                                return uploadStorageClient.sendBatch(userId, fileId, batchStart, batchEnd)
                                         .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
-                                        .then(cleanupService.cleanupBatch(fileId, batchStart, batchEnd));
+                                        .then(cleanupService.cleanupBatch(userId, fileId, batchStart, batchEnd));
                             });
                 })
                 .then();

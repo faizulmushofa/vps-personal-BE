@@ -21,6 +21,8 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.UUID;
 
+import io.github.faizul.User.UserRepository;
+
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ public class UploadServiceImp implements UploadService {
     private final CurrentUserContext currentUserContext;
     private final Scheduler fileCleanupScheduler;
     private final StorageConfig storageConfig;
+    private final UserRepository userRepository;
 
     @Override
     public Mono<InitResponse> create(InitRequest request) {
@@ -45,31 +48,40 @@ public class UploadServiceImp implements UploadService {
         }
 
         String storageName = UUID.randomUUID() + extension;
-        String tempPath = storageConfig.tempDir(fileId).toString();
-
         return currentUserContext.getUserId()
-                .flatMap(userId -> {
-                    File file = File.builder()
-                            .id(fileId)
-                            .userId(userId)
-                            .originalFileName(request.fileName())
-                            .storageName(storageName)
-                            .size(request.totalSize())
-                            .build();
+                .flatMap(userId -> userRepository.findById(userId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
+                        .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
+                                .flatMap(usedStorage -> {
+                                    long totalSize = request.totalSize();
+                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L;
+                                    if (usedStorage + totalSize > quota) {
+                                        return Mono.error(new IllegalArgumentException(
+                                                "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
+                                    }
 
-                    UploadSession session = UploadSession.builder()
-                            .id(sessionId)
-                            .fileId(fileId)
-                            .tempPath(tempPath)
-                            .totalChunks(Chunk.calculateTotalChunks(request.totalSize()))
-                            .uploadedChunks(0)
-                            .status(FileStatus.UPLOADING)
-                            .build();
+                                    String tempPath = storageConfig.tempDir(userId, fileId).toString();
+                                    File file = File.builder()
+                                            .id(fileId)
+                                            .userId(userId)
+                                            .originalFileName(request.fileName())
+                                            .storageName(storageName)
+                                            .size(totalSize)
+                                            .build();
 
-                    return fileRepository.save(file)
-                            .then(uploadSessionRepository.save(session))
-                            .thenReturn(file);
-                })
+                                    UploadSession session = UploadSession.builder()
+                                            .id(sessionId)
+                                            .fileId(fileId)
+                                            .tempPath(tempPath)
+                                            .totalChunks(Chunk.calculateTotalChunks(totalSize))
+                                            .uploadedChunks(0)
+                                            .status(FileStatus.UPLOADING)
+                                            .build();
+
+                                    return fileRepository.save(file)
+                                            .then(uploadSessionRepository.save(session))
+                                            .thenReturn(file);
+                                })))
                 .map(file -> new InitResponse(file.getId(), file.getOriginalFileName()));
     }
 
@@ -123,17 +135,15 @@ public class UploadServiceImp implements UploadService {
                     session.setStatus(FileStatus.CANCELED);
 
                     return uploadSessionRepository.save(session)
-                            .flatMap(savedSession ->
-                                    Mono.<Void>fromRunnable(() -> {
-                                        try {
-                                            FileSystemUtils.deleteRecursively(Paths.get(savedSession.getTempPath()));
-                                        } catch (Exception e) {
-                                            // Ignore
-                                        }
-                                    })
+                            .flatMap(savedSession -> Mono.<Void>fromRunnable(() -> {
+                                try {
+                                    FileSystemUtils.deleteRecursively(Paths.get(savedSession.getTempPath()));
+                                } catch (Exception e) {
+                                    // Ignore
+                                }
+                            })
                                     .subscribeOn(fileCleanupScheduler)
-                                    .thenReturn(savedSession)
-                            );
+                                    .thenReturn(savedSession));
                 })
                 .then();
     }
@@ -149,7 +159,6 @@ public class UploadServiceImp implements UploadService {
                         session.getTotalChunks(),
                         session.getStatus(),
                         session.getCreatedAt(),
-                        session.getCompletedAt()
-                ));
+                        session.getCompletedAt()));
     }
 }

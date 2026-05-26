@@ -19,16 +19,19 @@ public class UploadUnitWriterImp implements UploadUnitWriter {
     private final Scheduler fileWriteScheduler;
     private final UploadFileSystem fileSystem;
     private final StorageConfig storageConfig;
+    private final io.github.faizul.Infra.Security.CurrentUserContext currentUserContext;
 
     @Override
     public Mono<Void> write(UUID fileId, int index, FilePart part) {
 
-        Path dir = storageConfig.tempDir(fileId);
-        Path target = dir.resolve("chunk-" + index);
+        return currentUserContext.getUserId().flatMap(userId -> {
+            Path dir = storageConfig.tempDir(userId, fileId);
+            Path target = dir.resolve("chunk-" + index);
 
-        return Mono.fromCallable(() -> fileSystem.prepare(dir, target))
-                .subscribeOn(fileWriteScheduler)
-                .flatMap(part::transferTo)
-                .then();
+            return Mono.fromCallable(() -> fileSystem.prepare(dir, target))
+                    .subscribeOn(fileWriteScheduler)
+                    .flatMap(part::transferTo)
+                    .then();
+        });
     }
 }

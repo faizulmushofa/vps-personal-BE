@@ -1,6 +1,10 @@
 package io.github.faizul.File.FileService;
 
 import io.github.faizul.File.Dtos.FileResponse;
+import io.github.faizul.File.Dtos.UserProfileResponse;
+import io.github.faizul.File.Dtos.UserStorageResponse;
+import io.github.faizul.File.Dtos.UserStorageSummary;
+import io.github.faizul.File.Dtos.UpdateQuotaRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +20,6 @@ import java.util.UUID;
 public class FileController {
 
     private final FileService fileService;
-
 
     @GetMapping("/{id}")
     public Mono<ResponseEntity<FileResponse>> findById(@PathVariable UUID id) {
@@ -39,5 +42,30 @@ public class FileController {
     @PreAuthorize("hasRole('ADMIN')")
     public Flux<FileResponse> getAllForAdmin() {
         return fileService.getAllForAdmin();
+    }
+
+    @GetMapping("/me")
+    public Mono<UserProfileResponse> getCurrentUserProfile() {
+        return fileService.getCurrentUserProfile();
+    }
+
+    @GetMapping("/me/storage")
+    public Mono<UserStorageResponse> getCurrentUserStorage() {
+        return fileService.getCurrentUserStorage();
+    }
+
+    @GetMapping("/storage-summary")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ADMIN')")
+    public Flux<UserStorageSummary> getUserStorageSummary() {
+        return fileService.getUserStorageSummary();
+    }
+
+    @PutMapping("/users/{id}/quota")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('ADMIN')")
+    public Mono<ResponseEntity<UserStorageSummary>> updateUserQuota(
+            @PathVariable Long id,
+            @RequestBody UpdateQuotaRequest request) {
+        return fileService.updateUserQuota(id, request)
+                .map(ResponseEntity::ok);
     }
 }

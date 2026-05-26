@@ -7,12 +7,15 @@ spring:
     init:
       mode: always
 
-grpc:
-  client:
-    channels:
-      storage-node:
-        address: static://localhost:9090
-        negotiation-type: plaintext
+  grpc:
+    security:
+      service-token: ${SERVICE_TOKEN}
+    client:
+      channels:
+        storage-node:
+          address: ${STORAGE_NODE_URL}
+          negotiation-type: tls
+          secure: false
 
 jwt:
-  access-token-expiry-hours: 24
+  access-token-expiry-hours: 1

@@ -5,6 +5,10 @@ let accessToken = localStorage.getItem(tokenKey) || "";
 let activeTransferController = null; // Holds AbortController for active transfers
 let loadedFiles = []; // Holds list of currently loaded files for client-side search
 let currentViewIsShared = false; // Tracks if current view is shared files
+let userUsedBytes = 0;
+let userQuotaBytes = 0;
+let currentTargetUserId = null;
+let adminUsersList = [];
 
 // UI Elements
 const loginPage = document.getElementById("loginPage");
@@ -71,6 +75,12 @@ function setPage() {
   if (activeToken) {
     showToast("Sudah terhubung. Selamat datang kembali!", "success");
     fetchMyFiles();
+    fetchStorageQuota();
+    probeAdminAccess();
+  } else {
+    // Reset admin UI states
+    document.getElementById("adminPanelButton").classList.add("hidden");
+    closeAdminDashboard();
   }
 }
 
@@ -278,6 +288,12 @@ async function handleUpload(event) {
     return;
   }
 
+  // Client-side quick quota check
+  if (userQuotaBytes > 0 && (userUsedBytes + file.size > userQuotaBytes)) {
+    showToast(`Gagal: Ukuran file (${formatBytes(file.size)}) melebihi sisa kapasitas storage Anda!`, "error");
+    return;
+  }
+
   showToast("Menginisialisasi sesi upload...", "info");
   
   // Set up UI for active transfer progress
@@ -302,7 +318,14 @@ async function handleUpload(event) {
     }
 
     if (!initResponse.ok) {
-      showToast("Gagal inisialisasi upload.", "error");
+      let errMsg = "Gagal inisialisasi upload.";
+      try {
+        const errData = await initResponse.json();
+        if (errData && errData.message) {
+          errMsg = errData.message;
+        }
+      } catch (e) {}
+      showToast(errMsg, "error");
       transfersCard.classList.add("hidden");
       return;
     }
@@ -543,6 +566,7 @@ async function handleDownload(fileId, fileName, fileSize) {
 // FETCH FILE LISTINGS
 async function fetchMyFiles() {
   await fetchFiles("/api/files", "get-all-user", false);
+  fetchStorageQuota();
 }
 
 async function fetchFiles(url, label, isShared = false) {
@@ -682,9 +706,201 @@ document.getElementById("uploadForm").addEventListener("submit", handleUpload);
 document.getElementById("getAllButton").addEventListener("click", fetchMyFiles);
 document.getElementById("getSharedButton").addEventListener("click", () => fetchFiles("/api/files/share/shared-with-me", "get-shared", true));
 document.getElementById("getAllAdminButton").addEventListener("click", () => fetchFiles("/api/files/admin", "get-all-admin", false));
+document.getElementById("adminPanelButton").addEventListener("click", openAdminDashboard);
+document.getElementById("closeAdminPanelBtn").addEventListener("click", closeAdminDashboard);
+document.getElementById("closeQuotaModalBtn").addEventListener("click", closeQuotaModal);
+document.getElementById("quotaForm").addEventListener("submit", submitQuotaUpdate);
 document.getElementById("clearDebugButton").addEventListener("click", () => {
   debugLog.textContent = "";
 });
 
+// Preset quota buttons event bindings
+document.querySelectorAll(".preset-btn").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    const bytes = e.currentTarget.getAttribute("data-bytes");
+    document.getElementById("quotaInput").value = bytes;
+    updateHumanReadableQuota(bytes);
+  });
+});
+
+// Custom quota input real-time formatter
+document.getElementById("quotaInput").addEventListener("input", (e) => {
+  updateHumanReadableQuota(e.target.value);
+});
+
 // Run init checks
 setPage();
+
+// --- STORAGE QUOTA & ADMIN PANEL FUNCTIONS ---
+
+async function fetchStorageQuota() {
+  const activeToken = getToken();
+  if (!activeToken) return;
+
+  try {
+    const response = await debugFetch("storage-quota", "/api/files/me/storage", {
+      headers: authHeaders()
+    });
+    if (response.ok) {
+      const data = await response.json();
+      userUsedBytes = data.usedBytes;
+      userQuotaBytes = data.quotaBytes;
+      const percentage = userQuotaBytes > 0 ? Math.min(100, Math.round((userUsedBytes / userQuotaBytes) * 100)) : 0;
+
+      document.getElementById("quotaText").textContent = `${formatBytes(userUsedBytes)} dari ${formatBytes(userQuotaBytes)}`;
+      document.getElementById("quotaPercentage").textContent = `${percentage}%`;
+      
+      const quotaProgress = document.getElementById("quotaBarProgress");
+      quotaProgress.style.width = `${percentage}%`;
+      
+      if (percentage >= 90) {
+        quotaProgress.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
+      } else {
+        quotaProgress.style.background = "linear-gradient(135deg, #a855f7 0%, #3b82f6 100%)";
+      }
+    }
+  } catch (err) {
+    console.error("Gagal mengambil kuota storage", err);
+  }
+}
+
+async function probeAdminAccess() {
+  const activeToken = getToken();
+  if (!activeToken) return;
+
+  try {
+    const response = await debugFetch("probe-admin", "/api/files/storage-summary", {
+      headers: authHeaders()
+    });
+    const adminPanelButton = document.getElementById("adminPanelButton");
+    if (response.ok) {
+      adminPanelButton.classList.remove("hidden");
+    } else {
+      adminPanelButton.classList.add("hidden");
+    }
+  } catch (err) {
+    console.error("Gagal probe admin", err);
+    document.getElementById("adminPanelButton").classList.add("hidden");
+  }
+}
+
+function openAdminDashboard() {
+  document.querySelector(".dashboard-main").classList.add("hidden");
+  document.getElementById("adminDashboardMain").classList.remove("hidden");
+  loadAdminDashboard();
+}
+
+function closeAdminDashboard() {
+  document.getElementById("adminDashboardMain").classList.add("hidden");
+  document.querySelector(".dashboard-main").classList.remove("hidden");
+}
+
+async function loadAdminDashboard() {
+  try {
+    const response = await debugFetch("load-admin-summary", "/api/files/storage-summary", {
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      showToast("Gagal memuat rekap admin.", "error");
+      return;
+    }
+    const data = await response.json();
+    adminUsersList = data;
+    
+    document.getElementById("adminStatTotalUsers").textContent = data.length;
+    
+    const tbody = document.getElementById("adminUserTableBody");
+    tbody.innerHTML = "";
+    
+    data.forEach(user => {
+      const percentage = user.quotaBytes > 0 ? Math.min(100, Math.round((user.usedBytes / user.quotaBytes) * 100)) : 0;
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+      
+      tr.innerHTML = `
+        <td style="padding: 14px 8px; font-weight: 600; color: var(--text-primary);">${user.username}</td>
+        <td style="padding: 14px 8px; color: var(--text-secondary);">${user.email}</td>
+        <td style="padding: 14px 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent-color); min-width: 32px;">${percentage}%</span>
+            <div class="progress-bar-container quota-bar-bg" style="height: 6px; width: 120px; flex-shrink: 0; margin: 0;">
+              <div class="progress-bar-fill quota-bar-fill" style="width: ${percentage}%; height: 100%;"></div>
+            </div>
+          </div>
+        </td>
+        <td style="padding: 14px 8px; font-weight: 500; font-size: 0.85rem; color: var(--text-primary);">
+          ${formatBytes(user.usedBytes)} / ${formatBytes(user.quotaBytes)}
+        </td>
+        <td style="padding: 14px 8px; text-align: center;">
+          <button class="secondary small btn-manage-quota" data-userid="${user.userId}" data-username="${user.username}" data-email="${user.email}" data-quota="${user.quotaBytes}" style="min-height: 32px; padding: 4px 10px; font-size: 11px;">
+            Atur Kuota
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    tbody.querySelectorAll(".btn-manage-quota").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const userId = e.currentTarget.getAttribute("data-userid");
+        const username = e.currentTarget.getAttribute("data-username");
+        const email = e.currentTarget.getAttribute("data-email");
+        const currentQuota = e.currentTarget.getAttribute("data-quota");
+        openQuotaModal(userId, username, email, currentQuota);
+      });
+    });
+    
+  } catch (err) {
+    showToast("Koneksi gagal saat mengambil rekap admin.", "error");
+  }
+}
+
+function openQuotaModal(userId, username, email, currentQuotaBytes) {
+  currentTargetUserId = userId;
+  document.getElementById("quotaModalUser").textContent = `${username} (${email})`;
+  document.getElementById("quotaInput").value = currentQuotaBytes;
+  
+  updateHumanReadableQuota(currentQuotaBytes);
+  document.getElementById("quotaModal").classList.remove("hidden");
+}
+
+function closeQuotaModal() {
+  document.getElementById("quotaModal").classList.add("hidden");
+  currentTargetUserId = null;
+}
+
+function updateHumanReadableQuota(bytes) {
+  const num = parseInt(bytes);
+  const text = isNaN(num) || num <= 0 ? "" : formatBytes(num);
+  document.getElementById("quotaHumanReadable").textContent = text ? `Setara dengan: ${text}` : "";
+}
+
+async function submitQuotaUpdate(e) {
+  e.preventDefault();
+  if (!currentTargetUserId) return;
+  
+  const newQuotaBytes = parseInt(document.getElementById("quotaInput").value);
+  if (isNaN(newQuotaBytes) || newQuotaBytes < 1048576) {
+    showToast("Kuota minimal adalah 1 MB.", "error");
+    return;
+  }
+  
+  try {
+    const response = await debugFetch("update-quota", `/api/files/users/${currentTargetUserId}/quota`, {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ quotaBytes: newQuotaBytes })
+    });
+    
+    if (response.ok) {
+      showToast("Kuota penyimpanan berhasil diperbarui!", "success");
+      closeQuotaModal();
+      loadAdminDashboard();
+      fetchStorageQuota();
+    } else {
+      showToast("Gagal memperbarui kuota.", "error");
+    }
+  } catch (err) {
+    showToast("Koneksi terputus saat memperbarui kuota.", "error");
+  }
+}

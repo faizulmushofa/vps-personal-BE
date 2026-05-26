@@ -29,8 +29,8 @@ public class StorageConfig {
         return dataRoot().resolve("temp");
     }
 
-    public Path tempDir(UUID fileId) {
-        return tempRoot().resolve(fileId.toString());
+    public Path tempDir(Long userId, UUID fileId) {
+        return tempRoot().resolve(userId.toString()).resolve(fileId.toString());
     }
 
     private boolean isModuleDir(Path path) {

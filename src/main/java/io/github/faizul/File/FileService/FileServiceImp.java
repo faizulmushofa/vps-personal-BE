@@ -3,6 +3,11 @@ package io.github.faizul.File.FileService;
 import io.github.faizul.File.Dtos.FileResponse;
 import io.github.faizul.Infra.Security.CurrentUserContext;
 import io.github.faizul.Storage.Upload.UploadStorageService;
+import io.github.faizul.User.UserRepository;
+import io.github.faizul.File.Dtos.UserProfileResponse;
+import io.github.faizul.File.Dtos.UserStorageResponse;
+import io.github.faizul.File.Dtos.UserStorageSummary;
+import io.github.faizul.File.Dtos.UpdateQuotaRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +26,7 @@ public class FileServiceImp implements FileService {
     private final FileRepository fileRepository;
     private final CurrentUserContext currentUserContext;
     private final UploadStorageService uploadStorageClient;
+    private final UserRepository userRepository;
 
     @Override
     public Mono<FileResponse> findByUUID(UUID uuid) {
@@ -61,7 +67,7 @@ public class FileServiceImp implements FileService {
                                 })
                 )
                 .flatMap(file ->
-                        uploadStorageClient.deleteFile(file.getId().toString())
+                        uploadStorageClient.deleteFile(file.getUserId(), file.getId().toString())
                                 .then(
                                         fileRepository.deleteById(file.getId())
                                 )
@@ -89,5 +95,62 @@ public class FileServiceImp implements FileService {
                         file.getSize(),
                         file.getCreatedAt()
                 ));
+    }
+
+    @Override
+    public Mono<UserProfileResponse> getCurrentUserProfile() {
+        return currentUserContext.getUserId()
+                .flatMap(userRepository::findById)
+                .map(user -> new UserProfileResponse(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail()
+                ));
+    }
+
+    @Override
+    public Mono<UserStorageResponse> getCurrentUserStorage() {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> userRepository.findById(userId)
+                        .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
+                                .map(usedBytes -> new UserStorageResponse(
+                                        usedBytes,
+                                        user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L
+                                ))
+                        )
+                );
+    }
+
+    @Override
+    public Flux<UserStorageSummary> getUserStorageSummary() {
+        return userRepository.findAll()
+                .flatMap(user -> fileRepository.calculateUsedStorageByUserId(user.getId())
+                        .map(usedBytes -> new UserStorageSummary(
+                                user.getId(),
+                                user.getUsername(),
+                                user.getEmail(),
+                                usedBytes,
+                                user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L
+                        ))
+                );
+    }
+
+    @Override
+    public Mono<UserStorageSummary> updateUserQuota(Long id, UpdateQuotaRequest request) {
+        return userRepository.findById(id)
+                .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
+                .flatMap(user -> {
+                    user.setStorageQuota(request.quotaBytes());
+                    return userRepository.save(user);
+                })
+                .flatMap(user -> fileRepository.calculateUsedStorageByUserId(user.getId())
+                        .map(usedBytes -> new UserStorageSummary(
+                                user.getId(),
+                                user.getUsername(),
+                                user.getEmail(),
+                                usedBytes,
+                                user.getStorageQuota()
+                        ))
+                );
     }
 }

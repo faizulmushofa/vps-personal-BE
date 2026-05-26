@@ -7,6 +7,6 @@ import java.util.UUID;
 
 public interface DownloadStorageService {
 
-    Flux<FileChunk> downloadFile(UUID id);
+    Flux<FileChunk> downloadFile(Long userId, UUID id);
 
 }

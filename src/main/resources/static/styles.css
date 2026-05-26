@@ -760,3 +760,129 @@ button:active {
   font-family: monospace;
   font-size: 12px;
 }
+
+/* --- PREMIUM STYLING FOR USER QUOTA & ADMIN PANEL --- */
+
+.quota-bar-bg {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.quota-bar-fill {
+  background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+}
+
+/* Admin Dashboard Table */
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 10px;
+}
+
+.admin-table th, 
+.admin-table td {
+  padding: 14px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.admin-table tbody tr {
+  transition: var(--transition-smooth);
+}
+
+.admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-table th {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.admin-table td {
+  color: var(--text-primary);
+}
+
+/* Modal Overlay & Modal Dialog (Glassmorphism Modal) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: var(--transition-smooth);
+}
+
+.modal-content {
+  width: min(100% - 32px, 460px);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  animation: modalZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalZoomIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 50%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: auto;
+  padding: 0;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.modal-close-btn:hover {
+  background: transparent;
+  color: #fff;
+  box-shadow: none;
+  transform: scale(1.1);
+}
+
+.quota-preset-buttons button {
+  min-height: 38px;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent-color);
+  background: rgba(129, 140, 248, 0.1);
+}

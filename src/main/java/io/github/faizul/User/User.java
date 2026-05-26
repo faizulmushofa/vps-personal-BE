@@ -39,6 +39,9 @@ public class User {
     @Column("updated_at")
     private LocalDateTime updatedAt;
 
+    @Column("storage_quota")
+    private Long storageQuota;
+
     @Column("deleted_at")
     private LocalDateTime deletedAt;
 }

@@ -22,9 +22,9 @@ public class IoCleaningServiceImp implements IOCleaningService {
     private final StorageConfig storageConfig;
 
     @Override
-    public Mono<Void> cleanupBatch(UUID fileId, int startChunk, int endChunk) {
+    public Mono<Void> cleanupBatch(Long userId, UUID fileId, int startChunk, int endChunk) {
         return Mono.<Void>fromRunnable(() -> {
-            Path dir = storageConfig.tempDir(fileId);
+            Path dir = storageConfig.tempDir(userId, fileId);
             for (int i = startChunk; i <= endChunk; i++) {
                 Path chunkFile = dir.resolve("chunk-" + i);
                 try {
@@ -38,9 +38,9 @@ public class IoCleaningServiceImp implements IOCleaningService {
     }
 
     @Override
-    public Mono<Void> cleanupTempFiles(UUID fileId) {
+    public Mono<Void> cleanupTempFiles(Long userId, UUID fileId) {
         return Mono.<Void>fromRunnable(() -> {
-            Path dir = storageConfig.tempDir(fileId);
+            Path dir = storageConfig.tempDir(userId, fileId);
             try {
                 FileSystemUtils.deleteRecursively(dir);
                 log.info("Deleted temp directory for file: {}", fileId);

@@ -25,11 +25,10 @@ public class JwtService {
 
     private String SECRET = System.getenv("SECRET_KEY");
 
-    @Value("${jwt.access-token-expiry-hours:24}")
+    @Value("${jwt.access-token-expiry-hours}")
     private long accessTokenExpiryHours;
 
     public String generateAccessToken(User user){
-        System.out.println("KUNCI YANG DIBACA SPRING BOOT: >" + SECRET + "<");
         return Jwts.builder()
                 .subject(user.getEmail())
                 .claim("UserId",user.getId())
