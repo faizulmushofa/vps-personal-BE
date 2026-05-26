@@ -27,6 +27,11 @@ public class WorkerConfig {
 
     @Bean
     public Scheduler aiScheduler() {
-        return Schedulers.newBoundedElastic(20, 10000, "ai-dispatcher");
+        return Schedulers.newBoundedElastic(10, 1000, "ai-dispatcher");
+    }
+
+    @Bean
+    public Scheduler pdfScheduler() {
+        return Schedulers.newBoundedElastic(15, 1000, "files-dispatcher");
     }
 }

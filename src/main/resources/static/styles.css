@@ -886,3 +886,177 @@ button:active {
   border-color: var(--accent-color);
   background: rgba(129, 140, 248, 0.1);
 }
+
+/* ========================================
+   AI SUMMARIZE BUTTON & MODAL STYLES
+   ======================================== */
+
+/* Adjust file-card-actions to flex for multiple buttons */
+.file-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  align-items: center;
+}
+
+.btn-download-action {
+  flex: 1;
+  min-width: 90px;
+}
+
+/* AI Summarize Button */
+.btn-ai-action {
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
+  flex: 1;
+  min-width: 90px;
+  animation: aiPulse 3s ease-in-out infinite;
+}
+
+.btn-ai-action:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+  transform: translateY(-2px);
+}
+
+@keyframes aiPulse {
+  0%, 100% { box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3); }
+  50% { box-shadow: 0 4px 20px rgba(168, 85, 247, 0.6); }
+}
+
+/* Share & delete icon buttons */
+.btn-share-action,
+.btn-delete-action {
+  flex: 0 0 36px;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+/* AI Summary Modal - wider for readability */
+.ai-modal-content {
+  width: min(100% - 32px, 620px) !important;
+}
+
+.ai-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-modal-title h3 {
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ai-modal-filename {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+/* AI Loading state */
+.ai-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.ai-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(168, 85, 247, 0.15);
+  border-top-color: #a855f7;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
+}
+
+/* AI Result container */
+.ai-result-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(99, 102, 241, 0.2));
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+  letter-spacing: 0.04em;
+}
+
+.ai-summary-text {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.ai-summary-text::-webkit-scrollbar {
+  width: 5px;
+}
+.ai-summary-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ai-summary-text::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.4);
+  border-radius: 99px;
+}
+
+/* AI Error state */
+.ai-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.ai-error-state p {
+  max-width: 340px;
+  line-height: 1.6;
+}
+
+/* Modal body scrollable area for AI modal */
+.ai-modal-content .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}

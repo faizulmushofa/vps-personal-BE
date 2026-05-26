@@ -8,6 +8,7 @@ import io.github.faizul.File.dtos.DownloadInitResponse;
 import io.github.faizul.File.dtos.DownloadStatusResponse;
 import io.github.faizul.File.core.FileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -35,23 +36,23 @@ public class DownloadController {
                 .map(file -> ResponseEntity.ok()
                         .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
                         .header("Content-Length", String.valueOf(file.getSize()))
-                        .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .body(downloadService.streamFile(fileId)))
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/{fileId}/stream/chunked")
-    public Mono<ResponseEntity<Flux<byte[]>>> streamFileChunked(
-            @PathVariable UUID fileId,
-            @RequestParam(defaultValue = "262144") int chunkSize
-    ) {
-        return fileRepository.findById(fileId)
-                .map(file -> ResponseEntity.ok()
-                        .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
-                        .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
-                        .body(downloadService.streamFileChunked(fileId, chunkSize)))
-                .defaultIfEmpty(ResponseEntity.notFound().build());
-    }
+//    @GetMapping("/{fileId}/stream/chunked")
+//    public Mono<ResponseEntity<Flux<byte[]>>> streamFileChunked(
+//            @PathVariable UUID fileId,
+//            @RequestParam(defaultValue = "262144") int chunkSize
+//    ) {
+//        return fileRepository.findById(fileId)
+//                .map(file -> ResponseEntity.ok()
+//                        .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
+//                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+//                        .body(downloadService.streamFileChunked(fileId, chunkSize)))
+//                .defaultIfEmpty(ResponseEntity.notFound().build());
+//    }
 
     @GetMapping("/{fileId}/status")
     public Mono<ResponseEntity<DownloadStatusResponse>> getStatus(@PathVariable UUID fileId) {

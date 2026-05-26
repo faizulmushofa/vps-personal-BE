@@ -1,16 +1,13 @@
 package io.github.faizul.Ai;
 
-import io.github.faizul.Ai.dtos.*;
-
 import io.github.faizul.Ai.dtos.AiRequest;
 import io.github.faizul.Ai.dtos.AiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -24,4 +21,11 @@ public class AiController {
         return aiService.summary(request)
                 .map(response -> ResponseEntity.ok().body(response));
     }
+
+    @PostMapping("/summary/pdf/{fileId}")
+    public Mono<ResponseEntity<AiResponse>> summarizePdf(@PathVariable UUID fileId) {
+        return aiService.summarizePdf(fileId)
+                .map(response -> ResponseEntity.ok().body(response));
+    }
 }
+
