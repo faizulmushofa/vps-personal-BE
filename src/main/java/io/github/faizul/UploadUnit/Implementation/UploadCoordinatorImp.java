@@ -1,10 +1,5 @@
 package io.github.faizul.UploadUnit.Implementation;
 
-import io.github.faizul.Storage.upload.*;
-import io.github.faizul.File.upload.*;
-import io.github.faizul.File.core.*;
-import io.github.faizul.security.filter.*;
-
 import io.github.faizul.File.upload.UploadService;
 import io.github.faizul.Storage.upload.UploadStorageService;
 import io.github.faizul.UploadUnit.IOCleaningService;
@@ -44,8 +39,7 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                 .flatMap(sessionResponse -> {
                     
                     int totalChunks = sessionResponse.totalChunks();
-                    
-                    // 1. Cek Komplesi 100% (Secara Atomik)
+
                     return uploadUnitService.isComplete(fileId, totalChunks)
                             .flatMap(isComplete -> {
                                 if (isComplete) {
@@ -57,12 +51,11 @@ public class UploadCoordinatorImp implements UploadCoordinator {
                                                 return Mono.empty();
                                             });
                                 }
-                                
-                                // 2. Evaluasi Batch Saat Ini (Windowing Out-of-Order Proof)
+
                                 int batchIndex = chunkIndex / BATCH_SIZE;
                                 int batchStart = batchIndex * BATCH_SIZE;
                                 int batchEnd = Math.min(batchStart + BATCH_SIZE - 1, totalChunks - 1);
-                                
+
                                 return uploadUnitService.isBatchReady(fileId, batchStart, batchEnd)
                                         .flatMap(isReady -> {
                                             if (isReady) {

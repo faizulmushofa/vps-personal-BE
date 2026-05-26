@@ -1,11 +1,5 @@
 package io.github.faizul.File.upload;
 
-import io.github.faizul.infra.config.*;
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
-import io.github.faizul.User.*;
-import io.github.faizul.security.filter.*;
-
 import io.github.faizul.File.core.File;
 import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.security.filter.CurrentUserContext;
@@ -145,7 +139,7 @@ public class UploadServiceImp implements UploadService {
                                 try {
                                     FileSystemUtils.deleteRecursively(Paths.get(savedSession.getTempPath()));
                                 } catch (Exception e) {
-                                    // Ignore
+                                    // silently ignore temp-dir cleanup failures during cancel
                                 }
                             })
                                     .subscribeOn(fileCleanupScheduler)

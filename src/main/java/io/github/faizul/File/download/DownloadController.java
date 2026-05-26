@@ -1,8 +1,5 @@
 package io.github.faizul.File.download;
 
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
-
 import io.github.faizul.File.dtos.DownloadInitRequest;
 import io.github.faizul.File.dtos.DownloadInitResponse;
 import io.github.faizul.File.dtos.DownloadStatusResponse;
@@ -41,19 +38,6 @@ public class DownloadController {
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
-//    @GetMapping("/{fileId}/stream/chunked")
-//    public Mono<ResponseEntity<Flux<byte[]>>> streamFileChunked(
-//            @PathVariable UUID fileId,
-//            @RequestParam(defaultValue = "262144") int chunkSize
-//    ) {
-//        return fileRepository.findById(fileId)
-//                .map(file -> ResponseEntity.ok()
-//                        .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
-//                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-//                        .body(downloadService.streamFileChunked(fileId, chunkSize)))
-//                .defaultIfEmpty(ResponseEntity.notFound().build());
-//    }
-
     @GetMapping("/{fileId}/status")
     public Mono<ResponseEntity<DownloadStatusResponse>> getStatus(@PathVariable UUID fileId) {
         return downloadService.getStatus(fileId)
@@ -66,4 +50,3 @@ public class DownloadController {
                 .thenReturn(ResponseEntity.ok().build());
     }
 }
-

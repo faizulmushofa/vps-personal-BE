@@ -1,10 +1,5 @@
 package io.github.faizul.security.filter;
 
-import io.github.faizul.User.*;
-import io.github.faizul.security.userrole.*;
-import io.github.faizul.security.role.*;
-import io.github.faizul.security.jwt.*;
-
 import com.google.common.net.HttpHeaders;
 import io.github.faizul.security.jwt.JwtService;
 import io.github.faizul.security.role.RoleRepository;
@@ -55,7 +50,6 @@ public class JwtFilter implements WebFilter {
         String email = jwtService.extractEmail(token);
 
         return authenticate(email)
-                // Kalau user tidak ditemukan di DB (token valid tapi user dihapus) → reject 401.
                 .onErrorResume(e -> {
                     log.warn("JWT authentication failed: {}", e.getMessage());
                     exchange.getResponse().getHeaders().add("X-Auth-Debug", "authentication-error");
