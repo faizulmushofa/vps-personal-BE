@@ -129,6 +129,9 @@ public class DownloadServiceImp implements DownloadService {
                 );
     }
 
+    @Deprecated(
+            forRemoval = true
+    )
     @Override
     public Flux<byte[]> streamFileChunked(UUID fileId, int chunkSize) {
         return streamFile(fileId)

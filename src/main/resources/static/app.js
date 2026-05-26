@@ -629,6 +629,7 @@ function renderFiles(files) {
   files.forEach((f) => {
     const card = document.createElement("div");
     card.className = "file-card";
+    const isPdf = (f.originalFileName || "").toLowerCase().endsWith(".pdf");
     
     // Shorten title if too long
     const shortName = f.originalFileName || "Berkas Tidak Bernama";
@@ -649,13 +650,22 @@ function renderFiles(files) {
           <div class="file-card-date">${dateFormatted}</div>
         </div>
       </div>
-      <div class="file-card-actions">
+        <div class="file-card-actions">
         <button class="btn-download-action" data-id="${f.id}" data-name="${f.originalFileName}" data-size="${f.size}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
           <span>Download</span>
         </button>
+        ${isPdf ? `
+        <button class="btn-ai-action" data-id="${f.id}" title="Rangkum dengan AI">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+          <span>Rangkum AI</span>
+        </button>
+        ` : ''}
         ${!currentViewIsShared ? `
         <button class="btn-share-action" data-id="${f.id}" title="Bagikan File">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -686,6 +696,12 @@ function renderFiles(files) {
       };
     }
 
+    // Bind AI summarize button if it exists (PDF only)
+    const aiBtn = card.querySelector(".btn-ai-action");
+    if (aiBtn) {
+      aiBtn.onclick = () => handleSummarizePdf(f.id, f.originalFileName);
+    }
+
     fileList.appendChild(card);
   });
 }
@@ -698,6 +714,77 @@ searchFiles.addEventListener("input", (e) => {
   );
   renderFiles(filtered);
 });
+
+// AI PDF SUMMARIZATION
+function showAiSummaryModal(fileName) {
+  document.getElementById("aiModalFileName").textContent = `📄 ${fileName}`;
+  document.getElementById("aiSummaryLoading").classList.remove("hidden");
+  document.getElementById("aiSummaryResult").classList.add("hidden");
+  document.getElementById("aiSummaryError").classList.add("hidden");
+  document.getElementById("aiSummaryModal").classList.remove("hidden");
+}
+
+function closeAiSummaryModal() {
+  document.getElementById("aiSummaryModal").classList.add("hidden");
+}
+
+async function handleSummarizePdf(fileId, fileName) {
+  const activeToken = getToken();
+  if (!activeToken) {
+    clearSession("Login diperlukan.");
+    return;
+  }
+
+  showAiSummaryModal(fileName);
+
+  try {
+    const response = await debugFetch("summarize-pdf", `/api/ai/summary/pdf/${fileId}`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      clearSession("Akses ditolak.");
+      closeAiSummaryModal();
+      return;
+    }
+
+    if (!response.ok) {
+      document.getElementById("aiSummaryLoading").classList.add("hidden");
+      document.getElementById("aiSummaryError").classList.remove("hidden");
+      document.getElementById("aiSummaryErrorText").textContent =
+        `Gagal merangkum dokumen (HTTP ${response.status}). Pastikan file adalah PDF yang valid.`;
+      return;
+    }
+
+    const data = await response.json();
+    const summaryText = data.response || "Tidak ada ringkasan yang dihasilkan.";
+
+    document.getElementById("aiSummaryLoading").classList.add("hidden");
+    document.getElementById("aiSummaryText").textContent = summaryText;
+    document.getElementById("aiSummaryResult").classList.remove("hidden");
+
+  } catch (err) {
+    document.getElementById("aiSummaryLoading").classList.add("hidden");
+    document.getElementById("aiSummaryError").classList.remove("hidden");
+    document.getElementById("aiSummaryErrorText").textContent =
+      "Koneksi gagal. Pastikan server berjalan dan coba lagi.";
+  }
+}
+
+document.getElementById("closeAiModalBtn").addEventListener("click", closeAiSummaryModal);
+document.getElementById("aiSummaryModal").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("aiSummaryModal")) closeAiSummaryModal();
+});
+document.getElementById("copyAiResultBtn").addEventListener("click", () => {
+  const text = document.getElementById("aiSummaryText").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Ringkasan berhasil disalin!", "success");
+  }).catch(() => {
+    showToast("Gagal menyalin teks.", "error");
+  });
+});
+
 
 // INITIAL EVENT BINDINGS
 document.getElementById("loginForm").addEventListener("submit", handleLogin);

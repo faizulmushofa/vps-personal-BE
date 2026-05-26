@@ -281,6 +281,50 @@
     </div>
   </div>
 
+  <!-- AI Summary Modal -->
+  <div id="aiSummaryModal" class="modal-overlay hidden">
+    <div class="modal-content glass ai-modal-content">
+      <div class="modal-header">
+        <div class="ai-modal-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color: #a855f7;">
+            <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+            <line x1="9" y1="9" x2="9.01" y2="9"/>
+            <line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+          <h3>Ringkasan AI</h3>
+        </div>
+        <button id="closeAiModalBtn" class="modal-close-btn">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p class="ai-modal-filename" id="aiModalFileName"></p>
+
+        <!-- Loading State -->
+        <div id="aiSummaryLoading" class="ai-loading-state hidden">
+          <div class="ai-spinner"></div>
+          <p>Sedang menganalisis dan merangkum dokumen...</p>
+        </div>
+
+        <!-- Result State -->
+        <div id="aiSummaryResult" class="ai-result-container hidden">
+          <div class="ai-result-header">
+            <span class="ai-badge">✨ Gemini AI</span>
+            <button id="copyAiResultBtn" class="secondary small" type="button">Salin</button>
+          </div>
+          <div id="aiSummaryText" class="ai-summary-text"></div>
+        </div>
+
+        <!-- Error State -->
+        <div id="aiSummaryError" class="ai-error-state hidden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32" style="color: #ef4444;">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p id="aiSummaryErrorText">Gagal mengambil ringkasan.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Global Alert / Status Box -->
   <div id="toastAlert" class="toast hidden">
     <div class="toast-content">

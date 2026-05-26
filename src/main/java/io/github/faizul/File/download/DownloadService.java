@@ -15,9 +15,7 @@ public interface DownloadService {
 
     Flux<byte[]> streamFile(UUID fileId);
 
-
     Flux<byte[]> streamFileChunked(UUID fileId, int chunkSize);
-
 
     Mono<DownloadStatusResponse> getStatus(UUID fileId);
 
