@@ -1,8 +1,5 @@
 package io.github.faizul.Storage.upload;
 
-import io.github.faizul.infra.config.*;
-import io.github.faizul.Storage.upload.*;
-
 import com.google.protobuf.ByteString;
 import io.github.faizul.infra.config.StorageConfig;
 import io.github.storagenode.grpc.upload.FinalizeRequest;
@@ -47,14 +44,11 @@ public class UploadStorageImp implements UploadStorageService {
     public Mono<Void> sendBatch(Long userId, UUID fileId, int startChunk, int endChunk) {
         Path dir = storageConfig.tempDir(userId, fileId);
 
-        // 1. Looping reaktif dari startChunk ke endChunk
         return Flux.range(startChunk, endChunk - startChunk + 1)
-                // 2. Baca tiap file chunk dan pecah menjadi aliran bytes 256KB
                 .concatMap(index -> {
                     Path chunkPath = dir.resolve("chunk-" + index);
                     return streamFileInSlices(userId, fileId, chunkPath, index);
                 })
-                // 3. Pipa (Pipeline) ke Klien gRPC
                 .as(this::uploadBatch)
                 .then();
     }
@@ -78,20 +72,14 @@ public class UploadStorageImp implements UploadStorageService {
                 });
     }
 
-    /**
-     * Membaca file dari hardisk dengan "sedotan kecil" (256KB) 
-     * secara Non-Blocking.
-     */
     private Flux<UploadChunkRequest> streamFileInSlices(Long userId, UUID fileId, Path filePath, int chunkIndex) {
         FileSystemResource resource = new FileSystemResource(filePath);
-        
+
         return DataBufferUtils.read(resource, bufferFactory, GRPC_PAYLOAD_SIZE)
                 .map(dataBuffer -> {
                     byte[] bytes = new byte[dataBuffer.readableByteCount()];
                     dataBuffer.read(bytes);
-                    
-                    // PENTING: Bebaskan memori DataBuffer agar tidak Memory Leak (OOM)
-                    DataBufferUtils.release(dataBuffer); 
+                    DataBufferUtils.release(dataBuffer);
 
                     return UploadChunkRequest.newBuilder()
                             .setFileId(fileId.toString())

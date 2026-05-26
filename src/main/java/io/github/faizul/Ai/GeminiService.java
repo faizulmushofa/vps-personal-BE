@@ -24,15 +24,14 @@ public class GeminiService implements AiService {
         return Mono.fromCallable(() -> chatClient.prompt()
                 .user(request.teks())
                 .call()
-                .content()
-        )
-        .subscribeOn(aiScheduler)
-        .map(AiResponse::new)
-        .onErrorResume(Exception.class, e -> {
-            System.err.println("GAGAL menjalankan program: " + e.getMessage());
-            e.printStackTrace();
-            return Mono.just(new AiResponse("Gagal menghasilkan ringkasan karena masalah teknis."));
-        });
+                .content())
+                .subscribeOn(aiScheduler)
+                .map(AiResponse::new)
+                .onErrorResume(Exception.class, e -> {
+                    System.err.println("GAGAL menjalankan program: " + e.getMessage());
+                    e.printStackTrace();
+                    return Mono.just(new AiResponse("Gagal menghasilkan ringkasan karena masalah teknis."));
+                });
     }
 
     @Override
@@ -40,11 +39,6 @@ public class GeminiService implements AiService {
         return pdfService.extractFile(fileId)
                 .map(text -> "Tolong rangkum teks berikut secara singkat dan jelas dalam Bahasa Indonesia:\n\n" + text)
                 .map(AiRequest::new)
-                .flatMap(this::summary)
-                .onErrorResume(Exception.class, e -> {
-                    System.err.println("GAGAL merangkum PDF: " + e.getMessage());
-                    e.printStackTrace();
-                    return Mono.just(new AiResponse("Gagal memproses PDF: " + e.getMessage()));
-                });
+                .flatMap(this::summary);
     }
 }
