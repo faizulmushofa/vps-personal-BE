@@ -19,7 +19,7 @@
 ## ⚡ [FEATURES]
 * 🔄 **Reactive WebFlux Stack**: Seluruh aliran data non-blocking menggunakan Project Reactor (`Flux`/`Mono`) untuk menangani konkurensi tinggi.
 * 📦 **Chunked File Streaming**: Proses unggah dan unduh file besar dilakukan dengan membagi file menjadi potongan kecil (chunks) sehingga konsumsi RAM di server tetap stabil dan minimal.
-* 🔌 **Decoupled gRPC Storage**: Pemisahan layer logika (API) dengan penyimpanan aktual. Core API bertindak sebagai orchestrator dan berkomunikasi dengan gRPC storage node.
+* 🔌 **Decoupled gRPC Storage**: Pemisahan layer logika (API) dengan penyimpanan aktual. Core API bertindak sebagai orchestrator dan berkomunikasi dengan gRPC Storage Node pendamping (**[storage-node-grpc](https://github.com/faizulmushofa/storage-node-grpc.git)**).
 * 🔐 **Robust Security (JWT & RBAC)**: Autentikasi aman menggunakan access token di header dan refresh token dalam HTTP-Only Cookie. Mendukung Role-Based Access Control (Admin & User).
 * 📂 **File Sharing System**: Kemudahan membagikan file tertentu ke pengguna lain secara aman melalui pencocokan email.
 * 🧠 **Smart AI Summarizer (Gemini)**: Integrasi dengan Google Gemini AI untuk merangkum teks umum maupun mengekstrak teks langsung dari file PDF (menggunakan Apache PDFBox) lalu meringkasnya secara otomatis.
@@ -241,6 +241,9 @@ vps-personal-backend/
 * **Dynamic Database Seeding**: Schema database PostgreSQL didesain auto-create di runtime lewat `DatabaseSeeder.java`. Hal ini meminimalisir setup manual bagi developer baru.
 * **Fully Reactive Stack**: Penggunaan WebFlux dan R2DBC memastikan performa throughput data yang sangat besar dan efisiensi memori yang tangguh karena tidak memblock thread I/O.
 * **gRPC Plaintext vs TLS**: Konfigurasi gRPC client di `application.yaml` mendukung opsi TLS. Dalam local development, parameter `secure: false` diset untuk mempermudah testing tanpa ribet setup certificate local.
+
+> [!TIP]
+> gRPC Storage Node pendamping yang menangani penyimpanan biner ini dikembangkan di repositori **[storage-node-grpc](https://github.com/faizulmushofa/storage-node-grpc.git)** dan dapat dideploy langsung menggunakan Docker image resmi **`faizul20/storage-node`**.
 
 ---
 
