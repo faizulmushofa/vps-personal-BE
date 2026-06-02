@@ -18,17 +18,24 @@ COPY src src
 # Build application
 RUN ./mvnw clean package -DskipTests -B
 
-# Stage 2: Runtime
-FROM eclipse-temurin:21-jre-jammy
+# Stage 2: Runtime (Minimal base image)
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Copy JAR from builder
+# Copy JAR from builder stage
 COPY --from=builder /build/target/*.jar app.jar
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD java -cp app.jar org.springframework.boot.loader.JarLauncher || exit 1
+# Create non-root user for security (optional but recommended)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 
-# Run application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Expose port 8090
+EXPOSE 8090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8090/actuator/health || exit 1
+
+# Run application with memory optimizations for minimal resource usage
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
