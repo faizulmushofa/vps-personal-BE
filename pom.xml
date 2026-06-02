@@ -130,6 +130,11 @@
         </dependency>
         <!-- Source: https://mvnrepository.com/artifact/me.paulschwarz/spring-dotenv -->
 
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>3.0.3</version>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>
