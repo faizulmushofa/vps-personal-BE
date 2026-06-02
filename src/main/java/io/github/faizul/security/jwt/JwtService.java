@@ -25,7 +25,8 @@ public class JwtService {
 
     private final RefreshTokenRepository refreshTokenRepository;
 
-    private String SECRET = System.getenv("SECRET_KEY");
+    @Value("${SECRET_KEY}")
+    private String SECRET;
 
     @Value("${jwt.access-token-expiry-hours}")
     private long accessTokenExpiryHours;

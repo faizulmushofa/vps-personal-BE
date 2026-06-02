@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 @Component
 @RequiredArgsConstructor
@@ -172,6 +173,10 @@ public class DatabaseSeeder implements CommandLineRunner {
                 );
                 """;
         log.info("Initializing database schema...");
-        return databaseClient.sql(schema).then();
+        return Flux.fromArray(schema.split(";"))
+                .map(String::trim)
+                .filter(sql -> !sql.isEmpty())
+                .concatMap(sql -> databaseClient.sql(sql).then())
+                .then();
     }
 }
