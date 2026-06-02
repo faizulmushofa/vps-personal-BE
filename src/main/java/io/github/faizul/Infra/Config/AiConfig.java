@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,9 +16,10 @@ import org.springframework.context.annotation.Configuration;
 public class AiConfig {
 
         @Bean
-        public Client geminiClient() {
-
-                String apiKey = System.getenv("GEMINI_API_KEY");
+        public Client geminiClient(@Value("${GEMINI_API_KEY}") String apiKey) {
+                if (apiKey == null || apiKey.trim().isEmpty()) {
+                        throw new RuntimeException("Gamini api key is null or empty");
+                }
 
                 if (apiKey == null || apiKey.trim().isEmpty()) {
                         throw new RuntimeException("GEMINI_API_KEY is not set");
