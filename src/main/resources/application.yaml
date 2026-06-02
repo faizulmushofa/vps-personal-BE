@@ -19,3 +19,14 @@ spring:
 
 jwt:
   access-token-expiry-hours: 1
+
+server:
+  port: 8090
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: alpha
+    tagsSorter: alpha

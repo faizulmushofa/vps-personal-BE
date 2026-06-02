@@ -47,7 +47,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeExchange( authorizeExchangeSpec -> authorizeExchangeSpec
-                        .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico").permitAll()
+                        .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll()
                         .pathMatchers("/api/auth/**").permitAll()
                         .pathMatchers("/admin/**").hasRole("ADMIN")
                         .anyExchange().authenticated()
