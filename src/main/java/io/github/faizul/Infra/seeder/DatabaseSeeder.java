@@ -1,15 +1,10 @@
 package io.github.faizul.infra.seeder;
 
-import io.github.faizul.infra.seeder.*;
-import io.github.faizul.User.*;
-import io.github.faizul.security.userrole.*;
-import io.github.faizul.security.role.*;
-
 import io.github.faizul.security.role.Role;
 import io.github.faizul.security.role.RoleRepository;
 import io.github.faizul.security.role.Roles;
-import io.github.faizul.User.User;
-import io.github.faizul.User.UserRepository;
+import io.github.faizul.User.core.User;
+import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.security.userrole.UserRole;
 import io.github.faizul.security.userrole.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -170,6 +165,17 @@ public class DatabaseSeeder implements CommandLineRunner {
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE(file_id, user_id)
+                );
+                CREATE TABLE IF NOT EXISTS external_users (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    provider VARCHAR(255) NOT NULL,
+                    provider_user_id VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    expires_at BIGINT,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
                 """;
         log.info("Initializing database schema...");

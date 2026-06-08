@@ -1,7 +1,4 @@
-package io.github.faizul.User;
-
-import io.github.faizul.User.dtos.*;
-import io.github.faizul.security.userrole.*;
+package io.github.faizul.User.core;
 
 import io.github.faizul.User.dtos.UserDto;
 import io.github.faizul.security.userrole.UserRoleService;

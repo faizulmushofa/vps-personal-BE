@@ -1,0 +1,31 @@
+package io.github.faizul.User.externalAccount;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/external-accounts")
+@RequiredArgsConstructor
+public class ExternalAccountController {
+
+    private final ExternalAccountService externalUserService;
+
+    @GetMapping("/auth-url")
+    public Mono<String> getAuthUrl(@RequestParam String provider) {
+        return externalUserService.getAuthUrl(provider);
+    }
+
+    @PostMapping("/init")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<Void> initAccount(@RequestParam String provider, @RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        if (token == null || token.isBlank()) {
+            return Mono.error(new IllegalArgumentException("Token is required"));
+        }
+        return externalUserService.handleCallback(provider, token);
+    }
+}

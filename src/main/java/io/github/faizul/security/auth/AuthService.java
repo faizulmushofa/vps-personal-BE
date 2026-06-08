@@ -2,13 +2,9 @@ package io.github.faizul.security.auth;
 
 import io.github.faizul.security.auth.dtos.*;
 
-import io.github.faizul.User.*;
-import io.github.faizul.security.jwt.*;
-
-import io.github.faizul.security.auth.dtos.*;
 import io.github.faizul.security.jwt.JwtService;
-import io.github.faizul.User.UserRepository;
-import io.github.faizul.User.UserService;
+import io.github.faizul.User.core.UserRepository;
+import io.github.faizul.User.core.UserService;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;

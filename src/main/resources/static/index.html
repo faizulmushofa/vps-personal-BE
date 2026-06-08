@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <!-- Google GIS Script -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Dark mode particles/glows in background -->
@@ -133,6 +135,13 @@
             <div class="progress-bar-container quota-bar-bg" style="margin-top: 8px;">
               <div id="quotaBarProgress" class="progress-bar-fill quota-bar-fill" style="width: 0%"></div>
             </div>
+          </div>
+
+          <!-- Google Auth Card -->
+          <div class="side-card glass-card">
+            <h3>Google Account</h3>
+            <div id="googleBtnContainer" style="display: flex; justify-content: center; margin-top: 10px; min-height: 40px;"></div>
+            <p id="googleStatus" style="font-size: 0.8rem; text-align: center; color: var(--text-secondary); margin-top: 8px;">Hubungkan akun Google Anda</p>
           </div>
 
           <!-- Actions -->

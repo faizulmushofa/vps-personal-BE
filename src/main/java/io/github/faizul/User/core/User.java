@@ -1,4 +1,4 @@
-package io.github.faizul.User;
+package io.github.faizul.User.core;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

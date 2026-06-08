@@ -3,7 +3,7 @@ package io.github.faizul.security.filter;
 import com.google.common.net.HttpHeaders;
 import io.github.faizul.security.jwt.JwtService;
 import io.github.faizul.security.role.RoleRepository;
-import io.github.faizul.User.UserRepository;
+import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.security.userrole.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

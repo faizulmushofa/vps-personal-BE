@@ -1,5 +1,6 @@
-package io.github.faizul.File.download;
+package io.github.faizul.File.download.storageNodeDowload;
 
+import io.github.faizul.File.download.DownloadService;
 import io.github.faizul.File.dtos.DownloadInitRequest;
 import io.github.faizul.File.dtos.DownloadInitResponse;
 import io.github.faizul.File.dtos.DownloadStatusResponse;
@@ -16,7 +17,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("api/files/download")
 @RequiredArgsConstructor
-public class DownloadController {
+public class StorageNodeDownloadController {
 
     private final DownloadService downloadService;
     private final FileRepository fileRepository;

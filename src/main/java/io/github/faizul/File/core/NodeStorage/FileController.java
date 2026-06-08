@@ -1,6 +1,6 @@
-package io.github.faizul.File.core;
+package io.github.faizul.File.core.NodeStorage;
 
-import io.github.faizul.File.dtos.*;
+import io.github.faizul.File.core.FileService;
 
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.dtos.UserProfileResponse;

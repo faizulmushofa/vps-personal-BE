@@ -1,14 +1,13 @@
-package io.github.faizul.File.share;
+package io.github.faizul.File.share.StorageNode;
 
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
-import io.github.faizul.User.*;
-import io.github.faizul.security.filter.*;
+import io.github.faizul.File.share.FileShared;
+import io.github.faizul.File.share.FileSharedRepository;
+import io.github.faizul.File.share.ShareService;
 
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.security.filter.CurrentUserContext;
-import io.github.faizul.User.UserRepository;
+import io.github.faizul.User.core.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +21,7 @@ import java.util.UUID;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class ShareServiceImp implements ShareService {
+public class StorageNodeShareServiceImp implements ShareService {
 
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;

@@ -77,6 +77,7 @@ function setPage() {
     fetchMyFiles();
     fetchStorageQuota();
     probeAdminAccess();
+    initGoogleGis();
   } else {
     // Reset admin UI states
     document.getElementById("adminPanelButton").classList.add("hidden");
@@ -270,6 +271,73 @@ function handleLogout() {
   selectedFileInfo.classList.add("hidden");
   setPage();
   showToast("Berhasil logout.", "success");
+}
+
+// GOOGLE IDENTITY SERVICES (GIS) INTEGRATION
+async function initGoogleGis() {
+  if (typeof google === "undefined" || !google.accounts) {
+    // Retry in 500ms if script is not fully loaded yet
+    setTimeout(initGoogleGis, 500);
+    return;
+  }
+
+  try {
+    const response = await debugFetch("get-google-client-id", "/api/external-accounts/auth-url?provider=google", {
+      method: "GET",
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      console.error("Gagal mengambil Google Client ID dari backend");
+      return;
+    }
+
+    const clientId = await response.text();
+    if (!clientId) {
+      console.warn("Google Client ID kosong");
+      return;
+    }
+
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredentialResponse
+    });
+
+    const btnContainer = document.getElementById("googleBtnContainer");
+    if (btnContainer) {
+      google.accounts.id.renderButton(btnContainer, {
+        theme: "outline",
+        size: "large",
+        width: 280
+      });
+    }
+  } catch (error) {
+    console.error("Error inisialisasi Google GIS:", error);
+  }
+}
+
+async function handleGoogleCredentialResponse(response) {
+  showToast("Menghubungkan akun Google...", "info");
+  try {
+    const res = await debugFetch("init-external-account", "/api/external-accounts/init?provider=google", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ token: response.credential })
+    });
+
+    if (res.ok) {
+      showToast("Akun Google berhasil dihubungkan!", "success");
+      const statusText = document.getElementById("googleStatus");
+      if (statusText) {
+        statusText.textContent = "Google Account Terhubung";
+        statusText.style.color = "#10b981"; // success green
+      }
+    } else {
+      showToast("Gagal menghubungkan akun Google.", "error");
+    }
+  } catch (error) {
+    showToast("Koneksi bermasalah saat menghubungkan akun.", "error");
+  }
 }
 
 // UPLOADING FLOW

@@ -1,6 +1,4 @@
-package io.github.faizul.User;
-
-import io.github.faizul.User.dtos.*;
+package io.github.faizul.User.core;
 
 import io.github.faizul.User.dtos.UserDto;
 import lombok.RequiredArgsConstructor;
