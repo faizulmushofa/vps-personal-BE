@@ -16,6 +16,10 @@ spring:
           negotiation-type: tls
           secure: false
 
+google:
+  client-id: ${GOOGLE_GLIENT_ID}
+  client-secret: ${GOOGLE_CLIENT_SECRET}
+
 brevo:
   api-key: ${BREVO_API_KEY}
   sender:

@@ -5,19 +5,25 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-
 import java.util.Map;
 
 @Component
 public class GoogleProvider implements ExternalProvider {
 
     private final String clientId;
+    private final String clientSecret;
     private final WebClient webClient;
 
     public GoogleProvider(
-            @Value("${google.client-id:${GOOGLE_GLIENT_ID:}}") String clientId) {
+            @Value("${google.client-id:${GOOGLE_GLIENT_ID:}}") String clientId,
+            @Value("${google.client-secret:${GOOGLE_CLIENT_SECRET:}}") String clientSecret) {
         this.clientId = clientId;
-        this.webClient = WebClient.create();
+        this.clientSecret = clientSecret;
+        io.netty.resolver.DefaultAddressResolverGroup resolver = io.netty.resolver.DefaultAddressResolverGroup.INSTANCE;
+        reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create().resolver(resolver);
+        this.webClient = WebClient.builder()
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
+                .build();
     }
 
     @Override
@@ -32,38 +38,41 @@ public class GoogleProvider implements ExternalProvider {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Mono<ExternalAccount> exchangeCode(String idToken) {
-        return webClient.get()
-                .uri("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+    public Mono<ExternalAccount> exchangeCode(String code) {
+        return webClient.post()
+                .uri("https://oauth2.googleapis.com/token")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .bodyValue("code=" + code +
+                        "&client_id=" + clientId +
+                        "&client_secret=" + clientSecret +
+                        "&redirect_uri=postmessage" +
+                        "&grant_type=authorization_code")
                 .retrieve()
                 .bodyToMono(Map.class)
-                .flatMap(map -> {
-                    String aud = (String) map.get("aud");
-                    if (aud == null || !aud.equals(clientId)) {
-                        return Mono.error(new IllegalArgumentException("Invalid ID Token audience"));
-                    }
+                .flatMap(tokenResponse -> {
+                    String accessToken = (String) tokenResponse.get("access_token");
+                    String refreshToken = (String) tokenResponse.get("refresh_token");
+                    Number expiresIn = (Number) tokenResponse.get("expires_in");
+                    long expiresAt = System.currentTimeMillis() + (expiresIn != null ? expiresIn.longValue() * 1000 : 3600000L);
 
-                    ExternalAccount account = ExternalAccount.builder()
-                            .provider("GOOGLE")
-                            .providerUserId((String) map.get("sub"))
-                            .email((String) map.get("email"))
-                            .accessToken(idToken)
-                            .build();
+                    return webClient.get()
+                            .uri("https://www.googleapis.com/oauth2/v3/userinfo")
+                            .header("Authorization", "Bearer " + accessToken)
+                            .retrieve()
+                            .bodyToMono(Map.class)
+                            .map(userInfo -> {
+                                String sub = (String) userInfo.get("sub");
+                                String email = (String) userInfo.get("email");
 
-                    Object expObj = map.get("exp");
-                    if (expObj != null) {
-                        if (expObj instanceof Number number) {
-                            account.setExpiresAt(number.longValue() * 1000);
-                        } else {
-                            try {
-                                account.setExpiresAt(Long.parseLong(expObj.toString()) * 1000);
-                            } catch (NumberFormatException e) {
-                                // ignore
-                            }
-                        }
-                    }
-
-                    return Mono.just(account);
+                                return ExternalAccount.builder()
+                                        .provider("GOOGLE")
+                                        .providerUserId(sub)
+                                        .email(email)
+                                        .accessToken(accessToken)
+                                        .refreshToken(refreshToken)
+                                        .expiresAt(expiresAt)
+                                        .build();
+                            });
                 });
     }
 }

@@ -136,6 +136,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                     storage_name VARCHAR(255) NOT NULL,
                     size BIGINT NOT NULL,
                     user_id BIGINT NOT NULL,
+                    provider VARCHAR(50) DEFAULT 'STORAGE_NODE',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
@@ -195,6 +196,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(1024);
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+                ALTER TABLE files ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'STORAGE_NODE';
                 """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))

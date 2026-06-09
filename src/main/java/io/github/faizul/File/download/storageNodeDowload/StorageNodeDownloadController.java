@@ -6,6 +6,7 @@ import io.github.faizul.File.dtos.DownloadInitResponse;
 import io.github.faizul.File.dtos.DownloadStatusResponse;
 import io.github.faizul.File.core.FileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,11 +17,17 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("api/files/download")
-@RequiredArgsConstructor
 public class StorageNodeDownloadController {
 
     private final DownloadService downloadService;
     private final FileRepository fileRepository;
+
+    public StorageNodeDownloadController(
+            @Qualifier("storageNodeDownloadService") DownloadService downloadService,
+            FileRepository fileRepository) {
+        this.downloadService = downloadService;
+        this.fileRepository = fileRepository;
+    }
 
     @PostMapping("/init")
     public Mono<ResponseEntity<DownloadInitResponse>> init(@RequestBody DownloadInitRequest request) {

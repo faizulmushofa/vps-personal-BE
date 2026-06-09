@@ -34,4 +34,10 @@ public class WorkerConfig {
     public Scheduler pdfScheduler() {
         return Schedulers.newBoundedElastic(15, 1000, "files-dispatcher");
     }
+
+    @Bean
+    public Scheduler googleSyncScheduler() {
+        return Schedulers.newBoundedElastic(10, 1000, "google-sync");
+    }
+
 }

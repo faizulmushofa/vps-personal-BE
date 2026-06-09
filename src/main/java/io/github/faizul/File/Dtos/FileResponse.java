@@ -10,5 +10,6 @@ public record FileResponse(
         UUID id,
         String originalFileName,
         Long size,
-        Instant createdAt
+        Instant createdAt,
+        String provider
 ){}
