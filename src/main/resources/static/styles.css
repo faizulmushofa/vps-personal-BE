@@ -190,6 +190,19 @@ input:focus {
   background: rgba(15, 23, 42, 0.85);
 }
 
+input[readonly] {
+  background: rgba(148, 163, 184, 0.08) !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  color: rgba(148, 163, 184, 0.6) !important;
+  cursor: not-allowed;
+}
+
+input[readonly]:focus {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  box-shadow: none !important;
+  background: rgba(148, 163, 184, 0.08) !important;
+}
+
 input::placeholder {
   color: rgba(148, 163, 184, 0.4);
 }

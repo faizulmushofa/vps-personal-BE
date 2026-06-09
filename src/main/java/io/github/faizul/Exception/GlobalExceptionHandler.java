@@ -1,6 +1,5 @@
-package io.github.faizul.exception;
+package io.github.faizul.Exception;
 
-import io.github.faizul.exception.*;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

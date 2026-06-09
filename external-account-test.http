@@ -1,0 +1,21 @@
+### 1. Login to obtain JWT Token
+POST http://localhost:8090/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password"
+}
+
+> {%
+    client.global.set("auth_token", response.body.token);
+%}
+
+### 2. Initialize External Account (Google GIS verification)
+POST http://localhost:8090/api/external-accounts/init?provider=google
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "token": "PUT_YOUR_GOOGLE_ID_TOKEN_HERE"
+}

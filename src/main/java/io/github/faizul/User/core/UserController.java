@@ -1,8 +1,7 @@
-package io.github.faizul.User;
-
-import io.github.faizul.User.dtos.*;
+package io.github.faizul.User.core;
 
 import io.github.faizul.User.dtos.UserDto;
+import io.github.faizul.security.filter.CurrentUserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +17,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class UserController {
 
     private final UserService userService;
+    private final CurrentUserContext currentUserContext;
+
+    @GetMapping("/me")
+    public Mono<ResponseEntity<UserDto>> getMyProfile() {
+        return currentUserContext.getUserId()
+                .flatMap(userService::getUserById)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

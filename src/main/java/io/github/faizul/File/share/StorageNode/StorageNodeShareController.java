@@ -1,10 +1,8 @@
-package io.github.faizul.File.share;
-
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
+package io.github.faizul.File.share.StorageNode;
 
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.dtos.ShareFileRequest;
+import io.github.faizul.File.share.ShareService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +14,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("api/files/share")
 @RequiredArgsConstructor
-public class ShareController {
+public class StorageNodeShareController {
 
     private final ShareService shareService;
 

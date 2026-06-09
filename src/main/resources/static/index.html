@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <!-- Google GIS Script -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <!-- Dark mode particles/glows in background -->
@@ -59,6 +61,224 @@
           </svg>
         </button>
       </form>
+      <div style="text-align: center; margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+        <a href="#" id="toRegisterLink" style="font-size: 0.85rem; color: var(--accent-color); text-decoration: none; font-weight: 500;">Belum punya akun? Daftar sekarang</a>
+        <a href="#" id="toForgotPasswordLink" style="font-size: 0.8rem; color: var(--text-muted); text-decoration: none;">Lupa password?</a>
+      </div>
+    </section>
+
+    <!-- Register Panel -->
+    <section id="registerPage" class="panel glass hidden" style="max-width: 480px; margin: 80px auto;">
+      <div class="header">
+        <div class="logo-area">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="eyebrow">Cloud Storage</span>
+        </div>
+        <h1>Daftar Akun Baru</h1>
+        <p class="sub-heading">Silakan buat akun personal cloud storage Anda</p>
+      </div>
+
+      <form id="registerForm" class="form">
+        <div class="input-group">
+          <label for="regUsername">Username</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input id="regUsername" type="text" placeholder="Username" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="regFullName">Nama Lengkap</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input id="regFullName" type="text" placeholder="Nama Lengkap" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="regEmail">Email</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <input id="regEmail" type="email" placeholder="nama@email.com" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="regPhoneNumber">No. HP</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            <input id="regPhoneNumber" type="tel" placeholder="0812XXXXXXXX" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="regPassword">Password</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input id="regPassword" type="password" placeholder="••••••••" required>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="regConfirmPassword">Konfirmasi Password</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input id="regConfirmPassword" type="password" placeholder="••••••••" required>
+          </div>
+        </div>
+
+        <button id="registerButton" type="submit">
+          <span>Daftar</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="#" id="toLoginLink" style="font-size: 0.85rem; color: var(--accent-color); text-decoration: none; font-weight: 500;">Sudah punya akun? Masuk di sini</a>
+      </div>
+    </section>
+
+    <!-- OTP Page -->
+    <section id="otpPage" class="panel glass hidden" style="max-width: 480px; margin: 80px auto;">
+      <div class="header">
+        <div class="logo-area">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="eyebrow">Verification</span>
+        </div>
+        <h1>Verifikasi OTP</h1>
+        <p class="sub-heading">Masukkan kode OTP 6-digit yang dikirim ke email Anda</p>
+      </div>
+
+      <form id="otpForm" class="form">
+        <div class="input-group">
+          <label for="otpEmail">Email</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <input id="otpEmail" type="email" placeholder="nama@email.com" required readonly>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="otpCode">Kode OTP</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input id="otpCode" type="text" placeholder="123456" maxlength="6" required>
+          </div>
+        </div>
+
+        <button id="otpVerifyButton" type="submit">
+          <span>Verifikasi</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      </form>
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="#" id="otpToLoginLink" style="font-size: 0.85rem; color: var(--accent-color); text-decoration: none; font-weight: 500;">Kembali ke Login</a>
+      </div>
+    </section>
+
+    <!-- Forgot Password Page -->
+    <section id="forgotPasswordPage" class="panel glass hidden" style="max-width: 480px; margin: 80px auto;">
+      <div class="header">
+        <div class="logo-area">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="eyebrow">Recovery</span>
+        </div>
+        <h1 id="fpTitle">Pemulihan Akun</h1>
+        <p class="sub-heading" id="fpSubHeading">Masukkan email Anda untuk menerima kode pemulihan</p>
+      </div>
+
+      <form id="forgotPasswordForm" class="form">
+        <div class="input-group" id="fpEmailGroup">
+          <label for="fpEmail">Email</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <input id="fpEmail" type="email" placeholder="nama@email.com" required>
+          </div>
+        </div>
+
+        <div id="fpStep2Fields" class="hidden" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
+          <div class="input-group">
+            <label for="fpOtpCode">Kode OTP Pemulihan</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input id="fpOtpCode" type="text" placeholder="123456" maxlength="6">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="fpNewPassword">Password Baru</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input id="fpNewPassword" type="password" placeholder="••••••••">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="fpConfirmNewPassword">Konfirmasi Password Baru</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input id="fpConfirmNewPassword" type="password" placeholder="••••••••">
+            </div>
+          </div>
+        </div>
+
+        <button id="fpSubmitButton" type="submit">
+          <span id="fpSubmitText">Kirim Kode OTP</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="#" id="fpToLoginLink" style="font-size: 0.85rem; color: var(--accent-color); text-decoration: none; font-weight: 500;">Kembali ke Login</a>
+      </div>
     </section>
 
     <!-- Main Dashboard Panel -->
@@ -70,7 +290,15 @@
           </svg>
           <div>
             <span class="eyebrow">Personal Space</span>
-            <h1 class="user-greeting">Dashboard Cloud</h1>
+            <h1 class="user-greeting" id="userGreeting">Dashboard Cloud</h1>
+          </div>
+        </div>
+
+        <div class="user-profile-widget" style="display: flex; align-items: center; gap: 12px; margin-left: auto; margin-right: 20px;">
+          <img id="userAvatar" class="avatar-image hidden" src="" alt="Avatar" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent-color);">
+          <div class="user-meta" style="display: flex; flex-direction: column; text-align: right; line-height: 1.2;">
+            <span id="userFullName" style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);"></span>
+            <span id="userEmail" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
           </div>
         </div>
 
@@ -133,6 +361,13 @@
             <div class="progress-bar-container quota-bar-bg" style="margin-top: 8px;">
               <div id="quotaBarProgress" class="progress-bar-fill quota-bar-fill" style="width: 0%"></div>
             </div>
+          </div>
+
+          <!-- Google Auth Card -->
+          <div class="side-card glass-card">
+            <h3>Google Account</h3>
+            <div id="googleBtnContainer" style="display: flex; justify-content: center; margin-top: 10px; min-height: 40px;"></div>
+            <p id="googleStatus" style="font-size: 0.8rem; text-align: center; color: var(--text-secondary); margin-top: 8px;">Hubungkan akun Google Anda</p>
           </div>
 
           <!-- Actions -->

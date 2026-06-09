@@ -1,6 +1,4 @@
-package io.github.faizul.User;
-
-import io.github.faizul.User.dtos.*;
+package io.github.faizul.User.core;
 
 import io.github.faizul.User.dtos.UserDto;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +10,10 @@ public class UserMapper {
         return  User.builder()
                 .email(userDto.email())
                 .username(userDto.username())
+                .fullName(userDto.fullName())
+                .avatarUrl(userDto.avatarUrl())
+                .phoneNumber(userDto.phoneNumber())
+                .isActive(userDto.isActive())
                 .createdAt(userDto.createAt())
                 .deletedAt(userDto.deleteAt())
                 .updatedAt(userDto.updateAt())
@@ -22,12 +24,13 @@ public class UserMapper {
         return  new UserDto(
                 user.getUsername(),
                 user.getEmail(),
+                user.getFullName(),
+                user.getAvatarUrl(),
+                user.getPhoneNumber(),
+                user.getIsActive(),
                 user.getCreatedAt(),
                 user.getDeletedAt(),
                 user.getUpdatedAt()
         );
     }
-
-
-
 }

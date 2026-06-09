@@ -1,8 +1,6 @@
 package io.github.faizul.security.jwt;
 
-import io.github.faizul.User.*;
-
-import io.github.faizul.User.User;
+import io.github.faizul.User.core.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;

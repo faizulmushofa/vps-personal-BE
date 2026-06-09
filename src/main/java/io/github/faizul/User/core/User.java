@@ -1,4 +1,4 @@
-package io.github.faizul.User;
+package io.github.faizul.User.core;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,6 +41,18 @@ public class User {
 
     @Column("storage_quota")
     private Long storageQuota;
+
+    @Column("full_name")
+    private String fullName;
+
+    @Column("avatar_url")
+    private String avatarUrl;
+
+    @Column("phone_number")
+    private String phoneNumber;
+
+    @Column("is_active")
+    private Boolean isActive;
 
     @Column("deleted_at")
     private LocalDateTime deletedAt;

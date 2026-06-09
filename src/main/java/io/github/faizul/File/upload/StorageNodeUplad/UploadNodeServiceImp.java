@@ -1,7 +1,11 @@
-package io.github.faizul.File.upload;
+package io.github.faizul.File.upload.StorageNodeUplad;
 
 import io.github.faizul.File.core.File;
 import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.upload.FileStatus;
+import io.github.faizul.File.upload.UploadService;
+import io.github.faizul.File.upload.UploadSession;
+import io.github.faizul.File.upload.UploadSessionRepository;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.File.dtos.UploadSessionResponse;
 import io.github.faizul.File.dtos.InitRequest;
@@ -21,12 +25,12 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.UUID;
 
-import io.github.faizul.User.UserRepository;
+import io.github.faizul.User.core.UserRepository;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class UploadServiceImp implements UploadService {
+public class UploadNodeServiceImp implements UploadService {
 
     private final FileRepository fileRepository;
     private final UploadSessionRepository uploadSessionRepository;
@@ -54,7 +58,7 @@ public class UploadServiceImp implements UploadService {
                         .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
                                 .flatMap(usedStorage -> {
                                     long totalSize = request.totalSize();
-                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L;
+                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
                                     if (usedStorage + totalSize > quota) {
                                         return Mono.error(new IllegalArgumentException(
                                                 "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));

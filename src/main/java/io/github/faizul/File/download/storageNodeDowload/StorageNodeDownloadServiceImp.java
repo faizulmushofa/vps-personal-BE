@@ -1,12 +1,10 @@
-package io.github.faizul.File.download;
-
-import io.github.faizul.Storage.download.*;
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.share.*;
-import io.github.faizul.File.core.*;
-import io.github.faizul.security.filter.*;
+package io.github.faizul.File.download.storageNodeDowload;
 
 import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.download.DownloadService;
+import io.github.faizul.File.download.DownloadSession;
+import io.github.faizul.File.download.DownloadSessionRepository;
+import io.github.faizul.File.download.FileStatus;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.File.dtos.DownloadInitRequest;
 import io.github.faizul.File.dtos.DownloadInitResponse;
@@ -27,7 +25,7 @@ import java.util.UUID;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class DownloadServiceImp implements DownloadService {
+public class StorageNodeDownloadServiceImp implements DownloadService {
 
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;

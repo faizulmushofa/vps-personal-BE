@@ -1,8 +1,6 @@
 package io.github.faizul.security.filter;
 
-import io.github.faizul.User.*;
-
-import io.github.faizul.User.User;
+import io.github.faizul.User.core.User;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

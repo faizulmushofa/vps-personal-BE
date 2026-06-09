@@ -1,10 +1,8 @@
-package io.github.faizul.File.upload;
-
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
+package io.github.faizul.File.upload.StorageNodeUplad;
 
 import io.github.faizul.File.dtos.InitRequest;
 import io.github.faizul.File.dtos.InitResponse;
+import io.github.faizul.File.upload.UploadService;
 import io.github.faizul.UploadUnit.UploadCoordinator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +15,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("api/files")
-public class UploadController {
+public class UploadNodeController {
 
     private final UploadService uploadService;
     private final UploadCoordinator uploadCoordinator;
