@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 import java.util.Map;
 
@@ -27,5 +28,16 @@ public class ExternalAccountController {
             return Mono.error(new IllegalArgumentException("Token is required"));
         }
         return externalUserService.handleCallback(provider, token);
+    }
+
+    @GetMapping("/me")
+    public Flux<io.github.faizul.User.dtos.ExternalAccountDto> getMyAccounts() {
+        return externalUserService.getMyAccounts();
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> disconnect(@PathVariable Long id) {
+        return externalUserService.disconnect(id);
     }
 }

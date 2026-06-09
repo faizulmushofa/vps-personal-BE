@@ -27,7 +27,7 @@ import java.util.UUID;
 
 import io.github.faizul.User.core.UserRepository;
 
-@Service
+@Service("storageNodeUploadService")
 @Transactional
 @RequiredArgsConstructor
 public class UploadNodeServiceImp implements UploadService {
@@ -55,37 +55,47 @@ public class UploadNodeServiceImp implements UploadService {
         return currentUserContext.getUserId()
                 .flatMap(userId -> userRepository.findById(userId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
-                        .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
-                                .flatMap(usedStorage -> {
-                                    long totalSize = request.totalSize();
-                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
-                                    if (usedStorage + totalSize > quota) {
-                                        return Mono.error(new IllegalArgumentException(
-                                                "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
-                                    }
+                        .flatMap(user -> {
+                            String provider = request.provider() != null ? request.provider() : "STORAGE_NODE";
+                            Mono<Void> quotaCheck = Mono.empty();
+                            if (!"GOOGLE_DRIVE".equals(provider)) {
+                                quotaCheck = fileRepository.calculateUsedStorageByUserId(userId)
+                                        .flatMap(usedStorage -> {
+                                            long totalSize = request.totalSize();
+                                            long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                            if (usedStorage + totalSize > quota) {
+                                                return Mono.error(new IllegalArgumentException(
+                                                        "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
+                                            }
+                                            return Mono.empty();
+                                        });
+                            }
 
-                                    String tempPath = storageConfig.tempDir(userId, fileId).toString();
-                                    File file = File.builder()
-                                            .id(fileId)
-                                            .userId(userId)
-                                            .originalFileName(request.fileName())
-                                            .storageName(storageName)
-                                            .size(totalSize)
-                                            .build();
+                            return quotaCheck.then(Mono.defer(() -> {
+                                String tempPath = storageConfig.tempDir(userId, fileId).toString();
+                                File file = File.builder()
+                                        .id(fileId)
+                                        .userId(userId)
+                                        .originalFileName(request.fileName())
+                                        .storageName(storageName)
+                                        .size(request.totalSize())
+                                        .provider(provider)
+                                        .build();
 
-                                    UploadSession session = UploadSession.builder()
-                                            .id(sessionId)
-                                            .fileId(fileId)
-                                            .tempPath(tempPath)
-                                            .totalChunks(Chunk.calculateTotalChunks(totalSize))
-                                            .uploadedChunks(0)
-                                            .status(FileStatus.UPLOADING)
-                                            .build();
+                                UploadSession session = UploadSession.builder()
+                                        .id(sessionId)
+                                        .fileId(fileId)
+                                        .tempPath(tempPath)
+                                        .totalChunks(Chunk.calculateTotalChunks(request.totalSize()))
+                                        .uploadedChunks(0)
+                                        .status(FileStatus.UPLOADING)
+                                        .build();
 
-                                    return fileRepository.save(file)
-                                            .then(uploadSessionRepository.save(session))
-                                            .thenReturn(file);
-                                })))
+                                return fileRepository.save(file)
+                                        .then(uploadSessionRepository.save(session))
+                                        .thenReturn(file);
+                            }));
+                        }))
                 .map(file -> new InitResponse(file.getId(), file.getOriginalFileName()));
     }
 

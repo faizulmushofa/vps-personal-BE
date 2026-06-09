@@ -9,6 +9,7 @@ let userUsedBytes = 0;
 let userQuotaBytes = 0;
 let currentTargetUserId = null;
 let adminUsersList = [];
+let googleCodeClient = null;
 
 // UI Elements
 const loginPage = document.getElementById("loginPage");
@@ -502,9 +503,130 @@ async function fetchUserProfile() {
 }
 
 // GOOGLE IDENTITY SERVICES (GIS) INTEGRATION
+async function checkGoogleConnection() {
+  const activeToken = getToken();
+  if (!activeToken) return;
+
+  try {
+    const response = await debugFetch("get-my-accounts", "/api/external-accounts/me", {
+      headers: authHeaders()
+    });
+
+    const btnContainer = document.getElementById("googleBtnContainer");
+    const statusText = document.getElementById("googleStatus");
+    if (!btnContainer || !statusText) return;
+
+    if (response.ok) {
+      const accounts = await response.json();
+      const googleAccount = accounts.find(acc => acc.provider === "GOOGLE" || acc.provider === "google");
+
+      if (googleAccount) {
+        statusText.textContent = `Terhubung: ${googleAccount.email}`;
+        statusText.style.color = "#10b981"; // success green
+
+        btnContainer.innerHTML = `
+          <button id="syncGoogleBtn" class="primary-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); border: none;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 8s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>Sinkronisasi Google Drive</span>
+          </button>
+          <button id="disconnectGoogleBtn" class="danger-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer; margin-top: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></svg>
+            <span>Putuskan Hubungan</span>
+          </button>
+        `;
+
+        document.getElementById("syncGoogleBtn").addEventListener("click", syncGoogleDrive);
+        document.getElementById("disconnectGoogleBtn").addEventListener("click", () => disconnectGoogleAccount(googleAccount.id));
+        return;
+      }
+    }
+
+    // Default state: not connected
+    statusText.textContent = "Hubungkan akun Google Anda";
+    statusText.style.color = "var(--text-secondary)";
+    
+    if (googleCodeClient) {
+      btnContainer.innerHTML = `
+        <button id="connectGoogleBtn" class="primary-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M12.24 10.285V13.4h6.887C18.2 15.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.614 4.473 1.636l2.427-2.427C17.29 1.523 14.909 1 12.24 1A9.99 9.99 0 002.25 11a9.99 9.99 0 009.99 10c5.556 0 9.99-4.004 9.99-10 0-.682-.082-1.336-.237-1.715H12.24z"/>
+          </svg>
+          <span>Sambungkan Google Drive</span>
+        </button>
+      `;
+      document.getElementById("connectGoogleBtn").addEventListener("click", () => {
+        googleCodeClient.requestCode();
+      });
+    } else {
+      btnContainer.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-secondary);">Memuat Google Identity Services...</p>`;
+    }
+  } catch (err) {
+    console.error("Gagal memeriksa koneksi Google", err);
+  }
+}
+
+async function syncGoogleDrive() {
+  const syncBtn = document.getElementById("syncGoogleBtn");
+  let originalHtml = "";
+  if (syncBtn) {
+    originalHtml = syncBtn.innerHTML;
+    syncBtn.disabled = true;
+    syncBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      <span>Mensinkronisasi...</span>
+    `;
+  }
+
+  showToast("Sinkronisasi berkas Google Drive sedang berlangsung...", "info");
+  try {
+    const response = await debugFetch("sync-google-drive", "/api/google-drive/sync", {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (response.ok) {
+      showToast("Sinkronisasi Google Drive selesai!", "success");
+      await fetchMyFiles();
+    } else {
+      showToast("Gagal mensinkronisasi Google Drive.", "error");
+    }
+  } catch (error) {
+    showToast("Koneksi bermasalah saat sinkronisasi.", "error");
+  } finally {
+    if (syncBtn) {
+      syncBtn.disabled = false;
+      syncBtn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function disconnectGoogleAccount(id) {
+  if (!confirm("Apakah Anda yakin ingin memutuskan hubungan akun Google Drive Anda? File yang disinkronisasi tidak akan bisa diakses sampai dihubungkan kembali.")) {
+    return;
+  }
+
+  showToast("Memutus sambungan Google...", "info");
+  try {
+    const response = await debugFetch("disconnect-google", `/api/external-accounts/${id}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (response.ok) {
+      showToast("Akun Google Drive berhasil diputuskan.", "success");
+      await checkGoogleConnection();
+      fetchStorageQuota();
+      await fetchMyFiles();
+    } else {
+      showToast("Gagal memutus sambungan Google.", "error");
+    }
+  } catch (error) {
+    showToast("Koneksi bermasalah saat memutus sambungan.", "error");
+  }
+}
+
 async function initGoogleGis() {
   if (typeof google === "undefined" || !google.accounts) {
-    // Retry in 500ms if script is not fully loaded yet
     setTimeout(initGoogleGis, 500);
     return;
   }
@@ -526,45 +648,102 @@ async function initGoogleGis() {
       return;
     }
 
-    google.accounts.id.initialize({
+    googleCodeClient = google.accounts.oauth2.initCodeClient({
       client_id: clientId,
-      callback: handleGoogleCredentialResponse
+      scope: "https://www.googleapis.com/auth/drive email profile openid",
+      ux_mode: "popup",
+      callback: (authResponse) => {
+        if (authResponse.code) {
+          handleGoogleCodeResponse(authResponse.code);
+        } else {
+          showToast("Otorisasi dibatalkan.", "error");
+        }
+      }
     });
 
-    const btnContainer = document.getElementById("googleBtnContainer");
-    if (btnContainer) {
-      google.accounts.id.renderButton(btnContainer, {
-        theme: "outline",
-        size: "large",
-        width: 280
-      });
-    }
+    // Check if user is already connected
+    await checkGoogleConnection();
   } catch (error) {
     console.error("Error inisialisasi Google GIS:", error);
   }
 }
 
-async function handleGoogleCredentialResponse(response) {
+async function handleGoogleCodeResponse(code) {
   showToast("Menghubungkan akun Google...", "info");
+  
+  const btnContainer = document.getElementById("googleBtnContainer");
+  const statusText = document.getElementById("googleStatus");
+  let originalBtnHtml = "";
+
+  if (btnContainer) {
+    originalBtnHtml = btnContainer.innerHTML;
+    btnContainer.innerHTML = `
+      <button id="connectGoogleBtn" class="primary-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: not-allowed; opacity: 0.7;" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="32" stroke-dashoffset="8" fill="none"></circle>
+        </svg>
+        <span>Menghubungkan...</span>
+      </button>
+    `;
+  }
+  if (statusText) {
+    statusText.textContent = "Menghubungkan...";
+    statusText.style.color = "var(--text-secondary)";
+  }
+
   try {
     const res = await debugFetch("init-external-account", "/api/external-accounts/init?provider=google", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ token: response.credential })
+      body: JSON.stringify({ token: code })
     });
 
     if (res.ok) {
-      showToast("Akun Google berhasil dihubungkan!", "success");
-      const statusText = document.getElementById("googleStatus");
-      if (statusText) {
-        statusText.textContent = "Google Account Terhubung";
-        statusText.style.color = "#10b981"; // success green
-      }
+      showToast("Google Drive berhasil dihubungkan!", "success");
+      await checkGoogleConnection();
+      fetchStorageQuota();
+      await fetchMyFiles();
     } else {
-      showToast("Gagal menghubungkan akun Google.", "error");
+      let errorMsg = "Gagal menghubungkan akun Google.";
+      try {
+        const errorData = await res.json();
+        if (errorData && errorData.message) {
+          errorMsg = errorData.message;
+        } else if (errorData && errorData.error) {
+          errorMsg = errorData.error;
+        }
+      } catch (e) {}
+
+      showToast(`Gagal: ${errorMsg}`, "error");
+      if (statusText) {
+        statusText.textContent = `Gagal: ${errorMsg}`;
+        statusText.style.color = "#ef4444";
+      }
+      if (btnContainer) {
+        btnContainer.innerHTML = originalBtnHtml;
+        const connBtn = document.getElementById("connectGoogleBtn");
+        if (connBtn && googleCodeClient) {
+          connBtn.addEventListener("click", () => {
+            googleCodeClient.requestCode();
+          });
+        }
+      }
     }
   } catch (error) {
     showToast("Koneksi bermasalah saat menghubungkan akun.", "error");
+    if (statusText) {
+      statusText.textContent = "Koneksi bermasalah.";
+      statusText.style.color = "#ef4444";
+    }
+    if (btnContainer) {
+      btnContainer.innerHTML = originalBtnHtml;
+      const connBtn = document.getElementById("connectGoogleBtn");
+      if (connBtn && googleCodeClient) {
+        connBtn.addEventListener("click", () => {
+          googleCodeClient.requestCode();
+        });
+      }
+    }
   }
 }
 
@@ -584,8 +763,10 @@ async function handleUpload(event) {
     return;
   }
 
-  // Client-side quick quota check
-  if (userQuotaBytes > 0 && (userUsedBytes + file.size > userQuotaBytes)) {
+  const provider = document.getElementById("storageProvider").value || "STORAGE_NODE";
+
+  // Client-side quick quota check (only for local storage node)
+  if (provider === "STORAGE_NODE" && userQuotaBytes > 0 && (userUsedBytes + file.size > userQuotaBytes)) {
     showToast(`Gagal: Ukuran file (${formatBytes(file.size)}) melebihi sisa kapasitas storage Anda!`, "error");
     return;
   }
@@ -602,10 +783,14 @@ async function handleUpload(event) {
   cancelTransferBtn.classList.add("hidden"); // Disable active chunk-based upload cancelation to stay secure
 
   try {
-    const initResponse = await debugFetch("init-upload", "/api/files/init", {
+    const initUrl = provider === "GOOGLE_DRIVE" 
+      ? "/api/google-drive/upload/init" 
+      : "/api/files/init";
+
+    const initResponse = await debugFetch("init-upload", initUrl, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ fileName: file.name, totalSize: file.size })
+      body: JSON.stringify({ fileName: file.name, totalSize: file.size, provider: provider })
     });
 
     if (initResponse.status === 401 || initResponse.status === 403) {
@@ -638,7 +823,11 @@ async function handleUpload(event) {
 
       showToast(`Mengunggah bagian ${i + 1} dari ${totalChunks}...`, "info");
 
-      const chunkResponse = await fetch(`/api/files/${fileId}/chunks/${i}`, {
+      const chunkUrl = provider === "GOOGLE_DRIVE"
+        ? `/api/google-drive/upload/${fileId}/chunks/${i}`
+        : `/api/files/${fileId}/chunks/${i}`;
+
+      const chunkResponse = await fetch(chunkUrl, {
         method: "POST",
         headers: authHeaders(),
         body: form
@@ -672,7 +861,7 @@ async function handleUpload(event) {
 }
 
 // DELETION FLOW
-async function handleDelete(fileId) {
+async function handleDelete(fileId, provider) {
   if (!confirm("Apakah Anda yakin ingin menghapus berkas ini?")) return;
   const activeToken = getToken();
 
@@ -684,7 +873,11 @@ async function handleDelete(fileId) {
   showToast("Menghapus file...", "info");
 
   try {
-    const response = await debugFetch("delete-file", `/api/files/${fileId}`, {
+    const url = provider === "GOOGLE_DRIVE"
+      ? `/api/google-drive/files/${fileId}`
+      : `/api/files/${fileId}`;
+
+    const response = await debugFetch("delete-file", url, {
       method: "DELETE",
       headers: authHeaders()
     });
@@ -699,7 +892,12 @@ async function handleDelete(fileId) {
       return;
     }
 
-    showToast("File berhasil dihapus dari cloud.", "success");
+    const warning = response.headers.get("X-Warning");
+    if (warning) {
+      showToast(`Terhapus dari dashboard, namun gagal dari Google Drive API: ${warning}`, "info");
+    } else {
+      showToast("File berhasil dihapus.", "success");
+    }
     fetchMyFiles();
   } catch (err) {
     showToast("Kesalahan jaringan saat menghapus.", "error");
@@ -733,7 +931,7 @@ async function handleShare(fileId) {
 }
 
 // REACTIVE DOWNLOAD STREAMING FLOW WITH DYNAMIC PROGRESS AND ACTIVE CANCELATION
-async function handleDownload(fileId, fileName, fileSize) {
+async function handleDownload(fileId, fileName, fileSize, provider) {
   const activeToken = getToken();
   if (!activeToken) {
     clearSession("Sesi login diperlukan.");
@@ -764,7 +962,10 @@ async function handleDownload(fileId, fileName, fileSize) {
       
       // Cancel the session on the backend asynchronously
       try {
-        await fetch(`/api/files/download/${fileId}/cancel`, {
+        const cancelUrl = provider === "GOOGLE_DRIVE"
+          ? `/api/google-drive/download/${fileId}/cancel`
+          : `/api/files/download/${fileId}/cancel`;
+        await fetch(cancelUrl, {
           method: "POST",
           headers: authHeaders()
         });
@@ -775,8 +976,12 @@ async function handleDownload(fileId, fileName, fileSize) {
   };
 
   try {
+    const initUrl = provider === "GOOGLE_DRIVE"
+      ? "/api/google-drive/download/init"
+      : "/api/files/download/init";
+
     // 1. Initialize the Download Session on R2DBC Backend
-    const initResponse = await debugFetch("init-download", "/api/files/download/init", {
+    const initResponse = await debugFetch("init-download", initUrl, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ fileId }),
@@ -789,9 +994,13 @@ async function handleDownload(fileId, fileName, fileSize) {
       return;
     }
 
+    const streamUrl = provider === "GOOGLE_DRIVE"
+      ? `/api/google-drive/download/${fileId}/stream`
+      : `/api/files/download/${fileId}/stream`;
+
     // 2. Start pulling the stream with custom Auth headers
     showToast("Memulai aliran unduhan...", "info");
-    const streamResponse = await fetch(`/api/files/download/${fileId}/stream`, {
+    const streamResponse = await fetch(streamUrl, {
       method: "GET",
       headers: authHeaders(),
       signal
@@ -932,6 +1141,14 @@ function renderFiles(files) {
     const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleString() : "-";
     const displaySize = formatBytes(f.size || 0);
 
+    const providerBadge = f.provider === "GOOGLE_DRIVE" 
+      ? `<span class="badge" style="background: rgba(59, 130, 246, 0.15) !important; color: #3b82f6 !important; border: 1px solid rgba(59, 130, 246, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Google Drive
+         </span>`
+      : `<span class="badge" style="background: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; border: 1px solid rgba(168, 85, 247, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Storage Node
+         </span>`;
+
     card.innerHTML = `
       <div class="file-info-header">
         <div class="file-icon-wrapper">
@@ -942,7 +1159,10 @@ function renderFiles(files) {
         </div>
         <div class="file-meta-text">
           <div class="file-card-title" title="${shortName}">${shortName}</div>
-          <div class="file-card-size">${displaySize}</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 4px;">
+            <span class="file-card-size">${displaySize}</span>
+            ${providerBadge}
+          </div>
           <div class="file-card-date">${dateFormatted}</div>
         </div>
       </div>
@@ -979,7 +1199,7 @@ function renderFiles(files) {
 
     // Dynamic action event mapping
     card.querySelector(".btn-download-action").onclick = () => {
-      handleDownload(f.id, f.originalFileName, f.size);
+      handleDownload(f.id, f.originalFileName, f.size, f.provider);
     };
 
     if (!currentViewIsShared) {
@@ -988,7 +1208,7 @@ function renderFiles(files) {
       };
 
       card.querySelector(".btn-delete-action").onclick = () => {
-        handleDelete(f.id);
+        handleDelete(f.id, f.provider);
       };
     }
 
@@ -1159,13 +1379,18 @@ async function fetchStorageQuota() {
   if (!activeToken) return;
 
   try {
-    const response = await debugFetch("storage-quota", "/api/files/me/storage", {
-      headers: authHeaders()
-    });
-    if (response.ok) {
-      const data = await response.json();
-      userUsedBytes = data.usedBytes;
-      userQuotaBytes = data.quotaBytes;
+    const [localRes, googleRes] = await Promise.all([
+      debugFetch("storage-quota", "/api/files/me/storage", { headers: authHeaders() }),
+      debugFetch("google-drive-quota", "/api/google-drive/storage", { headers: authHeaders() }).catch(err => {
+        console.error("Gagal mengambil kuota Google Drive", err);
+        return null;
+      })
+    ]);
+
+    if (localRes && localRes.ok) {
+      const localData = await localRes.json();
+      userUsedBytes = localData.usedBytes;
+      userQuotaBytes = localData.quotaBytes;
       const percentage = userQuotaBytes > 0 ? Math.min(100, Math.round((userUsedBytes / userQuotaBytes) * 100)) : 0;
 
       document.getElementById("quotaText").textContent = `${formatBytes(userUsedBytes)} dari ${formatBytes(userQuotaBytes)}`;
@@ -1179,6 +1404,25 @@ async function fetchStorageQuota() {
       } else {
         quotaProgress.style.background = "linear-gradient(135deg, #a855f7 0%, #3b82f6 100%)";
       }
+    }
+
+    const googleDriveQuotaSection = document.getElementById("googleDriveQuotaSection");
+    if (googleRes && googleRes.ok) {
+      const googleData = await googleRes.json();
+      if (googleData.googleDriveConnected) {
+        googleDriveQuotaSection.classList.remove("hidden");
+        const gUsed = googleData.googleUsedBytes || 0;
+        const gQuota = googleData.googleQuotaBytes || 0;
+        const gPercent = gQuota > 0 ? Math.min(100, Math.round((gUsed / gQuota) * 100)) : 0;
+
+        document.getElementById("gdriveQuotaText").textContent = `${formatBytes(gUsed)} dari ${formatBytes(gQuota)}`;
+        document.getElementById("gdriveQuotaPercentage").textContent = `${gPercent}%`;
+        document.getElementById("gdriveQuotaBarProgress").style.width = `${gPercent}%`;
+      } else {
+        googleDriveQuotaSection.classList.add("hidden");
+      }
+    } else {
+      googleDriveQuotaSection.classList.add("hidden");
     }
   } catch (err) {
     console.error("Gagal mengambil kuota storage", err);

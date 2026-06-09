@@ -24,8 +24,11 @@ public class EmailNotification implements NotificationService {
     private String senderName;
 
     public EmailNotification() {
+        io.netty.resolver.DefaultAddressResolverGroup resolver = io.netty.resolver.DefaultAddressResolverGroup.INSTANCE;
+        reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create().resolver(resolver);
         this.webClient = WebClient.builder()
                 .baseUrl("https://api.brevo.com/v3")
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
                 .build();
     }
 

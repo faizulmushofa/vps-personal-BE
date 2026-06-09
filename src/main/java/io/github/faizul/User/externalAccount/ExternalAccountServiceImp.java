@@ -3,6 +3,7 @@ package io.github.faizul.User.externalAccount;
 import io.github.faizul.User.dtos.ExternalAccountDto;
 import io.github.faizul.User.externalAccount.ExternalProvider.ExternalProviderFactory;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.File.core.FileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -15,6 +16,7 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     private final ExternalProviderFactory providerFactory;
     private final ExternalAccountRepository externalAccountRepository;
     private final CurrentUserContext currentUserContext;
+    private final FileRepository fileRepository;
 
     @Override
     public Mono<String> getAuthUrl(String provider) {
@@ -36,11 +38,25 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
 
     @Override
     public Flux<ExternalAccountDto> getMyAccounts() {
-        return Flux.empty();
+        return currentUserContext.getUserId()
+                .flatMapMany(userId -> externalAccountRepository.findAllByUserId(userId))
+                .map(account -> new ExternalAccountDto(
+                        account.getId(),
+                        account.getProvider(),
+                        account.getEmail()
+                ));
     }
 
     @Override
     public Mono<Void> disconnect(Long externalAccountId) {
-        return externalAccountRepository.deleteById(externalAccountId);
+        return currentUserContext.getUserId()
+                .flatMap(userId -> externalAccountRepository.findById(externalAccountId)
+                        .flatMap(account -> {
+                            String provider = account.getProvider();
+                            String fileProvider = "GOOGLE".equalsIgnoreCase(provider) ? "GOOGLE_DRIVE" : provider;
+                            return fileRepository.deleteByUserIdAndProvider(userId, fileProvider)
+                                    .then(externalAccountRepository.deleteById(externalAccountId));
+                        })
+                );
     }
 }

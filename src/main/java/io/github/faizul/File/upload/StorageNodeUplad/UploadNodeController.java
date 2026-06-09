@@ -4,7 +4,7 @@ import io.github.faizul.File.dtos.InitRequest;
 import io.github.faizul.File.dtos.InitResponse;
 import io.github.faizul.File.upload.UploadService;
 import io.github.faizul.UploadUnit.UploadCoordinator;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.*;
@@ -13,12 +13,18 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("api/files")
 public class UploadNodeController {
 
     private final UploadService uploadService;
     private final UploadCoordinator uploadCoordinator;
+
+    public UploadNodeController(
+            @Qualifier("storageNodeUploadService") UploadService uploadService,
+            UploadCoordinator uploadCoordinator) {
+        this.uploadService = uploadService;
+        this.uploadCoordinator = uploadCoordinator;
+    }
 
     @PostMapping("/init")
     public Mono<ResponseEntity<InitResponse>> init(@RequestBody InitRequest request) {

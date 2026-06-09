@@ -33,6 +33,8 @@ public class File implements Persistable<UUID> {
 
     private Long userId;
 
+    private String provider;
+
     @CreatedDate
     private Instant createdAt;
 
