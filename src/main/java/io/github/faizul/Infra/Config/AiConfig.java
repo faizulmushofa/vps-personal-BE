@@ -16,13 +16,11 @@ import org.springframework.context.annotation.Configuration;
 public class AiConfig {
 
         @Bean
-        public Client geminiClient(@Value("${GEMINI_API_KEY}") String apiKey) {
+        public Client geminiClient() {
+                String apiKey = EnvLoader.get("GEMINI_API_KEY");
+                System.out.println("Gemini API Key : " + apiKey);
                 if (apiKey == null || apiKey.trim().isEmpty()) {
-                        throw new RuntimeException("Gamini api key is null or empty");
-                }
-
-                if (apiKey == null || apiKey.trim().isEmpty()) {
-                        throw new RuntimeException("GEMINI_API_KEY is not set");
+                        throw new RuntimeException("Gemini api key is null or empty");
                 }
 
                 return Client.builder()

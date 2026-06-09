@@ -1,5 +1,7 @@
 package io.github.faizul.File.pdf;
 
+import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
 import io.github.faizul.File.download.DownloadService;
 import io.github.faizul.Storage.download.DownloadStorageService;
 import io.github.faizul.security.filter.CurrentUserContext;
@@ -16,6 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
@@ -25,60 +28,61 @@ public class PdfServiceImp implements PdfService {
     private final DownloadStorageService downloadStorageService;
     private final CurrentUserContext currentUserContext;
     private final Scheduler pdfScheduler;
+    private final FileRepository fileRepository;
+    private final GoogleDriveClient googleDriveClient;
 
     @Override
     public Mono<String> extractFile(UUID fileId) {
-
         return currentUserContext.getUserId()
-                .flatMap(userId -> {
+                .flatMap(userId -> fileRepository.findById(fileId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                        .flatMap(file -> {
+                            Mono<Path> tempFileMono =
+                                    Mono.fromCallable(() ->
+                                            Files.createTempFile(
+                                                    "ocr-",
+                                                    ".pdf"
+                                            )
+                                    );
 
-                    Mono<Path> tempFileMono =
-                            Mono.fromCallable(() ->
-                                    Files.createTempFile(
-                                            "ocr-",
-                                            ".pdf"
-                                    )
+                            return tempFileMono.flatMap(tempFile ->
+                                    Mono.fromCallable(() -> {
+                                                try (OutputStream os =
+                                                             Files.newOutputStream(tempFile)) {
+
+                                                    reactor.core.publisher.Flux<byte[]> dataStream;
+                                                    if ("GOOGLE_DRIVE".equals(file.getProvider())) {
+                                                        dataStream = googleDriveClient.downloadFile(userId, file.getStorageName());
+                                                    } else {
+                                                        dataStream = downloadStorageService
+                                                                .downloadFile(userId, fileId)
+                                                                .map(chunk -> chunk.data());
+                                                    }
+
+                                                    dataStream
+                                                            .doOnNext(chunk -> {
+                                                                try {
+                                                                    os.write(chunk);
+                                                                } catch (IOException e) {
+                                                                    throw new RuntimeException(e);
+                                                                }
+                                                            })
+                                                            .blockLast();
+                                                }
+
+                                                return tempFile;
+                                            })
+                                            .subscribeOn(pdfScheduler)
+                                            .flatMap(this::extract)
+                                            .doFinally(signal -> {
+                                                try {
+                                                    Files.deleteIfExists(tempFile);
+                                                } catch (IOException ignored) {
+                                                }
+                                            })
                             );
-
-                    return tempFileMono.flatMap(tempFile ->
-
-                            Mono.fromCallable(() -> {
-
-                                        try (OutputStream os =
-                                                     Files.newOutputStream(tempFile)) {
-
-                                            downloadStorageService
-                                                    .downloadFile(userId, fileId)
-                                                    .doOnNext(chunk -> {
-
-                                                        try {
-
-                                                            os.write(chunk.data());
-
-                                                        } catch (IOException e) {
-                                                            throw new RuntimeException(e);
-                                                        }
-
-                                                    })
-                                                    .blockLast();
-                                        }
-
-                                        return tempFile;
-
-                                    })
-                                    .subscribeOn(pdfScheduler)
-                                    .flatMap(this::extract)
-                                    .doFinally(signal -> {
-
-                                        try {
-                                            Files.deleteIfExists(tempFile);
-
-                                        } catch (IOException ignored) {
-
-                                        }
-                                    })
-                    );
-                });
+                        })
+                );
     }
 
 
