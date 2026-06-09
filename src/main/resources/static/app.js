@@ -12,6 +12,9 @@ let adminUsersList = [];
 
 // UI Elements
 const loginPage = document.getElementById("loginPage");
+const registerPage = document.getElementById("registerPage");
+const otpPage = document.getElementById("otpPage");
+const forgotPasswordPage = document.getElementById("forgotPasswordPage");
 const uploadPage = document.getElementById("uploadPage");
 const toastAlert = document.getElementById("toastAlert");
 const statusBox = document.getElementById("status");
@@ -64,6 +67,9 @@ function getToken() {
 function setPage() {
   const activeToken = getToken();
   loginPage.classList.toggle("hidden", Boolean(activeToken));
+  registerPage.classList.add("hidden");
+  otpPage.classList.add("hidden");
+  forgotPasswordPage.classList.add("hidden");
   uploadPage.classList.toggle("hidden", !activeToken);
   
   // Hide debug panel on login page to keep the form clean and prevent overlay issues
@@ -74,6 +80,7 @@ function setPage() {
   
   if (activeToken) {
     showToast("Sudah terhubung. Selamat datang kembali!", "success");
+    fetchUserProfile();
     fetchMyFiles();
     fetchStorageQuota();
     probeAdminAccess();
@@ -242,7 +249,19 @@ async function handleLogin(event) {
     });
 
     if (!response.ok) {
-      showToast("Email atau password salah.", "error");
+      try {
+        const errorData = await response.json();
+        const errorMessage = errorData.message || "Email atau password salah.";
+        showToast(errorMessage, "error");
+        
+        if (errorMessage.includes("belum aktif") || errorMessage.includes("verifikasi email")) {
+          document.getElementById("otpEmail").value = email;
+          loginPage.classList.add("hidden");
+          otpPage.classList.remove("hidden");
+        }
+      } catch (parseErr) {
+        showToast("Email atau password salah.", "error");
+      }
       return;
     }
 
@@ -261,6 +280,158 @@ async function handleLogin(event) {
   }
 }
 
+async function handleRegister(event) {
+  event.preventDefault();
+  showToast("Mendaftarkan akun...", "info");
+
+  const username = document.getElementById("regUsername").value;
+  const fullName = document.getElementById("regFullName").value;
+  const email = document.getElementById("regEmail").value;
+  const phoneNumber = document.getElementById("regPhoneNumber").value;
+  const password = document.getElementById("regPassword").value;
+  const confirmPassword = document.getElementById("regConfirmPassword").value;
+
+  if (password !== confirmPassword) {
+    showToast("Password dan Konfirmasi Password tidak cocok.", "error");
+    return;
+  }
+
+  try {
+    const response = await debugFetch("register", "/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, fullName, email, phoneNumber, password })
+    });
+
+    if (!response.ok) {
+      showToast("Gagal melakukan registrasi. Email atau Username mungkin sudah digunakan.", "error");
+      return;
+    }
+
+    showToast("Registrasi berhasil! Kode OTP verifikasi telah dikirim ke email Anda.", "success");
+    
+    // Set email on OTP page
+    document.getElementById("otpEmail").value = email;
+    
+    // Reset form fields
+    document.getElementById("registerForm").reset();
+    
+    // Switch to OTP page
+    registerPage.classList.add("hidden");
+    otpPage.classList.remove("hidden");
+  } catch (err) {
+    showToast("Koneksi gagal atau server down.", "error");
+  }
+}
+
+async function handleVerifyOtp(event) {
+  event.preventDefault();
+  showToast("Memverifikasi OTP...", "info");
+
+  const email = document.getElementById("otpEmail").value;
+  const otp = document.getElementById("otpCode").value;
+
+  try {
+    const response = await debugFetch("verifyOtp", "/api/auth/verify-registration", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp })
+    });
+
+    if (!response.ok) {
+      showToast("Verifikasi gagal. Kode OTP mungkin salah atau kadaluarsa.", "error");
+      return;
+    }
+
+    showToast("Verifikasi berhasil! Akun Anda telah aktif. Silakan masuk.", "success");
+    document.getElementById("otpForm").reset();
+    otpPage.classList.add("hidden");
+    loginPage.classList.remove("hidden");
+  } catch (err) {
+    showToast("Koneksi gagal atau server down.", "error");
+  }
+}
+
+async function handleForgotPassword(event) {
+  event.preventDefault();
+  
+  const step2Fields = document.getElementById("fpStep2Fields");
+  const emailInput = document.getElementById("fpEmail");
+  const submitText = document.getElementById("fpSubmitText");
+  const subHeading = document.getElementById("fpSubHeading");
+  
+  const email = emailInput.value;
+  const isStep1 = step2Fields.classList.contains("hidden");
+  
+  if (isStep1) {
+    showToast("Mengirim kode OTP pemulihan...", "info");
+    try {
+      const response = await debugFetch("requestFpOtp", "/api/auth/forgot-password/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      
+      if (!response.ok) {
+        showToast("Gagal mengirim OTP. Email mungkin tidak terdaftar atau belum aktif.", "error");
+        return;
+      }
+      
+      showToast("OTP pemulihan berhasil dikirim ke email Anda.", "success");
+      step2Fields.classList.remove("hidden");
+      emailInput.setAttribute("readonly", "true");
+      submitText.textContent = "Setel Ulang Password";
+      subHeading.textContent = "Masukkan kode OTP pemulihan dan password baru Anda";
+      
+      document.getElementById("fpOtpCode").setAttribute("required", "true");
+      document.getElementById("fpNewPassword").setAttribute("required", "true");
+      document.getElementById("fpConfirmNewPassword").setAttribute("required", "true");
+    } catch (err) {
+      showToast("Koneksi gagal atau server down.", "error");
+    }
+  } else {
+    const otp = document.getElementById("fpOtpCode").value;
+    const newPassword = document.getElementById("fpNewPassword").value;
+    const confirmNewPassword = document.getElementById("fpConfirmNewPassword").value;
+    
+    if (newPassword !== confirmNewPassword) {
+      showToast("Password Baru dan Konfirmasi Password tidak cocok.", "error");
+      return;
+    }
+    
+    showToast("Mengubah password...", "info");
+    try {
+      const response = await debugFetch("resetPassword", "/api/auth/forgot-password/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, newPassword })
+      });
+      
+      if (!response.ok) {
+        showToast("Gagal mengatur ulang password. Kode OTP mungkin salah atau kadaluarsa.", "error");
+        return;
+      }
+      
+      showToast("Kata sandi berhasil diperbarui! Silakan masuk kembali.", "success");
+      
+      document.getElementById("forgotPasswordForm").reset();
+      step2Fields.classList.add("hidden");
+      emailInput.removeAttribute("readonly");
+      submitText.textContent = "Kirim Kode OTP";
+      subHeading.textContent = "Masukkan email Anda untuk menerima kode pemulihan";
+      
+      document.getElementById("fpOtpCode").removeAttribute("required");
+      document.getElementById("fpNewPassword").removeAttribute("required");
+      document.getElementById("fpConfirmNewPassword").removeAttribute("required");
+      
+      forgotPasswordPage.classList.add("hidden");
+      loginPage.classList.remove("hidden");
+    } catch (err) {
+      showToast("Koneksi gagal atau server down.", "error");
+    }
+  }
+}
+
 function handleLogout() {
   accessToken = "";
   localStorage.removeItem(tokenKey);
@@ -269,8 +440,65 @@ function handleLogout() {
   transfersCard.classList.add("hidden");
   fileInput.value = "";
   selectedFileInfo.classList.add("hidden");
+
+  // Clear profile widgets
+  const greeting = document.getElementById("userGreeting");
+  if (greeting) greeting.textContent = "Dashboard Cloud";
+  
+  const fullName = document.getElementById("userFullName");
+  if (fullName) fullName.textContent = "";
+  
+  const email = document.getElementById("userEmail");
+  if (email) email.textContent = "";
+  
+  const avatar = document.getElementById("userAvatar");
+  if (avatar) {
+    avatar.src = "";
+    avatar.classList.add("hidden");
+  }
+
   setPage();
   showToast("Berhasil logout.", "success");
+}
+
+async function fetchUserProfile() {
+  const activeToken = getToken();
+  if (!activeToken) return;
+
+  try {
+    const response = await debugFetch("get-user-profile", "/api/users/me", {
+      method: "GET",
+      headers: authHeaders()
+    });
+
+    if (response.ok) {
+      const user = await response.json();
+      
+      const displayName = user.fullName || user.username;
+      
+      const greeting = document.getElementById("userGreeting");
+      if (greeting) greeting.textContent = `Selamat datang, ${displayName}!`;
+      
+      const fullName = document.getElementById("userFullName");
+      if (fullName) fullName.textContent = displayName;
+      
+      const emailText = document.getElementById("userEmail");
+      if (emailText) emailText.textContent = user.email;
+
+      const avatar = document.getElementById("userAvatar");
+      if (avatar) {
+        if (user.avatarUrl) {
+          avatar.src = user.avatarUrl;
+          avatar.classList.remove("hidden");
+        } else {
+          avatar.src = "";
+          avatar.classList.add("hidden");
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Gagal memuat profil pengguna:", error);
+  }
 }
 
 // GOOGLE IDENTITY SERVICES (GIS) INTEGRATION
@@ -856,6 +1084,44 @@ document.getElementById("copyAiResultBtn").addEventListener("click", () => {
 
 // INITIAL EVENT BINDINGS
 document.getElementById("loginForm").addEventListener("submit", handleLogin);
+document.getElementById("toRegisterLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  loginPage.classList.add("hidden");
+  registerPage.classList.remove("hidden");
+});
+document.getElementById("toLoginLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  registerPage.classList.add("hidden");
+  loginPage.classList.remove("hidden");
+});
+document.getElementById("registerForm").addEventListener("submit", handleRegister);
+document.getElementById("otpForm").addEventListener("submit", handleVerifyOtp);
+document.getElementById("forgotPasswordForm").addEventListener("submit", handleForgotPassword);
+
+document.getElementById("toForgotPasswordLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  loginPage.classList.add("hidden");
+  forgotPasswordPage.classList.remove("hidden");
+});
+document.getElementById("otpToLoginLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  otpPage.classList.add("hidden");
+  loginPage.classList.remove("hidden");
+});
+document.getElementById("fpToLoginLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("forgotPasswordForm").reset();
+  document.getElementById("fpStep2Fields").classList.add("hidden");
+  document.getElementById("fpEmail").removeAttribute("readonly");
+  document.getElementById("fpSubmitText").textContent = "Kirim Kode OTP";
+  document.getElementById("fpSubHeading").textContent = "Masukkan email Anda untuk menerima kode pemulihan";
+  document.getElementById("fpOtpCode").removeAttribute("required");
+  document.getElementById("fpNewPassword").removeAttribute("required");
+  document.getElementById("fpConfirmNewPassword").removeAttribute("required");
+  forgotPasswordPage.classList.add("hidden");
+  loginPage.classList.remove("hidden");
+});
+
 document.getElementById("logoutButton").addEventListener("click", handleLogout);
 document.getElementById("uploadForm").addEventListener("submit", handleUpload);
 document.getElementById("getAllButton").addEventListener("click", fetchMyFiles);

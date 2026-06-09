@@ -10,6 +10,10 @@ public class AuthMapper {
                 .email(request.email())
                 .username(request.username())
                 .password(request.password())
+                .fullName(request.fullName())
+                .phoneNumber(request.phoneNumber())
+                .isActive(false)
                 .build();
     }
 }
+

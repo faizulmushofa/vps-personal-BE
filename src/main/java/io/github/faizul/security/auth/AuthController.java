@@ -59,6 +59,21 @@ public class AuthController {
                 });
     }
 
+    @PostMapping("/verify-registration")
+    public Mono<ResponseEntity<RegisterResponse>> verifyRegistration(@RequestBody VerifyOtpRequest request) {
+        return authService.verifyRegistration(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 
+    @PostMapping("/forgot-password/request")
+    public Mono<ResponseEntity<RegisterResponse>> requestForgotPassword(@RequestBody ForgotPasswordRequest request) {
+        return authService.requestForgotPassword(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 
+    @PostMapping("/forgot-password/reset")
+    public Mono<ResponseEntity<RegisterResponse>> resetPassword(@RequestBody ResetPasswordRequest request) {
+        return authService.resetPassword(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 }

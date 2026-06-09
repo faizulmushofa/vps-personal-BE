@@ -118,7 +118,7 @@ public class FileServiceImp implements FileService {
                         .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
                                 .map(usedBytes -> new UserStorageResponse(
                                         usedBytes,
-                                        user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L
+                                        user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L
                                 ))
                         )
                 );
@@ -133,7 +133,7 @@ public class FileServiceImp implements FileService {
                                 user.getUsername(),
                                 user.getEmail(),
                                 usedBytes,
-                                user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L
+                                user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L
                         ))
                 );
     }

@@ -58,7 +58,7 @@ public class UploadNodeServiceImp implements UploadService {
                         .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
                                 .flatMap(usedStorage -> {
                                     long totalSize = request.totalSize();
-                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 5368709120L;
+                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
                                     if (usedStorage + totalSize > quota) {
                                         return Mono.error(new IllegalArgumentException(
                                                 "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));

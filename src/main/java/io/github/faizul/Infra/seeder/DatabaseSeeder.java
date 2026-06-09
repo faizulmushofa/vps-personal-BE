@@ -63,12 +63,14 @@ public class DatabaseSeeder implements CommandLineRunner {
                                 .username("admin")
                                 .email("admin@example.com")
                                 .password(passwordEncoder.encode("password"))
+                                .isActive(true)
                                 .build();
 
                         User user = User.builder()
                                 .username("user")
                                 .email("user@example.com")
                                 .password(passwordEncoder.encode("password"))
+                                .isActive(true)
                                 .build();
 
                         return userRepository.save(admin)
@@ -99,7 +101,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                     username VARCHAR(255) NOT NULL,
                     email VARCHAR(255) NOT NULL,
                     password VARCHAR(255) NOT NULL,
-                    storage_quota BIGINT DEFAULT 5368709120,
+                    storage_quota BIGINT DEFAULT 1073741824,
+                    full_name VARCHAR(255),
+                    avatar_url VARCHAR(1024),
+                    phone_number VARCHAR(50),
+                    is_active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     deleted_at TIMESTAMP
@@ -177,6 +183,18 @@ public class DatabaseSeeder implements CommandLineRunner {
                     expires_at BIGINT,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS otp_verifications (
+                    id BIGSERIAL PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL,
+                    otp_code VARCHAR(6) NOT NULL,
+                    type VARCHAR(50) NOT NULL,
+                    expiry_time TIMESTAMP NOT NULL,
+                    verified BOOLEAN DEFAULT FALSE
+                );
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(1024);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
                 """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))
