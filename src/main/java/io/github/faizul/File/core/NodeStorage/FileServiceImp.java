@@ -49,7 +49,8 @@ public class FileServiceImp implements FileService {
                                                 file.getOriginalFileName(),
                                                 file.getSize(),
                                                 file.getCreatedAt(),
-                                                file.getProvider()));
+                                                file.getProvider(),
+                                                file.getExternalAccountId()));
         }
 
         @Override
@@ -80,7 +81,8 @@ public class FileServiceImp implements FileService {
                                                 file.getOriginalFileName(),
                                                 file.getSize(),
                                                 file.getCreatedAt(),
-                                                file.getProvider()));
+                                                file.getProvider(),
+                                                file.getExternalAccountId()));
         }
 
         @Override
@@ -91,7 +93,8 @@ public class FileServiceImp implements FileService {
                                                 file.getOriginalFileName(),
                                                 file.getSize(),
                                                 file.getCreatedAt(),
-                                                file.getProvider()));
+                                                file.getProvider(),
+                                                file.getExternalAccountId()));
         }
 
         @Override

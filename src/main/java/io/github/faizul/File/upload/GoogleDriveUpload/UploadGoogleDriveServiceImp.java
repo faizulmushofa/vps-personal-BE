@@ -65,6 +65,7 @@ public class UploadGoogleDriveServiceImp implements UploadService {
                             .storageName(storageName)
                             .size(request.totalSize())
                             .provider("GOOGLE_DRIVE")
+                            .externalAccountId(request.externalAccountId())
                             .build();
 
                     UploadSession session = UploadSession.builder()
@@ -196,7 +197,7 @@ public class UploadGoogleDriveServiceImp implements UploadService {
 
     private Mono<Void> uploadToGoogleDriveAndSave(Long userId, File file, Path combinedFilePath) {
         String mimeType = detectMimeType(combinedFilePath);
-        return googleDriveClient.uploadFile(userId, combinedFilePath, file.getOriginalFileName(), mimeType)
+        return googleDriveClient.uploadFile(file.getExternalAccountId(), combinedFilePath, file.getOriginalFileName(), mimeType)
                 .flatMap(googleFileId -> {
                     file.setStorageName(googleFileId);
                     return fileRepository.save(file);

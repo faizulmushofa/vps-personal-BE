@@ -95,7 +95,7 @@ public class GoogleDriveServiceImp implements DownloadService {
                         .flatMapMany(file -> getValidSession(fileId, userId)
                                 .flatMap(this::updateSessionToStreaming)
                                 .flatMapMany(savedSession -> {
-                                    Flux<byte[]> dataStream = googleDriveClient.downloadFile(userId, file.getStorageName());
+                                    Flux<byte[]> dataStream = googleDriveClient.downloadFile(file.getExternalAccountId(), file.getStorageName());
                                     return processDataStream(dataStream, savedSession.getId());
                                 })
                         )

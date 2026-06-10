@@ -338,6 +338,13 @@
                   </select>
                 </div>
               </div>
+              <div id="googleDriveAccountSelectGroup" class="input-group hidden" style="margin-top: 12px; margin-bottom: 12px;">
+                <label for="googleDriveAccountSelect" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; display: block;">Pilih Akun Google Drive</label>
+                <div class="input-wrapper" style="min-height: 40px; width: 100%;">
+                  <select id="googleDriveAccountSelect" style="width: 100%; min-height: 40px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-family: inherit; font-size: 14px; color: var(--text-primary); transition: var(--transition-smooth); outline: none; cursor: pointer;">
+                  </select>
+                </div>
+              </div>
               <button id="uploadButton" type="submit" class="primary-btn full-width">Kirim File</button>
             </form>
           </div>
@@ -379,26 +386,15 @@
               </div>
             </div>
             
-            <!-- Google Drive Storage -->
-            <div id="googleDriveQuotaSection" class="hidden">
-              <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19.347 14.625l-4.14-7.172h-6.41l4.14 7.172h6.41zM9.544 16.125l3.205-5.553-3.205-5.553-3.205 5.553 3.205 5.553zM10.456 16.125h6.41l-3.205-5.553-3.205 5.553z"/></svg>
-                Google Drive
-              </div>
-              <div class="quota-info" style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 500;">
-                <span id="gdriveQuotaText">0 B dari 0 B</span>
-                <span id="gdriveQuotaPercentage">0%</span>
-              </div>
-              <div class="progress-bar-container quota-bar-bg" style="margin-top: 4px;">
-                <div id="gdriveQuotaBarProgress" class="progress-bar-fill quota-bar-fill" style="width: 0%; background: linear-gradient(135deg, #10b981 0%, #059669 100%);"></div>
-              </div>
-            </div>
+            <!-- Google Drives Storage Container -->
+            <div id="googleDrivesQuotaContainer" style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;"></div>
           </div>
  
           <!-- Google Auth Card -->
           <div class="side-card glass-card">
-            <h3>Google Account</h3>
-            <div id="googleBtnContainer" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; min-height: 40px; align-items: center; width: 100%;"></div>
+            <h3>Google Accounts</h3>
+            <div id="connectedGoogleAccountsList" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px; width: 100%;"></div>
+            <div id="googleBtnContainer" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; min-height: 40px; align-items: center; width: 100%;"></div>
             <p id="googleStatus" style="font-size: 0.8rem; text-align: center; color: var(--text-secondary); margin-top: 8px;">Hubungkan akun Google Anda</p>
           </div>
 

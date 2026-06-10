@@ -18,8 +18,8 @@ public class GoogleDriveController {
     private final GoogleDriveServiceImp googleDriveService;
 
     @PostMapping("/sync")
-    public Mono<ResponseEntity<Void>> syncGoogleDrive() {
-        return googleDriveService.syncGoogleDrive()
+    public Mono<ResponseEntity<Void>> syncGoogleDrive(@RequestParam Long externalAccountId) {
+        return googleDriveService.syncGoogleDrive(externalAccountId)
                 .thenReturn(ResponseEntity.ok().build());
     }
 
@@ -37,12 +37,12 @@ public class GoogleDriveController {
     }
 
     @GetMapping("/files")
-    public Flux<FileResponse> getFiles() {
-        return googleDriveService.getFiles();
+    public Flux<FileResponse> getFiles(@RequestParam(required = false) Long externalAccountId) {
+        return googleDriveService.getFiles(externalAccountId);
     }
 
     @GetMapping("/storage")
-    public Mono<UserStorageResponse> getStorage() {
-        return googleDriveService.getStorage();
+    public Mono<UserStorageResponse> getStorage(@RequestParam Long externalAccountId) {
+        return googleDriveService.getStorage(externalAccountId);
     }
 }

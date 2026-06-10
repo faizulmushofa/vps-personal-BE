@@ -503,6 +503,50 @@ async function fetchUserProfile() {
 }
 
 // GOOGLE IDENTITY SERVICES (GIS) INTEGRATION
+let connectedGoogleAccounts = [];
+
+function toggleStorageProviderSelect() {
+  const provider = document.getElementById("storageProvider").value;
+  const selectGroup = document.getElementById("googleDriveAccountSelectGroup");
+  if (provider === "GOOGLE_DRIVE" && connectedGoogleAccounts.length > 0) {
+    selectGroup.classList.remove("hidden");
+  } else {
+    selectGroup.classList.add("hidden");
+  }
+}
+
+async function fetchSingleGoogleStorageQuota(accountId) {
+  try {
+    const response = await debugFetch(`get-gdrive-storage-${accountId}`, `/api/google-drive/storage?externalAccountId=${accountId}`, {
+      method: "GET",
+      headers: authHeaders()
+    });
+    if (response.ok) {
+      const quota = await response.json();
+      if (quota.googleDriveConnected) {
+        const textEl = document.getElementById(`gdriveQuotaText-${accountId}`);
+        const pctEl = document.getElementById(`gdriveQuotaPercentage-${accountId}`);
+        const progressEl = document.getElementById(`gdriveQuotaBarProgress-${accountId}`);
+        
+        if (textEl && pctEl && progressEl) {
+          const usedStr = formatBytes(quota.googleUsedBytes || 0);
+          const limitStr = formatBytes(quota.googleQuotaBytes || 0);
+          textEl.textContent = `${usedStr} dari ${limitStr}`;
+          
+          let pct = 0;
+          if (quota.googleQuotaBytes > 0) {
+            pct = Math.round(((quota.googleUsedBytes || 0) / quota.googleQuotaBytes) * 100);
+          }
+          pctEl.textContent = pct + "%";
+          progressEl.style.width = pct + "%";
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`Failed to fetch storage quota for account ${accountId}`, e);
+  }
+}
+
 async function checkGoogleConnection() {
   const activeToken = getToken();
   if (!activeToken) return;
@@ -512,46 +556,93 @@ async function checkGoogleConnection() {
       headers: authHeaders()
     });
 
+    const accountsList = document.getElementById("connectedGoogleAccountsList");
     const btnContainer = document.getElementById("googleBtnContainer");
     const statusText = document.getElementById("googleStatus");
-    if (!btnContainer || !statusText) return;
+    const selectGroup = document.getElementById("googleDriveAccountSelectGroup");
+    const selectEl = document.getElementById("googleDriveAccountSelect");
+    const quotaContainer = document.getElementById("googleDrivesQuotaContainer");
+
+    if (!accountsList || !btnContainer || !statusText || !selectGroup || !selectEl || !quotaContainer) return;
+
+    accountsList.innerHTML = "";
+    quotaContainer.innerHTML = "";
+    selectEl.innerHTML = "";
 
     if (response.ok) {
       const accounts = await response.json();
-      const googleAccount = accounts.find(acc => acc.provider === "GOOGLE" || acc.provider === "google");
+      connectedGoogleAccounts = accounts.filter(acc => acc.provider.toUpperCase() === "GOOGLE");
 
-      if (googleAccount) {
-        statusText.textContent = `Terhubung: ${googleAccount.email}`;
-        statusText.style.color = "#10b981"; // success green
+      if (connectedGoogleAccounts.length > 0) {
+        statusText.textContent = `${connectedGoogleAccounts.length} Akun Google Terhubung`;
+        statusText.style.color = "#10b981";
 
-        btnContainer.innerHTML = `
-          <button id="syncGoogleBtn" class="primary-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); border: none;">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 8s linear infinite;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            <span>Sinkronisasi Google Drive</span>
-          </button>
-          <button id="disconnectGoogleBtn" class="danger-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer; margin-top: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444;">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></svg>
-            <span>Putuskan Hubungan</span>
-          </button>
-        `;
+        connectedGoogleAccounts.forEach(account => {
+          const accountId = account.id;
+          const accountEmail = account.email;
 
-        document.getElementById("syncGoogleBtn").addEventListener("click", syncGoogleDrive);
-        document.getElementById("disconnectGoogleBtn").addEventListener("click", () => disconnectGoogleAccount(googleAccount.id));
-        return;
+          const accItem = document.createElement("div");
+          accItem.style = "padding: 8px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px;";
+          accItem.innerHTML = `
+            <div style="font-weight: 500; font-size: 0.8rem; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">${accountEmail}</span>
+              <span style="color: #10b981; font-size: 0.7rem;">Active</span>
+            </div>
+            <div style="display: flex; gap: 4px;">
+              <button class="primary-btn sync-btn-${accountId}" style="flex: 1; padding: 6px; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); border: none;">
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                <span>Sync</span>
+              </button>
+              <button class="danger-btn disconnect-btn-${accountId}" style="flex: 1; padding: 6px; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; gap: 4px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444;">
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></svg>
+                <span>Putus</span>
+              </button>
+            </div>
+          `;
+          accountsList.appendChild(accItem);
+
+          accItem.querySelector(`.sync-btn-${accountId}`).onclick = () => syncGoogleDrive(accountId);
+          accItem.querySelector(`.disconnect-btn-${accountId}`).onclick = () => disconnectGoogleAccount(accountId);
+
+          const quotaDiv = document.createElement("div");
+          quotaDiv.innerHTML = `
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19.347 14.625l-4.14-7.172h-6.41l4.14 7.172h6.41zM9.544 16.125l3.205-5.553-3.205-5.553-3.205 5.553 3.205 5.553zM10.456 16.125h6.41l-3.205-5.553-3.205 5.553z"/></svg>
+              GDrive: ${accountEmail}
+            </div>
+            <div class="quota-info" style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 500;">
+              <span id="gdriveQuotaText-${accountId}">0 B dari 0 B</span>
+              <span id="gdriveQuotaPercentage-${accountId}">0%</span>
+            </div>
+            <div class="progress-bar-container quota-bar-bg" style="margin-top: 4px; margin-bottom: 8px;">
+              <div id="gdriveQuotaBarProgress-${accountId}" class="progress-bar-fill quota-bar-fill" style="width: 0%; background: linear-gradient(135deg, #10b981 0%, #059669 100%);"></div>
+            </div>
+          `;
+          quotaContainer.appendChild(quotaDiv);
+
+          const option = document.createElement("option");
+          option.value = accountId;
+          option.textContent = accountEmail;
+          selectEl.appendChild(option);
+
+          fetchSingleGoogleStorageQuota(accountId);
+        });
+
+        toggleStorageProviderSelect();
+      } else {
+        statusText.textContent = "Hubungkan akun Google Anda";
+        statusText.style.color = "var(--text-secondary)";
+        selectGroup.classList.add("hidden");
       }
     }
 
-    // Default state: not connected
-    statusText.textContent = "Hubungkan akun Google Anda";
-    statusText.style.color = "var(--text-secondary)";
-    
     if (googleCodeClient) {
       btnContainer.innerHTML = `
         <button id="connectGoogleBtn" class="primary-btn full-width" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; font-weight: 600; cursor: pointer;">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M12.24 10.285V13.4h6.887C18.2 15.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.614 4.473 1.636l2.427-2.427C17.29 1.523 14.909 1 12.24 1A9.99 9.99 0 002.25 11a9.99 9.99 0 009.99 10c5.556 0 9.99-4.004 9.99-10 0-.682-.082-1.336-.237-1.715H12.24z"/>
           </svg>
-          <span>Sambungkan Google Drive</span>
+          <span>Hubungkan Akun Google Baru</span>
         </button>
       `;
       document.getElementById("connectGoogleBtn").addEventListener("click", () => {
@@ -565,21 +656,10 @@ async function checkGoogleConnection() {
   }
 }
 
-async function syncGoogleDrive() {
-  const syncBtn = document.getElementById("syncGoogleBtn");
-  let originalHtml = "";
-  if (syncBtn) {
-    originalHtml = syncBtn.innerHTML;
-    syncBtn.disabled = true;
-    syncBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-      <span>Mensinkronisasi...</span>
-    `;
-  }
-
+async function syncGoogleDrive(externalAccountId) {
   showToast("Sinkronisasi berkas Google Drive sedang berlangsung...", "info");
   try {
-    const response = await debugFetch("sync-google-drive", "/api/google-drive/sync", {
+    const response = await debugFetch("sync-google-drive", `/api/google-drive/sync?externalAccountId=${externalAccountId}`, {
       method: "POST",
       headers: authHeaders()
     });
@@ -592,11 +672,6 @@ async function syncGoogleDrive() {
     }
   } catch (error) {
     showToast("Koneksi bermasalah saat sinkronisasi.", "error");
-  } finally {
-    if (syncBtn) {
-      syncBtn.disabled = false;
-      syncBtn.innerHTML = originalHtml;
-    }
   }
 }
 
@@ -615,7 +690,6 @@ async function disconnectGoogleAccount(id) {
     if (response.ok) {
       showToast("Akun Google Drive berhasil diputuskan.", "success");
       await checkGoogleConnection();
-      fetchStorageQuota();
       await fetchMyFiles();
     } else {
       showToast("Gagal memutus sambungan Google.", "error");
@@ -787,10 +861,21 @@ async function handleUpload(event) {
       ? "/api/google-drive/upload/init" 
       : "/api/files/init";
 
+    const bodyObj = { fileName: file.name, totalSize: file.size, provider: provider };
+    if (provider === "GOOGLE_DRIVE") {
+      const selectVal = document.getElementById("googleDriveAccountSelect").value;
+      if (!selectVal) {
+        showToast("Hubungkan dan pilih akun Google Drive terlebih dahulu.", "error");
+        transfersCard.classList.add("hidden");
+        return;
+      }
+      bodyObj.externalAccountId = parseInt(selectVal);
+    }
+
     const initResponse = await debugFetch("init-upload", initUrl, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ fileName: file.name, totalSize: file.size, provider: provider })
+      body: JSON.stringify(bodyObj)
     });
 
     if (initResponse.status === 401 || initResponse.status === 403) {
@@ -1141,9 +1226,17 @@ function renderFiles(files) {
     const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleString() : "-";
     const displaySize = formatBytes(f.size || 0);
 
+    let accountInfo = "";
+    if (f.provider === "GOOGLE_DRIVE" && f.externalAccountId) {
+      const acc = connectedGoogleAccounts.find(a => a.id === f.externalAccountId);
+      if (acc) {
+        accountInfo = ` (${acc.email})`;
+      }
+    }
+
     const providerBadge = f.provider === "GOOGLE_DRIVE" 
       ? `<span class="badge" style="background: rgba(59, 130, 246, 0.15) !important; color: #3b82f6 !important; border: 1px solid rgba(59, 130, 246, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
-           <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Google Drive
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Google Drive${accountInfo}
          </span>`
       : `<span class="badge" style="background: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; border: 1px solid rgba(168, 85, 247, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Storage Node
@@ -1344,6 +1437,7 @@ document.getElementById("fpToLoginLink").addEventListener("click", (e) => {
 
 document.getElementById("logoutButton").addEventListener("click", handleLogout);
 document.getElementById("uploadForm").addEventListener("submit", handleUpload);
+document.getElementById("storageProvider").addEventListener("change", toggleStorageProviderSelect);
 document.getElementById("getAllButton").addEventListener("click", fetchMyFiles);
 document.getElementById("getSharedButton").addEventListener("click", () => fetchFiles("/api/files/share/shared-with-me", "get-shared", true));
 document.getElementById("getAllAdminButton").addEventListener("click", () => fetchFiles("/api/files/admin", "get-all-admin", false));
@@ -1379,13 +1473,7 @@ async function fetchStorageQuota() {
   if (!activeToken) return;
 
   try {
-    const [localRes, googleRes] = await Promise.all([
-      debugFetch("storage-quota", "/api/files/me/storage", { headers: authHeaders() }),
-      debugFetch("google-drive-quota", "/api/google-drive/storage", { headers: authHeaders() }).catch(err => {
-        console.error("Gagal mengambil kuota Google Drive", err);
-        return null;
-      })
-    ]);
+    const localRes = await debugFetch("storage-quota", "/api/files/me/storage", { headers: authHeaders() });
 
     if (localRes && localRes.ok) {
       const localData = await localRes.json();
@@ -1404,25 +1492,6 @@ async function fetchStorageQuota() {
       } else {
         quotaProgress.style.background = "linear-gradient(135deg, #a855f7 0%, #3b82f6 100%)";
       }
-    }
-
-    const googleDriveQuotaSection = document.getElementById("googleDriveQuotaSection");
-    if (googleRes && googleRes.ok) {
-      const googleData = await googleRes.json();
-      if (googleData.googleDriveConnected) {
-        googleDriveQuotaSection.classList.remove("hidden");
-        const gUsed = googleData.googleUsedBytes || 0;
-        const gQuota = googleData.googleQuotaBytes || 0;
-        const gPercent = gQuota > 0 ? Math.min(100, Math.round((gUsed / gQuota) * 100)) : 0;
-
-        document.getElementById("gdriveQuotaText").textContent = `${formatBytes(gUsed)} dari ${formatBytes(gQuota)}`;
-        document.getElementById("gdriveQuotaPercentage").textContent = `${gPercent}%`;
-        document.getElementById("gdriveQuotaBarProgress").style.width = `${gPercent}%`;
-      } else {
-        googleDriveQuotaSection.classList.add("hidden");
-      }
-    } else {
-      googleDriveQuotaSection.classList.add("hidden");
     }
   } catch (err) {
     console.error("Gagal mengambil kuota storage", err);

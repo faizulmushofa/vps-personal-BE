@@ -80,7 +80,8 @@ public class StorageNodeShareServiceImp implements ShareService {
                         file.getOriginalFileName(),
                         file.getSize(),
                         file.getCreatedAt(),
-                        file.getProvider()
+                        file.getProvider(),
+                        file.getExternalAccountId()
                 ));
     }
 
