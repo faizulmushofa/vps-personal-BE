@@ -42,3 +42,6 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: alpha
     tagsSorter: alpha
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}

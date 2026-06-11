@@ -1,10 +1,7 @@
 package io.github.faizul.security.auth.dtos;
 
-import io.github.faizul.security.auth.dtos.*;
-
-import io.github.faizul.security.auth.*;
-
 public record RefreshResponse(
-        String message
+        String message,
+        String accessToken
 ) {
 }
