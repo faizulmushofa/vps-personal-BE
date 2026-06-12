@@ -127,8 +127,13 @@ public class GoogleDriveClient {
                 .flatMapMany(token -> webClient.get()
                         .uri("https://www.googleapis.com/drive/v3/files/" + googleFileId + "?alt=media")
                         .header("Authorization", "Bearer " + token)
+                        .header("Connection", "close")
                         .retrieve()
                         .bodyToFlux(byte[].class)
+                        .retryWhen(reactor.util.retry.Retry.backoff(3, java.time.Duration.ofMillis(200))
+                                .filter(throwable -> throwable instanceof reactor.netty.http.client.PrematureCloseException ||
+                                        (throwable instanceof org.springframework.web.reactive.function.client.WebClientRequestException &&
+                                         throwable.getCause() instanceof reactor.netty.http.client.PrematureCloseException)))
                 );
     }
 

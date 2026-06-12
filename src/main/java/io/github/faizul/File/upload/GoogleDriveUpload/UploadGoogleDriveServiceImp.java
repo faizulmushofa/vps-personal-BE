@@ -86,13 +86,13 @@ public class UploadGoogleDriveServiceImp implements UploadService {
 
     private Mono<UploadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                 .flatMap(file -> {
                     if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new org.springframework.security.access.AccessDeniedException("Access Denied"));
+                        return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk mengunggah berkas Google Drive ini"));
                     }
                     return uploadSessionRepository.findByFileId(fileId)
-                            .switchIfEmpty(Mono.error(new NoSuchElementException("Upload Session Not Found")));
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Sesi unggah tidak ditemukan")));
                 });
     }
 

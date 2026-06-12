@@ -60,17 +60,18 @@ public class GoogleDriveServiceImp {
                         file.getSize(),
                         file.getCreatedAt(),
                         file.getProvider(),
-                        file.getExternalAccountId()
+                        file.getExternalAccountId(),
+                        null
                 ));
     }
 
     public Mono<String> deleteFile(UUID uuid) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(uuid)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found!")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Access Denied"));
+                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk menghapus berkas Google Drive ini"));
                             }
                             return googleDriveClient.deleteFile(file.getExternalAccountId(), file.getStorageName())
                                     .thenReturn("")

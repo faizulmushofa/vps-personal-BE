@@ -74,7 +74,7 @@ public class SecurityConfig {
                         .pathMatchers("/admin/**").hasRole("ADMIN")
                         .anyExchange().authenticated()
                 )
-                .addFilterBefore(requestDebugFilter,
+                .addFilterAfter(requestDebugFilter,
                         SecurityWebFiltersOrder.AUTHENTICATION
                 )
                 .addFilterAt(

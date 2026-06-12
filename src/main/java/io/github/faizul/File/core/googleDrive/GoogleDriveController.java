@@ -10,7 +10,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-@RestController
+@RestController("googleDriveCoreController")
 @RequestMapping("api/google-drive")
 @RequiredArgsConstructor
 public class GoogleDriveController {
@@ -23,7 +23,7 @@ public class GoogleDriveController {
                 .thenReturn(ResponseEntity.ok().build());
     }
 
-    @DeleteMapping("/files/{id}")
+    @DeleteMapping({"/files/{id}", "/{id}"})
     public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id) {
         return googleDriveService.deleteFile(id)
                 .map(warning -> {

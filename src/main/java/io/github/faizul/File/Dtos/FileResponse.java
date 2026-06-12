@@ -12,5 +12,6 @@ public record FileResponse(
         Long size,
         Instant createdAt,
         String provider,
-        Long externalAccountId
+        Long externalAccountId,
+        String ownerEmail
 ){}

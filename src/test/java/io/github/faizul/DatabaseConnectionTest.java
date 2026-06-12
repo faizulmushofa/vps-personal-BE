@@ -4,18 +4,38 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.r2dbc.core.DatabaseClient;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import com.google.genai.Client;
+import io.github.faizul.Ai.AiService;
+import io.github.faizul.Ai.dtos.AiRequest;
 import reactor.test.StepVerifier;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "spring.ai.openai.api-key=dummy-openrouter-key",
+    "spring.ai.google.genai.api-key=dummy-gemini-key"
+})
 public class DatabaseConnectionTest {
 
-    @MockitoBean
-    private Client geminiClient;
+    @Autowired
+    private AiService aiService;
 
     @Autowired
     private DatabaseClient databaseClient;
+
+    @Test
+    public void testAiConnection() {
+        try {
+            System.out.println("\n>>> CALLING AI SERVICE...");
+            aiService.summary(new AiRequest("Hello"))
+                .subscribe(response -> System.out.println(">>> AI RESPONSE: " + response.response() + "\n"),
+                           err -> {
+                               System.err.println(">>> AI SERVICE EXCEPTION:");
+                               err.printStackTrace();
+                           });
+        } catch (Exception e) {
+            System.err.println("\n>>> AI SERVICE EXCEPTION:");
+            e.printStackTrace();
+            System.err.println(">>> ====================\n");
+        }
+    }
 
     @Test
     public void testSupabaseConnection() {

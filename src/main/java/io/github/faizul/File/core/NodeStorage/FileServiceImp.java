@@ -36,11 +36,11 @@ public class FileServiceImp implements FileService {
                                 .flatMap(userId -> fileRepository.findById(uuid)
                                                 .switchIfEmpty(
                                                                 Mono.error(new NoSuchElementException(
-                                                                                "File Not Found!")))
+                                                                                "Berkas tidak ditemukan!")))
                                                 .flatMap(file -> {
                                                         if (!file.getUserId().equals(userId)) {
                                                                 return Mono.error(new AccessDeniedException(
-                                                                                "Access Denied"));
+                                                                                "Anda tidak memiliki akses untuk melihat berkas ini"));
                                                         }
                                                         return Mono.just(file);
                                                 }))
@@ -50,7 +50,8 @@ public class FileServiceImp implements FileService {
                                                 file.getSize(),
                                                 file.getCreatedAt(),
                                                 file.getProvider(),
-                                                file.getExternalAccountId()));
+                                                file.getExternalAccountId(),
+                                                null));
         }
 
         @Override
@@ -59,16 +60,20 @@ public class FileServiceImp implements FileService {
                                 .flatMap(userId -> fileRepository.findById(uuid)
                                                 .switchIfEmpty(
                                                                 Mono.error(new NoSuchElementException(
-                                                                                "File Not Found!")))
+                                                                                "Berkas tidak ditemukan!")))
                                                 .flatMap(file -> {
                                                         if (!file.getUserId().equals(userId)) {
                                                                 return Mono.error(new AccessDeniedException(
-                                                                                "Access Denied"));
+                                                                                "Anda tidak memiliki akses untuk menghapus berkas ini"));
                                                         }
                                                         return Mono.just(file);
                                                 }))
                                 .flatMap(file -> uploadStorageClient
                                                 .deleteFile(file.getUserId(), file.getId().toString())
+                                                .onErrorResume(e -> {
+                                                        System.err.println("Warning: Gagal menghapus file fisik di storage node: " + e.getMessage());
+                                                        return Mono.empty();
+                                                })
                                                 .then(fileRepository.deleteById(file.getId())));
         }
 
@@ -82,7 +87,8 @@ public class FileServiceImp implements FileService {
                                                 file.getSize(),
                                                 file.getCreatedAt(),
                                                 file.getProvider(),
-                                                file.getExternalAccountId()));
+                                                file.getExternalAccountId(),
+                                                null));
         }
 
         @Override
@@ -94,7 +100,8 @@ public class FileServiceImp implements FileService {
                                                 file.getSize(),
                                                 file.getCreatedAt(),
                                                 file.getProvider(),
-                                                file.getExternalAccountId()));
+                                                file.getExternalAccountId(),
+                                                null));
         }
 
         @Override

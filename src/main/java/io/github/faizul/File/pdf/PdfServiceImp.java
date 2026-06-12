@@ -54,9 +54,10 @@ public class PdfServiceImp implements PdfService {
                                             .flatMap(os -> {
                                                 Flux<byte[]> dataStream;
                                                 if ("GOOGLE_DRIVE".equals(file.getProvider())) {
-                                                    log.info("Mendownload dari Google Drive....");
+                                                    log.info("Mulai mengunduh file dari Google Drive...");
                                                     dataStream = googleDriveClient.downloadFile(userId, file.getStorageName());
                                                 } else {
+                                                    log.info("Mulai mengunduh file dari Storage Node...");
                                                     dataStream = downloadStorageService
                                                             .downloadFile(userId, fileId)
                                                             .map(chunk -> chunk.data());
@@ -64,18 +65,21 @@ public class PdfServiceImp implements PdfService {
 
                                                 return dataStream
                                                         .publishOn(pdfScheduler)
+                                                        .doFirst(() -> log.info("Mulai menulis data file ke disk..."))
                                                         .doOnNext(chunk -> {
-                                                            log.info("Menulis File Ke disk.....");
                                                             try {
                                                                 os.write(chunk);
                                                             } catch (IOException e) {
                                                                 throw new RuntimeException(e);
                                                             }
                                                         })
+                                                        .doOnComplete(() -> log.info("Semua chunk berhasil diterima untuk fileId: {}", fileId))
+                                                        .doOnError(err -> log.error("Error saat download stream fileId: {}", fileId, err))
+                                                        .doOnCancel(() -> log.warn("Download stream DIBATALKAN untuk fileId: {}", fileId))
                                                         .then(Mono.fromRunnable(() -> {
                                                             try {
                                                                 os.close();
-                                                                log.info("File Berhasil Di Download...");
+                                                                log.info("File Berhasil Di Download dan ditulis ke disk.");
                                                             } catch (IOException e) {
                                                                 throw new RuntimeException(e);
                                                             }
@@ -88,10 +92,13 @@ public class PdfServiceImp implements PdfService {
                                                         });
                                             })
                                             .subscribeOn(pdfScheduler)
-                                            .flatMap(this::extract)
+                                            .flatMap(path -> {
+                                                log.info("Memulai ekstraksi teks dari file: {}", path);
+                                                return this.extract(path);
+                                            })
                                             .doFinally(signal -> {
+                                                log.info("doFinally signal: {} — Menghapus file untuk fileId: {}", signal, fileId);
                                                 try {
-                                                    log.info("Menghapus File.. : " + fileId.toString());
                                                     Files.deleteIfExists(tempFile);
                                                 } catch (IOException ignored) {
                                                 }
@@ -108,8 +115,9 @@ public class PdfServiceImp implements PdfService {
             try(PDDocument document = Loader.loadPDF(file.toFile())) {
 
                 PDFTextStripper stripper = new PDFTextStripper();
-                log.info(stripper.getText(document));
-                return stripper.getText(document);
+                String text = stripper.getText(document);
+                log.info("Ekstraksi PDF berhasil: {} karakter", text != null ? text.length() : 0);
+                return text;
             }
 
         }).subscribeOn(pdfScheduler);
