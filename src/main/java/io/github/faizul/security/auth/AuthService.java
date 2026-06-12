@@ -8,6 +8,7 @@ import io.github.faizul.notification.NotificationService;
 import io.github.faizul.security.auth.otp.OtpVerification;
 import io.github.faizul.security.auth.otp.OtpVerificationRepository;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.util.Random;
 
 @Service
 @AllArgsConstructor
+@Slf4j
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -57,10 +59,7 @@ public class AuthService {
 
                     return otpVerificationRepository.save(otp)
                             .flatMap(savedOtp -> notificationService.sendNotification(request.email(), emailSubject, emailBody)
-                                    .onErrorResume(err -> {
-                                        System.err.println("Gagal mengirim email OTP: " + err.getMessage());
-                                        return Mono.empty();
-                                    }))
+                                    .doOnError(err -> log.error("Gagal mengirim email OTP: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("Register Successfully. Silakan periksa email Anda untuk kode verifikasi OTP."));
                 });
     }
@@ -131,10 +130,7 @@ public class AuthService {
 
                     return otpVerificationRepository.save(otp)
                             .flatMap(savedOtp -> notificationService.sendNotification(request.email(), emailSubject, emailBody)
-                                    .onErrorResume(err -> {
-                                        System.err.println("Gagal mengirim email OTP lupa password: " + err.getMessage());
-                                        return Mono.empty();
-                                    }))
+                                    .doOnError(err -> log.error("Gagal mengirim email OTP lupa password: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("OTP pemulihan kata sandi telah dikirim ke email Anda."));
                 });
     }
