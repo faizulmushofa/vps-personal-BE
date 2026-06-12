@@ -19,7 +19,8 @@ COPY --from=dependency-cache /build /build
 COPY src src
 
 # Single-threaded build with aggressive memory limit
-RUN ./mvnw clean package -DskipTests -B -T 1C -Xmx512m
+ENV MAVEN_OPTS="-Xmx512m"
+RUN ./mvnw clean package -DskipTests -B -T 1C
 
 # Stage 3: Runtime (ultra-minimal for 1GB VPS)
 FROM eclipse-temurin:21-jre-alpine
