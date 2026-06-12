@@ -2,12 +2,13 @@ spring:
   application:
     name: vps-personal-backend-test
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/testdb
-    username: testuser
-    password: testpassword
+    url: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
   sql:
     init:
-      mode: never
+      mode: always
+      schema-locations: classpath:schema-h2.sql
 
   grpc:
     security:
@@ -29,6 +30,8 @@ spring:
 jwt:
   access-token-expiry-hours: 24
 
+SECRET_KEY: test-secret-key-for-jwt-signing-minimum-32-bytes
+
 google:
   client-id: dummy-google-client-id
   client-secret: dummy-google-client-secret
@@ -40,10 +43,8 @@ brevo:
     name: Premium VPS Cloud Test
 
 app:
-  frontend-url: http://localhost:5173
+  frontend-url: ${frontend-url}
 
-DATABASE_URL: r2dbc:postgresql://localhost:5432/testdb
+DATABASE_URL: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
 GEMINI_API_KEY: test_key
 STORAGE_NODE_URL: localhost:9095
-
-
