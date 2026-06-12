@@ -1,6 +1,8 @@
 package io.github.faizul.User.core;
 
 import io.github.faizul.User.dtos.UserDto;
+import io.github.faizul.User.dtos.UpdateProfileRequest;
+import io.github.faizul.User.dtos.UpdatePasswordRequest;
 import io.github.faizul.security.filter.CurrentUserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,21 @@ public class UserController {
                 .flatMap(userService::getUserById)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/me")
+    public Mono<ResponseEntity<UserDto>> updateMyProfile(@RequestBody UpdateProfileRequest request) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> userService.updateProfile(userId, request))
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/me/password")
+    public Mono<ResponseEntity<Void>> updateMyPassword(@RequestBody UpdatePasswordRequest request) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> userService.updatePassword(userId, request))
+                .then(Mono.just(ResponseEntity.ok().build()));
     }
 
     @PostMapping
