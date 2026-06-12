@@ -56,7 +56,7 @@ ENTRYPOINT ["java", \
   "-XX:+UseZGC", \
   "-XX:+AlwaysPreTouch", \
   "-XX:+UnlockExperimentalVMOptions", \
-  "-XX:ZUncommitDelay=30s", \
+  "-XX:ZUncommitDelay=30", \
   "-Djava.util.concurrent.ForkJoinPool.common.parallelism=2", \
   "-Dspring.jmx.enabled=false", \
   "-Dlogging.level.io.grpc=WARN", \
