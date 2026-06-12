@@ -15,6 +15,7 @@ import java.util.UUID;
 public class AiController {
 
     private final AiService aiService;
+    private final PdfChatService pdfChatService;
 
     @PostMapping("/summary")
     public Mono<ResponseEntity<AiResponse>> postString(@RequestBody AiRequest request) {
@@ -27,5 +28,10 @@ public class AiController {
         return aiService.summarizePdf(fileId)
                 .map(response -> ResponseEntity.ok().body(response));
     }
-}
 
+    @PostMapping("/chat/pdf/{fileId}")
+    public Mono<ResponseEntity<AiResponse>> chatPdf(@PathVariable UUID fileId, @RequestBody AiRequest request) {
+        return pdfChatService.chatPdf(fileId, request)
+                .map(response -> ResponseEntity.ok().body(response));
+    }
+}

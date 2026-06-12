@@ -29,7 +29,13 @@ public class File implements Persistable<UUID> {
 
     private Long size;
 
+    //private Boolean active;
+
     private Long userId;
+
+    private String provider;
+
+    private Long externalAccountId;
 
     @CreatedDate
     private Instant createdAt;

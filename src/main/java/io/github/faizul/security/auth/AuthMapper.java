@@ -1,12 +1,7 @@
 package io.github.faizul.security.auth;
 
-import io.github.faizul.security.auth.dtos.*;
-
-import io.github.faizul.User.*;
-import io.github.faizul.security.auth.dtos.*;
-
 import io.github.faizul.security.auth.dtos.RegisterRequest;
-import io.github.faizul.User.User;
+import io.github.faizul.User.core.User;
 
 public class AuthMapper {
 
@@ -15,6 +10,10 @@ public class AuthMapper {
                 .email(request.email())
                 .username(request.username())
                 .password(request.password())
+                .fullName(request.fullName())
+                .phoneNumber(request.phoneNumber())
+                .isActive(false)
                 .build();
     }
 }
+

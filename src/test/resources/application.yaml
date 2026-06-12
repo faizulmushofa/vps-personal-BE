@@ -2,12 +2,13 @@ spring:
   application:
     name: vps-personal-backend-test
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/testdb
-    username: testuser
-    password: testpassword
+    url: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
   sql:
     init:
-      mode: never
+      mode: always
+      schema-locations: classpath:schema-h2.sql
 
   grpc:
     security:
@@ -18,9 +19,32 @@ spring:
           address: static://localhost:9095
           negotiation-type: plaintext
 
+  ai:
+    openai:
+      api-key: ${OPEN_ROUTER_API_KEY:dummy-openrouter-key}
+      base-url: https://openrouter.ai/api/v1
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:dummy-gemini-key}
+
 jwt:
   access-token-expiry-hours: 24
 
-DATABASE_URL: r2dbc:postgresql://localhost:5432/testdb
+SECRET_KEY: test-secret-key-for-jwt-signing-minimum-32-bytes
+
+google:
+  client-id: dummy-google-client-id
+  client-secret: dummy-google-client-secret
+
+brevo:
+  api-key: dummy-brevo-api-key
+  sender:
+    email: test@example.com
+    name: Premium VPS Cloud Test
+
+app:
+  frontend-url: ${frontend-url}
+
+DATABASE_URL: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
 GEMINI_API_KEY: test_key
 STORAGE_NODE_URL: localhost:9095

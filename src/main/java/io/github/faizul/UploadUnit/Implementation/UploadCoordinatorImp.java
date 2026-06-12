@@ -6,20 +6,22 @@ import io.github.faizul.UploadUnit.IOCleaningService;
 import io.github.faizul.UploadUnit.UploadCoordinator;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.UploadUnit.UploadUnitService;
+import io.github.faizul.infra.config.StorageConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.codec.multipart.FilePart;
 import reactor.core.publisher.Flux;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class UploadCoordinatorImp implements UploadCoordinator {
 
     private final UploadUnitService uploadUnitService;
@@ -27,6 +29,22 @@ public class UploadCoordinatorImp implements UploadCoordinator {
     private final UploadStorageService uploadStorageClient;
     private final IOCleaningService cleanupService;
     private final CurrentUserContext currentUserContext;
+    private final StorageConfig storageConfig;
+
+    public UploadCoordinatorImp(
+            UploadUnitService uploadUnitService,
+            @Qualifier("storageNodeUploadService") UploadService uploadService,
+            UploadStorageService uploadStorageClient,
+            IOCleaningService cleanupService,
+            CurrentUserContext currentUserContext,
+            StorageConfig storageConfig) {
+        this.uploadUnitService = uploadUnitService;
+        this.uploadService = uploadService;
+        this.uploadStorageClient = uploadStorageClient;
+        this.cleanupService = cleanupService;
+        this.currentUserContext = currentUserContext;
+        this.storageConfig = storageConfig;
+    }
 
     private static final int BATCH_SIZE = 5;
 
@@ -89,14 +107,14 @@ public class UploadCoordinatorImp implements UploadCoordinator {
 
     private Mono<Void> handleCompletion(Long userId, UUID fileId, int totalChunks) {
         log.info("[COMPLETION DETECTED] All chunks received for file {}", fileId);
-        
+
         return flushUnsentBatches(userId, fileId, totalChunks)
                 .then(uploadStorageClient.sendFinalSignal(userId, fileId, totalChunks))
-                .retryWhen(Retry.backoff(3,Duration.ofSeconds(1)))
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .then(uploadService.updateUploadProgress(fileId, totalChunks))
                 .then(uploadService.markAsCompleted(fileId))
                 .then(cleanupService.cleanupTempFiles(userId, fileId))
-                .then(uploadUnitService.cleanupMemory(fileId)) 
+                .then(uploadUnitService.cleanupMemory(fileId))
                 .onErrorResume(e -> {
                     log.error("[COMPLETION ERROR] Failed to finalize file {}: {}", fileId, e.getMessage());
                     return Mono.error(e);

@@ -5,6 +5,8 @@ import io.github.faizul.File.core.*;
 
 public record InitRequest(
         String fileName,
-        Long totalSize
+        Long totalSize,
+        String provider,
+        Long externalAccountId
 ) {
 }

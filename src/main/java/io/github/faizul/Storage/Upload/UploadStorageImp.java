@@ -63,7 +63,7 @@ public class UploadStorageImp implements UploadStorageService {
                 .build();
 
         return finalizeUpload(request)
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofMinutes(15))
                 .flatMap(response -> {
                     if (response.getSuccess()) {
                         return Mono.empty();
@@ -154,7 +154,7 @@ public class UploadStorageImp implements UploadStorageService {
                 .build();
 
         return deleteFileRpc(request)
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofMinutes(15))
                 .flatMap(response -> {
                     if (response.getSuccess()) {
                         return Mono.empty();

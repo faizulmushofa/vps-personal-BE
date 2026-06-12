@@ -6,7 +6,6 @@ spring:
   sql:
     init:
       mode: always
-
   grpc:
     security:
       service-token: ${SERVICE_TOKEN}
@@ -16,6 +15,23 @@ spring:
           address: ${STORAGE_NODE_URL}
           negotiation-type: tls
           secure: false
+  ai:
+    openai:
+      api-key: ${OPEN_ROUTER_API_KEY}
+      base-url: https://openrouter.ai/api/v1
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
+
+google:
+  client-id: ${GOOGLE_GLIENT_ID}
+  client-secret: ${GOOGLE_CLIENT_SECRET}
+
+brevo:
+  api-key: ${BREVO_API_KEY}
+  sender:
+    email: ${BREVO_SENDER_EMAIL}
+    name: ${BREVO_SENDER_NAME:Premium VPS Cloud}
 
 jwt:
   access-token-expiry-hours: 1
@@ -30,3 +46,6 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: alpha
     tagsSorter: alpha
+
+app:
+  frontend-url: ${FRONTEND_URL}

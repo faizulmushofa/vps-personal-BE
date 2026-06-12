@@ -1,15 +1,10 @@
 package io.github.faizul.infra.seeder;
 
-import io.github.faizul.infra.seeder.*;
-import io.github.faizul.User.*;
-import io.github.faizul.security.userrole.*;
-import io.github.faizul.security.role.*;
-
 import io.github.faizul.security.role.Role;
 import io.github.faizul.security.role.RoleRepository;
 import io.github.faizul.security.role.Roles;
-import io.github.faizul.User.User;
-import io.github.faizul.User.UserRepository;
+import io.github.faizul.User.core.User;
+import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.security.userrole.UserRole;
 import io.github.faizul.security.userrole.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -68,12 +63,14 @@ public class DatabaseSeeder implements CommandLineRunner {
                                 .username("admin")
                                 .email("admin@example.com")
                                 .password(passwordEncoder.encode("password"))
+                                .isActive(true)
                                 .build();
 
                         User user = User.builder()
                                 .username("user")
                                 .email("user@example.com")
                                 .password(passwordEncoder.encode("password"))
+                                .isActive(true)
                                 .build();
 
                         return userRepository.save(admin)
@@ -104,7 +101,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                     username VARCHAR(255) NOT NULL,
                     email VARCHAR(255) NOT NULL,
                     password VARCHAR(255) NOT NULL,
-                    storage_quota BIGINT DEFAULT 5368709120,
+                    storage_quota BIGINT DEFAULT 1073741824,
+                    full_name VARCHAR(255),
+                    avatar_url VARCHAR(1024),
+                    phone_number VARCHAR(50),
+                    is_active BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     deleted_at TIMESTAMP
@@ -135,8 +136,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                     storage_name VARCHAR(255) NOT NULL,
                     size BIGINT NOT NULL,
                     user_id BIGINT NOT NULL,
+                    provider VARCHAR(50) DEFAULT 'STORAGE_NODE',
+                    external_account_id BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (external_account_id) REFERENCES external_users(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS upload_sessions (
                     id UUID PRIMARY KEY,
@@ -165,12 +169,51 @@ public class DatabaseSeeder implements CommandLineRunner {
                 CREATE TABLE IF NOT EXISTS file_shared (
                     id BIGSERIAL PRIMARY KEY,
                     file_id UUID NOT NULL,
-                    user_id BIGINT NOT NULL,
+                    user_id BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    share_token VARCHAR(255) UNIQUE,
+                    is_public BOOLEAN DEFAULT FALSE,
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE(file_id, user_id)
                 );
+                CREATE TABLE IF NOT EXISTS external_users (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    provider VARCHAR(255) NOT NULL,
+                    provider_user_id VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    expires_at BIGINT,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS otp_verifications (
+                    id BIGSERIAL PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL,
+                    otp_code VARCHAR(6) NOT NULL,
+                    type VARCHAR(50) NOT NULL,
+                    expiry_time TIMESTAMP NOT NULL,
+                    verified BOOLEAN DEFAULT FALSE
+                );
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(1024);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+                ALTER TABLE files ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'STORAGE_NODE';
+                ALTER TABLE files ADD COLUMN IF NOT EXISTS external_account_id BIGINT;
+                CREATE TABLE IF NOT EXISTS file_summaries (
+                    id BIGSERIAL PRIMARY KEY,
+                    file_id UUID NOT NULL UNIQUE,
+                    summary TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+                );
+                ALTER TABLE file_shared ALTER COLUMN user_id DROP NOT NULL;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS share_token VARCHAR(255) UNIQUE;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
                 """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))

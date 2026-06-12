@@ -43,22 +43,41 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public Mono<ResponseEntity<RefreshResponse>> refresh(
-            @CookieValue("refreshToken") String refreshToken,
+            @CookieValue(value = "refreshToken", required = false) String refreshToken,
             ServerHttpResponse response
     ){
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
         return authService.refresh(refreshToken)
                 .map(e -> {
                     response.addCookie(
-                            CookieFactory.createRefreshTokenCookie(e.Token())
+                            CookieFactory.createRefreshTokenCookie(e.refreshToken())
                     );
                     return ResponseEntity.ok(
                             new RefreshResponse(
-                                    e.message()
+                                    e.message(),
+                                    e.accessToken()
                             )
                     );
                 });
     }
 
+    @PostMapping("/verify-registration")
+    public Mono<ResponseEntity<RegisterResponse>> verifyRegistration(@RequestBody VerifyOtpRequest request) {
+        return authService.verifyRegistration(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 
+    @PostMapping("/forgot-password/request")
+    public Mono<ResponseEntity<RegisterResponse>> requestForgotPassword(@RequestBody ForgotPasswordRequest request) {
+        return authService.requestForgotPassword(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 
+    @PostMapping("/forgot-password/reset")
+    public Mono<ResponseEntity<RegisterResponse>> resetPassword(@RequestBody ResetPasswordRequest request) {
+        return authService.resetPassword(request)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
 }
