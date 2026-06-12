@@ -10,6 +10,7 @@ import io.github.faizul.File.dtos.UserProfileResponse;
 import io.github.faizul.File.dtos.UserStorageResponse;
 import io.github.faizul.File.dtos.UserStorageSummary;
 import io.github.faizul.File.dtos.UpdateQuotaRequest;
+import io.github.faizul.File.share.FileSharedRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -29,6 +31,7 @@ public class FileServiceImp implements FileService {
         private final CurrentUserContext currentUserContext;
         private final UploadStorageService uploadStorageClient;
         private final UserRepository userRepository;
+        private final FileSharedRepository fileSharedRepository;
 
         @Override
         public Mono<FileResponse> findByUUID(UUID uuid) {
@@ -38,11 +41,19 @@ public class FileServiceImp implements FileService {
                                                                 Mono.error(new NoSuchElementException(
                                                                                 "Berkas tidak ditemukan!")))
                                                 .flatMap(file -> {
-                                                        if (!file.getUserId().equals(userId)) {
-                                                                return Mono.error(new AccessDeniedException(
-                                                                                "Anda tidak memiliki akses untuk melihat berkas ini"));
+                                                        if (file.getUserId().equals(userId)) {
+                                                                return Mono.just(file);
                                                         }
-                                                        return Mono.just(file);
+                                                        return fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
+                                                                        .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                                                                        .defaultIfEmpty(false)
+                                                                        .flatMap(hasAccess -> {
+                                                                                if (Boolean.TRUE.equals(hasAccess)) {
+                                                                                        return Mono.just(file);
+                                                                                }
+                                                                                return Mono.error(new AccessDeniedException(
+                                                                                                "Anda tidak memiliki akses untuk melihat berkas ini"));
+                                                                        });
                                                 }))
                                 .map(file -> new FileResponse(
                                                 file.getId(),

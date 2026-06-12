@@ -169,8 +169,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                 CREATE TABLE IF NOT EXISTS file_shared (
                     id BIGSERIAL PRIMARY KEY,
                     file_id UUID NOT NULL,
-                    user_id BIGINT NOT NULL,
+                    user_id BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    share_token VARCHAR(255) UNIQUE,
+                    is_public BOOLEAN DEFAULT FALSE,
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE(file_id, user_id)
@@ -207,6 +210,10 @@ public class DatabaseSeeder implements CommandLineRunner {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
                 );
+                ALTER TABLE file_shared ALTER COLUMN user_id DROP NOT NULL;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS share_token VARCHAR(255) UNIQUE;
+                ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
                 """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))

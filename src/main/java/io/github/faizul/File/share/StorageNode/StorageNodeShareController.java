@@ -2,8 +2,10 @@ package io.github.faizul.File.share.StorageNode;
 
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.dtos.ShareFileRequest;
+import io.github.faizul.File.dtos.ShareFileResponse;
 import io.github.faizul.File.share.ShareService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -13,15 +15,18 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("api/files/share")
-@RequiredArgsConstructor
 public class StorageNodeShareController {
 
     private final ShareService shareService;
 
+    public StorageNodeShareController(@Qualifier("storageNodeShareService") ShareService shareService) {
+        this.shareService = shareService;
+    }
+
     @PostMapping("/{fileId}")
-    public Mono<ResponseEntity<Void>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request) {
-        return shareService.shareFile(fileId, request.email())
-                .thenReturn(ResponseEntity.ok().build());
+    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request) {
+        return shareService.shareFile(fileId, request)
+                .map(ResponseEntity::ok);
     }
 
     @DeleteMapping("/{fileId}/{userId}")
@@ -33,5 +38,45 @@ public class StorageNodeShareController {
     @GetMapping("/shared-with-me")
     public Flux<FileResponse> getSharedWithMe() {
         return shareService.getSharedWithMe();
+    }
+
+    @GetMapping("/public/info/{shareToken}")
+    public Mono<ResponseEntity<FileResponse>> getPublicFileInfo(@PathVariable String shareToken) {
+        return shareService.getPublicFileInfo(shareToken)
+                .map(ResponseEntity::ok);
+    }
+
+    @GetMapping("/public/download/{shareToken}")
+    public Mono<ResponseEntity<Flux<byte[]>>> downloadPublicFile(
+            @PathVariable String shareToken,
+            @RequestParam(value = "download", required = false, defaultValue = "false") Boolean download) {
+        return shareService.getPublicFileInfo(shareToken)
+                .map(file -> {
+                    String disposition = Boolean.TRUE.equals(download)
+                            ? "attachment; filename=\"" + file.originalFileName() + "\""
+                            : "inline; filename=\"" + file.originalFileName() + "\"";
+
+                    String contentType = org.springframework.http.MediaTypeFactory.getMediaType(file.originalFileName())
+                            .map(org.springframework.http.MediaType::toString)
+                            .orElse("application/octet-stream");
+
+                    return ResponseEntity.ok()
+                            .header("Content-Disposition", disposition)
+                            .header("Content-Length", String.valueOf(file.size()))
+                            .contentType(MediaType.parseMediaType(contentType))
+                            .body(shareService.downloadPublicFile(shareToken));
+                })
+                .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/shared-by-me")
+    public Flux<io.github.faizul.File.dtos.SharedByMeResponse> getSharedByMe() {
+        return shareService.getSharedByMe();
+    }
+
+    @DeleteMapping("/cancel/{shareId}")
+    public Mono<ResponseEntity<Void>> unshareFileById(@PathVariable Long shareId) {
+        return shareService.unshareFile(shareId)
+                .thenReturn(ResponseEntity.noContent().build());
     }
 }
