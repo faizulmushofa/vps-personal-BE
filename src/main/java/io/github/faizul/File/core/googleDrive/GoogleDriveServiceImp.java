@@ -49,28 +49,31 @@ public class GoogleDriveServiceImp {
         this.googleSyncScheduler = googleSyncScheduler;
     }
 
-    public Flux<FileResponse> getFiles() {
+    public Flux<FileResponse> getFiles(Long externalAccountId) {
         return currentUserContext.getUserId()
                 .flatMapMany(userId -> fileRepository.findByUserId(userId))
-                .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()))
+                .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()) &&
+                        (externalAccountId == null || externalAccountId.equals(file.getExternalAccountId())))
                 .map(file -> new FileResponse(
                         file.getId(),
                         file.getOriginalFileName(),
                         file.getSize(),
                         file.getCreatedAt(),
-                        file.getProvider()
+                        file.getProvider(),
+                        file.getExternalAccountId(),
+                        null
                 ));
     }
 
     public Mono<String> deleteFile(UUID uuid) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(uuid)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found!")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Access Denied"));
+                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk menghapus berkas Google Drive ini"));
                             }
-                            return googleDriveClient.deleteFile(userId, file.getStorageName())
+                            return googleDriveClient.deleteFile(file.getExternalAccountId(), file.getStorageName())
                                     .thenReturn("")
                                     .onErrorResume(e -> {
                                         System.err.println("Warning: Gagal menghapus file dari Google Drive API: " + e.getMessage());
@@ -83,10 +86,10 @@ public class GoogleDriveServiceImp {
                 );
     }
 
-    public Mono<UserStorageResponse> getStorage() {
+    public Mono<UserStorageResponse> getStorage(Long externalAccountId) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> externalAccountRepository.findByUserIdAndProvider(userId, "GOOGLE")
-                        .flatMap(account -> googleDriveClient.getAboutSpace(userId)
+                .flatMap(userId -> externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
+                        .flatMap(account -> googleDriveClient.getAboutSpace(externalAccountId)
                                 .map(quotaMap -> {
                                     long gUsed = 0L;
                                     long gLimit = 0L;
@@ -115,26 +118,30 @@ public class GoogleDriveServiceImp {
                 );
     }
 
-    public Mono<Void> syncGoogleDrive() {
+    public Mono<Void> syncGoogleDrive(Long externalAccountId) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> {
-                    log.info("Memulai sinkronisasi Google Drive untuk userId: {}", userId);
-                    return googleDriveClient.listFiles(userId)
-                            .flatMap(googleFiles -> {
-                                log.info("Berhasil mengambil {} berkas dari Google Drive API", googleFiles.size());
-                                return fileRepository.findByUserId(userId)
-                                        .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()))
-                                        .collectList()
-                                        .map(localGoogleFiles -> calculateSyncDiff(userId, googleFiles, localGoogleFiles))
-                                        .flatMap(this::applyDatabaseSyncChanges);
-                            });
-                })
+                .flatMap(userId -> externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Akun Google Drive tidak ditemukan")))
+                        .flatMap(account -> {
+                            log.info("Memulai sinkronisasi Google Drive untuk akun: {}", account.getEmail());
+                            return googleDriveClient.listFiles(externalAccountId)
+                                    .flatMap(googleFiles -> {
+                                        log.info("Berhasil mengambil {} berkas dari Google Drive API", googleFiles.size());
+                                        return fileRepository.findByUserId(userId)
+                                                .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()) &&
+                                                        externalAccountId.equals(file.getExternalAccountId()))
+                                                .collectList()
+                                                .map(localGoogleFiles -> calculateSyncDiff(userId, externalAccountId, googleFiles, localGoogleFiles))
+                                                .flatMap(this::applyDatabaseSyncChanges);
+                                    });
+                        })
+                )
                 .subscribeOn(googleSyncScheduler);
     }
 
     private record SyncDiff(List<File> filesToSave, List<UUID> idsToDelete) {}
 
-    private SyncDiff calculateSyncDiff(Long userId, List<Map<String, Object>> googleFiles, List<File> localGoogleFiles) {
+    private SyncDiff calculateSyncDiff(Long userId, Long externalAccountId, List<Map<String, Object>> googleFiles, List<File> localGoogleFiles) {
         log.info("Daftar berkas Google Drive lokal di database: {} berkas", localGoogleFiles.size());
         Map<String, File> localMap = localGoogleFiles.stream()
                 .collect(Collectors.toMap(File::getStorageName, f -> f));
@@ -169,6 +176,7 @@ public class GoogleDriveServiceImp {
                         .storageName(gId)
                         .size(gSize)
                         .provider("GOOGLE_DRIVE")
+                        .externalAccountId(externalAccountId)
                         .build();
                 filesToSave.add(newFile);
             }

@@ -41,4 +41,10 @@ public class UploadNodeController {
                 .thenReturn(ResponseEntity.accepted().build());
     }
 
+    @PostMapping("/{id}/cancel")
+    public Mono<ResponseEntity<Void>> cancelUpload(@PathVariable UUID id) {
+        return uploadService.cancelUpload(id)
+                .thenReturn(ResponseEntity.ok().build());
+    }
+
 }

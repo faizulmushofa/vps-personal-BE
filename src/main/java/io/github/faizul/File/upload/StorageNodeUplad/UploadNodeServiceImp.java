@@ -56,20 +56,16 @@ public class UploadNodeServiceImp implements UploadService {
                 .flatMap(userId -> userRepository.findById(userId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
                         .flatMap(user -> {
-                            String provider = request.provider() != null ? request.provider() : "STORAGE_NODE";
-                            Mono<Void> quotaCheck = Mono.empty();
-                            if (!"GOOGLE_DRIVE".equals(provider)) {
-                                quotaCheck = fileRepository.calculateUsedStorageByUserId(userId)
-                                        .flatMap(usedStorage -> {
-                                            long totalSize = request.totalSize();
-                                            long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
-                                            if (usedStorage + totalSize > quota) {
-                                                return Mono.error(new IllegalArgumentException(
-                                                        "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
-                                            }
-                                            return Mono.empty();
-                                        });
-                            }
+                            Mono<Void> quotaCheck = fileRepository.calculateUsedStorageByUserId(userId)
+                                    .flatMap(usedStorage -> {
+                                        long totalSize = request.totalSize();
+                                        long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                        if (usedStorage + totalSize > quota) {
+                                            return Mono.error(new IllegalArgumentException(
+                                                    "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
+                                        }
+                                        return Mono.empty();
+                                    });
 
                             return quotaCheck.then(Mono.defer(() -> {
                                 String tempPath = storageConfig.tempDir(userId, fileId).toString();
@@ -79,7 +75,7 @@ public class UploadNodeServiceImp implements UploadService {
                                         .originalFileName(request.fileName())
                                         .storageName(storageName)
                                         .size(request.totalSize())
-                                        .provider(provider)
+                                        .provider("STORAGE_NODE")
                                         .build();
 
                                 UploadSession session = UploadSession.builder()
@@ -101,13 +97,13 @@ public class UploadNodeServiceImp implements UploadService {
 
     private Mono<UploadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                 .flatMap(file -> {
                     if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new AccessDeniedException("Access Denied"));
+                        return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunggah berkas ini"));
                     }
                     return uploadSessionRepository.findByFileId(fileId)
-                            .switchIfEmpty(Mono.error(new NoSuchElementException("Upload Session Not Found")));
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Sesi unggah tidak ditemukan")));
                 });
     }
 

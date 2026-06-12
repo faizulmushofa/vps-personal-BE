@@ -10,7 +10,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-@RestController
+@RestController("googleDriveCoreController")
 @RequestMapping("api/google-drive")
 @RequiredArgsConstructor
 public class GoogleDriveController {
@@ -18,12 +18,12 @@ public class GoogleDriveController {
     private final GoogleDriveServiceImp googleDriveService;
 
     @PostMapping("/sync")
-    public Mono<ResponseEntity<Void>> syncGoogleDrive() {
-        return googleDriveService.syncGoogleDrive()
+    public Mono<ResponseEntity<Void>> syncGoogleDrive(@RequestParam Long externalAccountId) {
+        return googleDriveService.syncGoogleDrive(externalAccountId)
                 .thenReturn(ResponseEntity.ok().build());
     }
 
-    @DeleteMapping("/files/{id}")
+    @DeleteMapping({"/files/{id}", "/{id}"})
     public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id) {
         return googleDriveService.deleteFile(id)
                 .map(warning -> {
@@ -37,12 +37,12 @@ public class GoogleDriveController {
     }
 
     @GetMapping("/files")
-    public Flux<FileResponse> getFiles() {
-        return googleDriveService.getFiles();
+    public Flux<FileResponse> getFiles(@RequestParam(required = false) Long externalAccountId) {
+        return googleDriveService.getFiles(externalAccountId);
     }
 
     @GetMapping("/storage")
-    public Mono<UserStorageResponse> getStorage() {
-        return googleDriveService.getStorage();
+    public Mono<UserStorageResponse> getStorage(@RequestParam Long externalAccountId) {
+        return googleDriveService.getStorage(externalAccountId);
     }
 }

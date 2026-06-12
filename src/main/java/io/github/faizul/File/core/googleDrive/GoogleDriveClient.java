@@ -37,8 +37,8 @@ public class GoogleDriveClient {
                 .build();
     }
 
-    public Mono<String> getValidAccessToken(Long userId) {
-        return externalAccountRepository.findByUserIdAndProvider(userId, "GOOGLE")
+    public Mono<String> getValidAccessToken(Long externalAccountId) {
+        return externalAccountRepository.findById(externalAccountId)
                 .switchIfEmpty(Mono.error(new IllegalStateException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu.")))
                 .flatMap(account -> {
                     long now = System.currentTimeMillis();
@@ -75,12 +75,12 @@ public class GoogleDriveClient {
                 });
     }
 
-    public Mono<String> uploadFile(Long userId, Path filePath, String fileName, String mimeType) {
+    public Mono<String> uploadFile(Long externalAccountId, Path filePath, String fileName, String mimeType) {
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("metadata", Map.of("name", fileName), MediaType.APPLICATION_JSON);
         builder.part("media", new FileSystemResource(filePath), MediaType.parseMediaType(mimeType));
 
-        return getValidAccessToken(userId)
+        return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.post()
                         .uri("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
                         .header("Authorization", "Bearer " + token)
@@ -97,8 +97,8 @@ public class GoogleDriveClient {
                 );
     }
 
-    public Mono<Void> deleteFile(Long userId, String googleFileId) {
-        return getValidAccessToken(userId)
+    public Mono<Void> deleteFile(Long externalAccountId, String googleFileId) {
+        return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.patch()
                         .uri(uriBuilder -> uriBuilder
                                 .scheme("https")
@@ -122,18 +122,23 @@ public class GoogleDriveClient {
                 );
     }
 
-    public Flux<byte[]> downloadFile(Long userId, String googleFileId) {
-        return getValidAccessToken(userId)
+    public Flux<byte[]> downloadFile(Long externalAccountId, String googleFileId) {
+        return getValidAccessToken(externalAccountId)
                 .flatMapMany(token -> webClient.get()
                         .uri("https://www.googleapis.com/drive/v3/files/" + googleFileId + "?alt=media")
                         .header("Authorization", "Bearer " + token)
+                        .header("Connection", "close")
                         .retrieve()
                         .bodyToFlux(byte[].class)
+                        .retryWhen(reactor.util.retry.Retry.backoff(3, java.time.Duration.ofMillis(200))
+                                .filter(throwable -> throwable instanceof reactor.netty.http.client.PrematureCloseException ||
+                                        (throwable instanceof org.springframework.web.reactive.function.client.WebClientRequestException &&
+                                         throwable.getCause() instanceof reactor.netty.http.client.PrematureCloseException)))
                 );
     }
 
-    public Mono<java.util.List<java.util.Map<String, Object>>> listFiles(Long userId) {
-        return getValidAccessToken(userId)
+    public Mono<java.util.List<java.util.Map<String, Object>>> listFiles(Long externalAccountId) {
+        return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.get()
                         .uri(uriBuilder -> uriBuilder
                                 .scheme("https")
@@ -152,8 +157,8 @@ public class GoogleDriveClient {
                 );
     }
 
-    public Mono<java.util.Map<String, Object>> getAboutSpace(Long userId) {
-        return getValidAccessToken(userId)
+    public Mono<java.util.Map<String, Object>> getAboutSpace(Long externalAccountId) {
+        return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.get()
                         .uri("https://www.googleapis.com/drive/v3/about?fields=storageQuota")
                         .header("Authorization", "Bearer " + token)

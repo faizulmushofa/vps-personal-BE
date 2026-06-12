@@ -13,7 +13,7 @@ import java.util.UUID;
 @RestController("googleDriveUploadController")
 @RequestMapping("api/google-drive/upload")
 @RequiredArgsConstructor
-public class GoogleDriveController {
+public class GoogleDriveUploadController {
 
     private final UploadGoogleDriveServiceImp uploadService;
 
@@ -31,5 +31,11 @@ public class GoogleDriveController {
     ) {
         return uploadService.handleChunkUpload(id, index, filePart)
                 .thenReturn(ResponseEntity.accepted().build());
+    }
+
+    @PostMapping("/{id}/cancel")
+    public Mono<ResponseEntity<Void>> cancelUpload(@PathVariable UUID id) {
+        return uploadService.cancelUpload(id)
+                .thenReturn(ResponseEntity.ok().build());
     }
 }

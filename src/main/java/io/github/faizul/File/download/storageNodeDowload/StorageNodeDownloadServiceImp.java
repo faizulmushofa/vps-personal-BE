@@ -37,14 +37,14 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
     public Mono<DownloadInitResponse> init(DownloadInitRequest request) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(request.fileId())
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                                 Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
                             
                             return accessCheck.flatMap(hasAccess -> {
                                 if (!hasAccess) {
-                                    return Mono.error(new AccessDeniedException("Access Denied"));
+                                    return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunduh berkas ini"));
                                 }
 
                                 UUID sessionId = UUID.randomUUID();
@@ -72,17 +72,29 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
 
     private Mono<DownloadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                 .flatMap(file -> {
                     Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                         Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
                     
                     return accessCheck.flatMap(hasAccess -> {
                         if (!hasAccess) {
-                            return Mono.error(new AccessDeniedException("Access Denied"));
+                            return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunduh berkas ini"));
                         }
                         return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
-                                .switchIfEmpty(Mono.error(new NoSuchElementException("Download Session Not Found")));
+                                .switchIfEmpty(Mono.defer(() -> {
+                                    UUID sessionId = UUID.randomUUID();
+                                    DownloadSession session = DownloadSession.builder()
+                                            .id(sessionId)
+                                            .fileId(file.getId())
+                                            .userId(userId)
+                                            .status(FileStatus.INIT)
+                                            .totalBytes(file.getSize())
+                                            .bytesSent(0L)
+                                            .startedAt(Instant.now())
+                                            .build();
+                                    return downloadSessionRepository.save(session);
+                                }));
                     });
                 });
     }

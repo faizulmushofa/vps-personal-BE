@@ -18,9 +18,32 @@ spring:
           address: static://localhost:9095
           negotiation-type: plaintext
 
+  ai:
+    openai:
+      api-key: ${OPEN_ROUTER_API_KEY:dummy-openrouter-key}
+      base-url: https://openrouter.ai/api/v1
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:dummy-gemini-key}
+
 jwt:
   access-token-expiry-hours: 24
+
+google:
+  client-id: dummy-google-client-id
+  client-secret: dummy-google-client-secret
+
+brevo:
+  api-key: dummy-brevo-api-key
+  sender:
+    email: test@example.com
+    name: Premium VPS Cloud Test
+
+app:
+  frontend-url: http://localhost:5173
 
 DATABASE_URL: r2dbc:postgresql://localhost:5432/testdb
 GEMINI_API_KEY: test_key
 STORAGE_NODE_URL: localhost:9095
+
+

@@ -1,6 +1,7 @@
 package io.github.faizul.Exception;
 
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,10 +17,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoSuchElementException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleNoSuchElementException(NoSuchElementException ex, ServerWebExchange exchange) {
+        log.warn("NoSuchElementException pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -33,6 +36,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleAccessDeniedException(AccessDeniedException ex, ServerWebExchange exchange) {
+        log.warn("AccessDeniedException pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(HttpStatus.FORBIDDEN.value())
@@ -44,8 +48,9 @@ public class GlobalExceptionHandler {
         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse));
     }
 
-    @ExceptionHandler(BadCredentialsException.class)
-    public Mono<ResponseEntity<ErrorResponse>> handleBadCredentialsException(BadCredentialsException ex, ServerWebExchange exchange) {
+    @ExceptionHandler({BadCredentialsException.class, org.springframework.security.core.userdetails.UsernameNotFoundException.class})
+    public Mono<ResponseEntity<ErrorResponse>> handleAuthExceptions(Exception ex, ServerWebExchange exchange) {
+        log.warn("Auth exception pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(HttpStatus.UNAUTHORIZED.value())
@@ -59,6 +64,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleIllegalArgumentException(IllegalArgumentException ex, ServerWebExchange exchange) {
+        log.warn("IllegalArgumentException pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -72,6 +78,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public Mono<ResponseEntity<ErrorResponse>> handleGenericException(Exception ex, ServerWebExchange exchange) {
+        log.error("Internal Server Error pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage(), ex);
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())

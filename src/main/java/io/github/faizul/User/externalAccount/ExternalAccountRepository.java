@@ -7,5 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface ExternalAccountRepository extends R2dbcRepository<ExternalAccount, Long> {
     Mono<ExternalAccount> findByUserIdAndProvider(Long userId, String provider);
+    Flux<ExternalAccount> findAllByUserIdAndProvider(Long userId, String provider);
+    Mono<ExternalAccount> findByIdAndUserId(Long id, Long userId);
     Flux<ExternalAccount> findAllByUserId(Long userId);
 }

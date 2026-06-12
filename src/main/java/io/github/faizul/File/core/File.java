@@ -35,6 +35,8 @@ public class File implements Persistable<UUID> {
 
     private String provider;
 
+    private Long externalAccountId;
+
     @CreatedDate
     private Instant createdAt;
 

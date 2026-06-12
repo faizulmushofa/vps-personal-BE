@@ -65,6 +65,7 @@ public class UploadGoogleDriveServiceImp implements UploadService {
                             .storageName(storageName)
                             .size(request.totalSize())
                             .provider("GOOGLE_DRIVE")
+                            .externalAccountId(request.externalAccountId())
                             .build();
 
                     UploadSession session = UploadSession.builder()
@@ -85,13 +86,13 @@ public class UploadGoogleDriveServiceImp implements UploadService {
 
     private Mono<UploadSession> getValidSession(UUID fileId, Long userId) {
         return fileRepository.findById(fileId)
-                .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                 .flatMap(file -> {
                     if (!file.getUserId().equals(userId)) {
-                        return Mono.error(new org.springframework.security.access.AccessDeniedException("Access Denied"));
+                        return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk mengunggah berkas Google Drive ini"));
                     }
                     return uploadSessionRepository.findByFileId(fileId)
-                            .switchIfEmpty(Mono.error(new NoSuchElementException("Upload Session Not Found")));
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Sesi unggah tidak ditemukan")));
                 });
     }
 
@@ -196,7 +197,7 @@ public class UploadGoogleDriveServiceImp implements UploadService {
 
     private Mono<Void> uploadToGoogleDriveAndSave(Long userId, File file, Path combinedFilePath) {
         String mimeType = detectMimeType(combinedFilePath);
-        return googleDriveClient.uploadFile(userId, combinedFilePath, file.getOriginalFileName(), mimeType)
+        return googleDriveClient.uploadFile(file.getExternalAccountId(), combinedFilePath, file.getOriginalFileName(), mimeType)
                 .flatMap(googleFileId -> {
                     file.setStorageName(googleFileId);
                     return fileRepository.save(file);

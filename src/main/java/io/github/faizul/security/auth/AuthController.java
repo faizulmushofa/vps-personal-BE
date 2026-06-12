@@ -43,17 +43,21 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public Mono<ResponseEntity<RefreshResponse>> refresh(
-            @CookieValue("refreshToken") String refreshToken,
+            @CookieValue(value = "refreshToken", required = false) String refreshToken,
             ServerHttpResponse response
     ){
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
         return authService.refresh(refreshToken)
                 .map(e -> {
                     response.addCookie(
-                            CookieFactory.createRefreshTokenCookie(e.Token())
+                            CookieFactory.createRefreshTokenCookie(e.refreshToken())
                     );
                     return ResponseEntity.ok(
                             new RefreshResponse(
-                                    e.message()
+                                    e.message(),
+                                    e.accessToken()
                             )
                     );
                 });

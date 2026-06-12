@@ -32,16 +32,16 @@ public class StorageNodeShareServiceImp implements ShareService {
     public Mono<Void> shareFile(UUID fileId, String targetEmail) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new AccessDeniedException("Only owner can share the file"));
+                                return Mono.error(new AccessDeniedException("Hanya pemilik berkas yang diperbolehkan untuk membagikan berkas ini"));
                             }
                             return userRepository.findByEmail(targetEmail)
-                                    .switchIfEmpty(Mono.error(new NoSuchElementException("User with email not found")))
+                                    .switchIfEmpty(Mono.error(new NoSuchElementException("Pengguna dengan alamat email tersebut tidak ditemukan")))
                                     .flatMap(targetUser -> {
                                         if (userId.equals(targetUser.getId())) {
-                                            return Mono.error(new IllegalArgumentException("Cannot share with yourself"));
+                                            return Mono.error(new IllegalArgumentException("Anda tidak dapat membagikan berkas dengan diri Anda sendiri"));
                                         }
                                         return fileSharedRepository.existsByFileIdAndUserId(fileId, targetUser.getId())
                                                 .flatMap(exists -> {
@@ -60,10 +60,10 @@ public class StorageNodeShareServiceImp implements ShareService {
     public Mono<Void> unshareFile(UUID fileId, Long targetUserId) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new AccessDeniedException("Only owner can unshare the file"));
+                                return Mono.error(new AccessDeniedException("Hanya pemilik berkas yang diperbolehkan untuk membatalkan pembagian berkas ini"));
                             }
                             return fileSharedRepository.deleteByFileIdAndUserId(fileId, targetUserId);
                         }));
@@ -73,15 +73,29 @@ public class StorageNodeShareServiceImp implements ShareService {
     public Flux<FileResponse> getSharedWithMe() {
         return currentUserContext.getUserId()
                 .flatMapMany(userId -> fileSharedRepository.findByUserId(userId)
-                        .flatMap(shared -> fileRepository.findById(shared.getFileId()))
-                )
-                .map(file -> new FileResponse(
-                        file.getId(),
-                        file.getOriginalFileName(),
-                        file.getSize(),
-                        file.getCreatedAt(),
-                        file.getProvider()
-                ));
+                        .flatMap(shared -> fileRepository.findById(shared.getFileId())
+                                .flatMap(file -> userRepository.findById(file.getUserId())
+                                        .map(owner -> new FileResponse(
+                                                file.getId(),
+                                                file.getOriginalFileName(),
+                                                file.getSize(),
+                                                file.getCreatedAt(),
+                                                file.getProvider(),
+                                                file.getExternalAccountId(),
+                                                owner.getEmail()
+                                        ))
+                                        .defaultIfEmpty(new FileResponse(
+                                                file.getId(),
+                                                file.getOriginalFileName(),
+                                                file.getSize(),
+                                                file.getCreatedAt(),
+                                                file.getProvider(),
+                                                file.getExternalAccountId(),
+                                                "Unknown Owner"
+                                        ))
+                                )
+                        )
+                );
     }
 
     @Override

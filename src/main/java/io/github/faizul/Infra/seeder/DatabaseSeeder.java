@@ -137,8 +137,10 @@ public class DatabaseSeeder implements CommandLineRunner {
                     size BIGINT NOT NULL,
                     user_id BIGINT NOT NULL,
                     provider VARCHAR(50) DEFAULT 'STORAGE_NODE',
+                    external_account_id BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (external_account_id) REFERENCES external_users(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS upload_sessions (
                     id UUID PRIMARY KEY,
@@ -197,6 +199,14 @@ public class DatabaseSeeder implements CommandLineRunner {
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50);
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
                 ALTER TABLE files ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'STORAGE_NODE';
+                ALTER TABLE files ADD COLUMN IF NOT EXISTS external_account_id BIGINT;
+                CREATE TABLE IF NOT EXISTS file_summaries (
+                    id BIGSERIAL PRIMARY KEY,
+                    file_id UUID NOT NULL UNIQUE,
+                    summary TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+                );
                 """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))

@@ -162,7 +162,14 @@ public class AuthService {
 
     public Mono<ResponseRefreshInternal> refresh(String refreshToken) {
         return jwtService.refresh(refreshToken)
-                .map(e -> new ResponseRefreshInternal(
-                        "token refreshed", e.getToken()));
+                .flatMap(newRefreshToken -> userRepository.findById(newRefreshToken.getUserId())
+                        .map(user -> {
+                            String accessToken = jwtService.generateAccessToken(user);
+                            return new ResponseRefreshInternal(
+                                    accessToken,
+                                    newRefreshToken.getToken(),
+                                    "token refreshed"
+                            );
+                        }));
     }
 }
