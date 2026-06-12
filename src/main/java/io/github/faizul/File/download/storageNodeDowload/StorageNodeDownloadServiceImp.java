@@ -40,7 +40,9 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
-                                Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                                Mono.just(true) : fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
+                                    .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                                    .defaultIfEmpty(false);
                             
                             return accessCheck.flatMap(hasAccess -> {
                                 if (!hasAccess) {
@@ -75,7 +77,9 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                 .flatMap(file -> {
                     Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
-                        Mono.just(true) : fileSharedRepository.existsByFileIdAndUserId(file.getId(), userId);
+                        Mono.just(true) : fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
+                            .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                            .defaultIfEmpty(false);
                     
                     return accessCheck.flatMap(hasAccess -> {
                         if (!hasAccess) {
@@ -110,7 +114,7 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                                     return downloadSessionRepository.save(session);
                                 })
                                 .flatMapMany(savedSession -> {
-                                    Flux<byte[]> dataStream = downloadStorageService.downloadFile(userId, fileId)
+                                    Flux<byte[]> dataStream = downloadStorageService.downloadFile(file.getUserId(), fileId)
                                             .map(chunk -> chunk.data());
 
                                     return dataStream

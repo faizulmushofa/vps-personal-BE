@@ -1,13 +1,12 @@
 package io.github.faizul.File.share;
 
-import io.github.faizul.File.core.*;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
@@ -23,10 +22,22 @@ public class FileShared {
     @Id
     private Long id;
 
+    @Column("file_id")
     private UUID fileId;
 
-    private Long userId;
+    @Column("user_id")
+    private Long userId; // Nullable for public share
+
+    @Column("expires_at")
+    private Instant expiresAt; // Nullable
+
+    @Column("share_token")
+    private String shareToken; // Nullable
+
+    @Column("is_public")
+    private Boolean isPublic; // Defaults to false
 
     @CreatedDate
+    @Column("created_at")
     private Instant createdAt;
 }
