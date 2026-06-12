@@ -41,17 +41,13 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private Mono<Void> seedRoles() {
-        return roleRepository.count()
-                .flatMap(count -> {
-                    if (count == 0) {
-                        log.info("Seeding roles (ADMIN, USER)...");
-                        Role adminRole = Role.builder().name(Roles.ADMIN).build();
-                        Role userRole = Role.builder().name(Roles.USER).build();
-                        return roleRepository.save(adminRole)
-                                .then(roleRepository.save(userRole));
-                    }
-                    return Mono.empty();
-                }).then();
+        return Flux.just(Roles.ADMIN, Roles.USER)
+                .flatMap(roleName -> roleRepository.findByName(roleName)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.info("Seeding role: {}...", roleName);
+                            return roleRepository.save(Role.builder().name(roleName).build());
+                        })))
+                .then();
     }
 
     private Mono<Void> seedUsers() {
@@ -112,7 +108,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                 );
                 CREATE TABLE IF NOT EXISTS roles (
                     id BIGSERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL
+                    name VARCHAR(255) NOT NULL UNIQUE
                 );
                 CREATE TABLE IF NOT EXISTS user_roles (
                     user_id BIGINT NOT NULL,
