@@ -71,6 +71,7 @@ public class SecurityConfig {
                 .authorizeExchange( authorizeExchangeSpec -> authorizeExchangeSpec
                         .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll()
                         .pathMatchers("/api/auth/**").permitAll()
+                        .pathMatchers("/api/reports").permitAll()
                         .pathMatchers("/api/files/share/public/**").permitAll()
                         .pathMatchers("/api/google-drive/share/public/**").permitAll()
                         .pathMatchers("/api/preview/public/**").permitAll()
