@@ -7,7 +7,7 @@ public class AuthMapper {
 
     public static User toUser(RegisterRequest request){
         return User.builder()
-                .email(request.email())
+                .email(request.email().toLowerCase().trim())
                 .username(request.username())
                 .password(request.password())
                 .fullName(request.fullName())

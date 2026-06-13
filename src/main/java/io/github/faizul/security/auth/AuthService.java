@@ -35,11 +35,12 @@ public class AuthService {
     }
 
     public Mono<RegisterResponse> register(RegisterRequest request) {
+        String emailNormalized = request.email().toLowerCase().trim();
         return userService.createUser(AuthMapper.toUser(request))
                 .flatMap(userDto -> {
                     String otpCode = generateOtp();
                     OtpVerification otp = OtpVerification.builder()
-                            .email(request.email())
+                            .email(emailNormalized)
                             .otpCode(otpCode)
                             .type("REGISTRATION")
                             .expiryTime(LocalDateTime.now().plusMinutes(5))
@@ -58,21 +59,26 @@ public class AuthService {
                     );
 
                     return otpVerificationRepository.save(otp)
-                            .flatMap(savedOtp -> notificationService.sendNotification(request.email(), emailSubject, emailBody)
+                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, emailBody)
                                     .doOnError(err -> log.error("Gagal mengirim email OTP: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("Register Successfully. Silakan periksa email Anda untuk kode verifikasi OTP."));
                 });
     }
 
     public Mono<RegisterResponse> verifyRegistration(VerifyOtpRequest request) {
-        return otpVerificationRepository.findLatestUnverified(request.email(), "REGISTRATION")
+        String emailNormalized = request.email().toLowerCase().trim();
+        return otpVerificationRepository.findLatestUnverified(emailNormalized, "REGISTRATION")
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Kode OTP tidak valid atau tidak ditemukan")))
                 .flatMap(otp -> {
                     if (otp.getExpiryTime().isBefore(LocalDateTime.now())) {
                         return Mono.error(new IllegalArgumentException("Kode OTP telah kadaluarsa"));
                     }
 
-                    return userRepository.findByEmail(request.email())
+                    if (!otp.getOtpCode().equals(request.otp())) {
+                        return Mono.error(new IllegalArgumentException("Kode OTP tidak valid"));
+                    }
+
+                    return userRepository.findByEmail(emailNormalized)
                             .switchIfEmpty(Mono.error(new UsernameNotFoundException("User tidak ditemukan")))
                             .flatMap(user -> {
                                 user.setIsActive(true);
@@ -86,7 +92,8 @@ public class AuthService {
     }
 
     public Mono<Response> login(LoginRequest request) {
-        return userRepository.findByEmail(request.email())
+        String emailNormalized = request.email().toLowerCase().trim();
+        return userRepository.findByEmail(emailNormalized)
                 .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
                 .filter(user -> passwordEncoder.matches(request.password(), user.getPassword()))
                 .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
@@ -102,14 +109,15 @@ public class AuthService {
     }
 
     public Mono<RegisterResponse> requestForgotPassword(ForgotPasswordRequest request) {
-        return userRepository.findByEmail(request.email())
+        String emailNormalized = request.email().toLowerCase().trim();
+        return userRepository.findByEmail(emailNormalized)
                 .switchIfEmpty(Mono.error(new UsernameNotFoundException("Email tidak terdaftar")))
                 .filter(user -> Boolean.TRUE.equals(user.getIsActive()))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Akun Anda belum aktif. Silakan verifikasi email terlebih dahulu.")))
                 .flatMap(user -> {
                     String otpCode = generateOtp();
                     OtpVerification otp = OtpVerification.builder()
-                            .email(request.email())
+                            .email(emailNormalized)
                             .otpCode(otpCode)
                             .type("FORGOT_PASSWORD")
                             .expiryTime(LocalDateTime.now().plusMinutes(5))
@@ -129,21 +137,26 @@ public class AuthService {
                     );
 
                     return otpVerificationRepository.save(otp)
-                            .flatMap(savedOtp -> notificationService.sendNotification(request.email(), emailSubject, emailBody)
+                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, emailBody)
                                     .doOnError(err -> log.error("Gagal mengirim email OTP lupa password: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("OTP pemulihan kata sandi telah dikirim ke email Anda."));
                 });
     }
 
     public Mono<RegisterResponse> resetPassword(ResetPasswordRequest request) {
-        return otpVerificationRepository.findLatestUnverified(request.email(), "FORGOT_PASSWORD")
+        String emailNormalized = request.email().toLowerCase().trim();
+        return otpVerificationRepository.findLatestUnverified(emailNormalized, "FORGOT_PASSWORD")
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Kode OTP pemulihan tidak valid atau tidak ditemukan")))
                 .flatMap(otp -> {
                     if (otp.getExpiryTime().isBefore(LocalDateTime.now())) {
                         return Mono.error(new IllegalArgumentException("Kode OTP pemulihan telah kadaluarsa"));
                     }
 
-                    return userRepository.findByEmail(request.email())
+                    if (!otp.getOtpCode().equals(request.otp())) {
+                        return Mono.error(new IllegalArgumentException("Kode OTP pemulihan tidak valid"));
+                    }
+
+                    return userRepository.findByEmail(emailNormalized)
                             .switchIfEmpty(Mono.error(new UsernameNotFoundException("User tidak ditemukan")))
                             .flatMap(user -> {
                                 user.setPassword(passwordEncoder.encode(request.newPassword()));
