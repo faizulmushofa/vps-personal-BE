@@ -63,4 +63,5 @@ ENTRYPOINT ["java", \
   "-Dspring.jmx.enabled=false", \
   "-Dlogging.level.io.grpc=WARN", \
   "-XX:-OmitStackTraceInFastThrow", \
+  "-Djava.net.preferIPv4Stack=true", \
   "-jar", "app.jar"]
