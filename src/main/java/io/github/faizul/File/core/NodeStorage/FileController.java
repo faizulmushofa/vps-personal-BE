@@ -22,6 +22,9 @@ import java.util.UUID;
 public class FileController {
 
     private final FileService fileService;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
+    private final io.github.faizul.File.core.FileRepository fileRepository;
 
     @GetMapping("/{id}")
     public Mono<ResponseEntity<FileResponse>> findById(@PathVariable UUID id) {
@@ -30,8 +33,13 @@ public class FileController {
     }
 
     @DeleteMapping("/{id}")
-    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id) {
-        return fileService.deleteByUUID(id)
+    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> fileRepository.findById(id)
+                        .flatMap(file -> fileService.deleteByUUID(id)
+                                .then(userActivityService.log(userId, "DELETE_FILE", "Menghapus berkas: " + file.getOriginalFileName(), exchange))
+                        )
+                )
                 .thenReturn(ResponseEntity.noContent().build());
     }
 
@@ -66,8 +74,15 @@ public class FileController {
     @PreAuthorize("hasRole('ADMIN') or hasAuthority('ADMIN')")
     public Mono<ResponseEntity<UserStorageSummary>> updateUserQuota(
             @PathVariable Long id,
-            @RequestBody UpdateQuotaRequest request) {
-        return fileService.updateUserQuota(id, request)
+            @RequestBody UpdateQuotaRequest request,
+            org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> fileService.updateUserQuota(id, request)
+                        .flatMap(summary -> userActivityService.log(adminId, "UPDATE_USER_QUOTA", 
+                                "Mengubah kuota penyimpanan user " + summary.username() + " (ID: " + id + ") menjadi " + request.quotaBytes() + " bytes", exchange)
+                                .thenReturn(summary)
+                        )
+                )
                 .map(ResponseEntity::ok);
     }
 }

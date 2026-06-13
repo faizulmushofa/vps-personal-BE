@@ -57,4 +57,15 @@ public class User {
 
     @Column("deleted_at")
     private LocalDateTime deletedAt;
+
+    @Column("ai_daily_limit")
+    @Builder.Default
+    private Integer aiDailyLimit = 5;
+
+    @Column("daily_ai_requests")
+    @Builder.Default
+    private Integer dailyAiRequests = 0;
+
+    @Column("last_ai_request_date")
+    private java.time.LocalDate lastAiRequestDate;
 }

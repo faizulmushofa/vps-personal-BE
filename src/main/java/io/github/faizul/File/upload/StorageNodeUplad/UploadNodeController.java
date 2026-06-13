@@ -18,18 +18,28 @@ public class UploadNodeController {
 
     private final UploadService uploadService;
     private final UploadCoordinator uploadCoordinator;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     public UploadNodeController(
             @Qualifier("storageNodeUploadService") UploadService uploadService,
-            UploadCoordinator uploadCoordinator) {
+            UploadCoordinator uploadCoordinator,
+            io.github.faizul.security.filter.CurrentUserContext currentUserContext,
+            io.github.faizul.activity.UserActivityService userActivityService) {
         this.uploadService = uploadService;
         this.uploadCoordinator = uploadCoordinator;
+        this.currentUserContext = currentUserContext;
+        this.userActivityService = userActivityService;
     }
 
     @PostMapping("/init")
-    public Mono<ResponseEntity<InitResponse>> init(@RequestBody InitRequest request) {
-        return uploadService.create(request)
-                .map(response -> ResponseEntity.ok().body(response));
+    public Mono<ResponseEntity<InitResponse>> init(@RequestBody InitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> uploadService.create(request)
+                        .flatMap(response -> userActivityService.log(userId, "UPLOAD_INIT", "Mengunggah berkas: " + request.fileName(), exchange)
+                                .thenReturn(ResponseEntity.ok().body(response))
+                        )
+                );
     }
     @PostMapping("/{id}/chunks/{index}")
     public Mono<ResponseEntity<Void>> uploadChunk(

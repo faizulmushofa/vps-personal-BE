@@ -20,12 +20,18 @@ public class GoogleDriveDownloadController {
 
     private final DownloadService downloadService;
     private final FileRepository fileRepository;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     public GoogleDriveDownloadController(
             @Qualifier("googleDriveDownloadService") DownloadService downloadService,
-            FileRepository fileRepository) {
+            FileRepository fileRepository,
+            io.github.faizul.security.filter.CurrentUserContext currentUserContext,
+            io.github.faizul.activity.UserActivityService userActivityService) {
         this.downloadService = downloadService;
         this.fileRepository = fileRepository;
+        this.currentUserContext = currentUserContext;
+        this.userActivityService = userActivityService;
     }
 
     @PostMapping("/init")
@@ -35,13 +41,17 @@ public class GoogleDriveDownloadController {
     }
 
     @GetMapping("/{fileId}/stream")
-    public Mono<ResponseEntity<Flux<byte[]>>> streamFile(@PathVariable UUID fileId) {
-        return fileRepository.findById(fileId)
-                .map(file -> ResponseEntity.ok()
-                        .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
-                        .header("Content-Length", String.valueOf(file.getSize()))
-                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                        .body(downloadService.streamFile(fileId)))
+    public Mono<ResponseEntity<Flux<byte[]>>> streamFile(@PathVariable UUID fileId, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> fileRepository.findById(fileId)
+                        .flatMap(file -> userActivityService.log(userId, "DOWNLOAD_GD", "Mengunduh berkas Google Drive: " + file.getOriginalFileName(), exchange)
+                                .thenReturn(ResponseEntity.ok()
+                                        .header("Content-Disposition", "attachment; filename=\"" + file.getOriginalFileName() + "\"")
+                                        .header("Content-Length", String.valueOf(file.getSize()))
+                                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                                        .body(downloadService.streamFile(fileId)))
+                        )
+                )
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 

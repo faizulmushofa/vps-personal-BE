@@ -75,6 +75,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/google-drive/share/public/**").permitAll()
                         .pathMatchers("/api/preview/public/**").permitAll()
                         .pathMatchers("/admin/**").hasRole("ADMIN")
+                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyExchange().authenticated()
                 )
                 .addFilterAfter(requestDebugFilter,

@@ -18,20 +18,42 @@ import java.util.UUID;
 public class GoogleDriveShareController {
 
     private final ShareService shareService;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
+    private final io.github.faizul.File.core.FileRepository fileRepository;
 
-    public GoogleDriveShareController(@Qualifier("googleDriveShareService") ShareService shareService) {
+    public GoogleDriveShareController(
+            @Qualifier("googleDriveShareService") ShareService shareService,
+            io.github.faizul.security.filter.CurrentUserContext currentUserContext,
+            io.github.faizul.activity.UserActivityService userActivityService,
+            io.github.faizul.File.core.FileRepository fileRepository) {
         this.shareService = shareService;
+        this.currentUserContext = currentUserContext;
+        this.userActivityService = userActivityService;
+        this.fileRepository = fileRepository;
     }
 
     @PostMapping("/{fileId}")
-    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request) {
-        return shareService.shareFile(fileId, request)
+    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> fileRepository.findById(fileId)
+                        .flatMap(file -> shareService.shareFile(fileId, request)
+                                .flatMap(response -> userActivityService.log(userId, "SHARE_FILE_GD", "Membagikan berkas Google Drive: " + file.getOriginalFileName(), exchange)
+                                        .thenReturn(response)
+                                )
+                        )
+                )
                 .map(ResponseEntity::ok);
     }
 
     @DeleteMapping("/{fileId}/{userId}")
-    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable UUID fileId, @PathVariable Long userId) {
-        return shareService.unshareFile(fileId, userId)
+    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable UUID fileId, @PathVariable Long userId, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> fileRepository.findById(fileId)
+                        .flatMap(file -> shareService.unshareFile(fileId, userId)
+                                .then(userActivityService.log(adminId, "UNSHARE_FILE_GD", "Membatalkan share berkas Google Drive " + file.getOriginalFileName() + " untuk user ID: " + userId, exchange))
+                        )
+                )
                 .thenReturn(ResponseEntity.noContent().build());
     }
 
@@ -75,8 +97,11 @@ public class GoogleDriveShareController {
     }
 
     @DeleteMapping("/cancel/{shareId}")
-    public Mono<ResponseEntity<Void>> unshareFileById(@PathVariable Long shareId) {
-        return shareService.unshareFile(shareId)
+    public Mono<ResponseEntity<Void>> unshareFileById(@PathVariable Long shareId, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> shareService.unshareFile(shareId)
+                        .then(userActivityService.log(userId, "CANCEL_SHARE_GD", "Membatalkan share berkas Google Drive dengan Share ID: " + shareId, exchange))
+                )
                 .thenReturn(ResponseEntity.noContent().build());
     }
 }

@@ -4,5 +4,5 @@ import reactor.core.publisher.Mono;
 
 public interface AiClient {
     boolean supports(String provider);
-    Mono<String> generate(String systemPrompt, String userMessage, String model);
+    Mono<AiGenerationResult> generate(String systemPrompt, String userMessage, String model);
 }

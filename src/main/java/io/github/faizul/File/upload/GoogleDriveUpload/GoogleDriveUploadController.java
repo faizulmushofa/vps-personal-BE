@@ -16,11 +16,17 @@ import java.util.UUID;
 public class GoogleDriveUploadController {
 
     private final UploadGoogleDriveServiceImp uploadService;
+    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     @PostMapping("/init")
-    public Mono<ResponseEntity<InitResponse>> init(@RequestBody InitRequest request) {
-        return uploadService.create(request)
-                .map(response -> ResponseEntity.ok().body(response));
+    public Mono<ResponseEntity<InitResponse>> init(@RequestBody InitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> uploadService.create(request)
+                        .flatMap(response -> userActivityService.log(userId, "UPLOAD_INIT_GD", "Mengunggah berkas ke Google Drive: " + request.fileName(), exchange)
+                                .thenReturn(ResponseEntity.ok().body(response))
+                        )
+                );
     }
 
     @PostMapping("/{id}/chunks/{index}")

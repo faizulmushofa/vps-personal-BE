@@ -2,6 +2,7 @@ package io.github.faizul.Ai.fallback;
 
 import io.github.faizul.infra.config.AiConfig;
 import io.github.faizul.Ai.client.AiClient;
+import io.github.faizul.Ai.client.AiGenerationResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,7 @@ public class AiFallbackService {
 
     private final List<AiClient> aiClients;
 
-    public Mono<String> callWithFallback(
+    public Mono<AiGenerationResult> callWithFallback(
             String primaryProvider, String primaryModel,
             String fallbackProvider, String fallbackModel,
             String systemPrompt, String userMessage) {

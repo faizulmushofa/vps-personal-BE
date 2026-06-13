@@ -25,20 +25,26 @@ public class GeminiService implements AiClient {
     }
 
     @Override
-    public Mono<String> generate(String systemPrompt, String userMessage, String model) {
+    public Mono<AiGenerationResult> generate(String systemPrompt, String userMessage, String model) {
         return Mono.fromCallable(() -> {
             log.info("Memanggil Gemini Native model: {}, temp: {}", model, AiConfig.DEFAULT_TEMPERATURE);
             try {
-                String content = chatClient.prompt()
+                var chatResponse = chatClient.prompt()
                         .system(systemPrompt)
                         .user(userMessage)
                         .options(GoogleGenAiChatOptions.builder()
                                 .model(model)
                                 .temperature(AiConfig.DEFAULT_TEMPERATURE))
                         .call()
-                        .content();
-                log.info("Gemini Native sukses menghasilkan konten");
-                return content;
+                        .chatResponse();
+                
+                String content = chatResponse.getResult().getOutput().getText();
+                var usage = chatResponse.getMetadata().getUsage();
+                int promptTokens = usage != null && usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0;
+                int generationTokens = usage != null && usage.getCompletionTokens() != null ? usage.getCompletionTokens().intValue() : 0;
+
+                log.info("Gemini Native sukses menghasilkan konten. Token: Input={}, Output={}", promptTokens, generationTokens);
+                return new AiGenerationResult(content, promptTokens, generationTokens);
             } catch (Exception e) {
                 if (isCancellation(e)) {
                     log.warn("Gemini Native call cancelled or interrupted for model: {}", model);

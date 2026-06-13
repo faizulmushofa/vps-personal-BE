@@ -6,6 +6,8 @@ import io.github.faizul.Ai.dtos.AiResponse;
 import io.github.faizul.Ai.fallback.AiFallbackService;
 import io.github.faizul.File.pdf.PdfService;
 import io.github.faizul.infra.config.AiConfig;
+import io.github.faizul.setting.AppSettingService;
+import io.github.faizul.security.filter.CurrentUserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,14 +25,38 @@ public class AiServiceImpl implements AiService {
     private final SummaryCacheService cacheService;
     private final PdfService pdfService;
     private final Scheduler aiScheduler;
+    private final AppSettingService appSettingService;
+    private final AiQuotaAndLogService quotaAndLogService;
+    private final CurrentUserContext currentUserContext;
 
     @Override
     public Mono<AiResponse> summary(AiRequest request) {
-        return aiFallbackService.callWithFallback(
-                AiConfig.SUMMARY_PRIMARY_PROVIDER, AiConfig.SUMMARY_PRIMARY_MODEL,
-                AiConfig.SUMMARY_FALLBACK_PROVIDER, AiConfig.SUMMARY_FALLBACK_MODEL,
-                AiConfig.SYSTEM_PROMPT, request.teks()
-        )
+        return currentUserContext.getUserId()
+                .flatMap(userId -> quotaAndLogService.checkAndIncrementQuota(userId)
+                        .flatMap(user -> Mono.zip(
+                                appSettingService.getSetting("ai.summary.primary.provider", AiConfig.SUMMARY_PRIMARY_PROVIDER),
+                                appSettingService.getSetting("ai.summary.primary.model", AiConfig.SUMMARY_PRIMARY_MODEL),
+                                appSettingService.getSetting("ai.summary.fallback.provider", AiConfig.SUMMARY_FALLBACK_PROVIDER),
+                                appSettingService.getSetting("ai.summary.fallback.model", AiConfig.SUMMARY_FALLBACK_MODEL),
+                                appSettingService.getSetting("ai.system_prompt", AiConfig.SYSTEM_PROMPT)
+                        ).flatMap(tuple -> {
+                            String primaryProvider = tuple.getT1();
+                            String primaryModel = tuple.getT2();
+                            String fallbackProvider = tuple.getT3();
+                            String fallbackModel = tuple.getT4();
+                            String systemPrompt = tuple.getT5();
+
+                            return aiFallbackService.callWithFallback(
+                                    primaryProvider, primaryModel,
+                                    fallbackProvider, fallbackModel,
+                                    systemPrompt, request.teks()
+                            )
+                            .flatMap(result -> quotaAndLogService.logTokenUsage(
+                                    userId, "SUMMARY", primaryProvider, primaryModel, result)
+                                    .thenReturn(result.content())
+                            );
+                        }))
+                )
                 .subscribeOn(aiScheduler)
                 .map(AiResponse::new)
                 .doOnError(e -> log.error("Gagal memproses summary", e));
@@ -40,15 +66,37 @@ public class AiServiceImpl implements AiService {
     public Mono<AiResponse> summarizePdf(UUID fileId) {
         return cacheService.getCachedSummary(fileId)
                 .map(AiResponse::new)
-                .switchIfEmpty(Mono.defer(() -> pdfService.extractFile(fileId)
-                        .flatMap(text -> {
-                            String prompt = "Tolong rangkum teks berikut secara singkat dan jelas dalam Bahasa Indonesia:\n\n" + text;
-                            return aiFallbackService.callWithFallback(
-                                    AiConfig.SUMMARY_PRIMARY_PROVIDER, AiConfig.SUMMARY_PRIMARY_MODEL,
-                                    AiConfig.SUMMARY_FALLBACK_PROVIDER, AiConfig.SUMMARY_FALLBACK_MODEL,
-                                    AiConfig.SYSTEM_PROMPT, prompt
-                            );
-                        })
+                .switchIfEmpty(Mono.defer(() -> currentUserContext.getUserId()
+                        .flatMap(userId -> quotaAndLogService.checkAndIncrementQuota(userId)
+                                .flatMap(user -> pdfService.extractFile(fileId)
+                                        .flatMap(text -> {
+                                            String prompt = "Tolong rangkum teks berikut secara singkat dan jelas dalam Bahasa Indonesia:\n\n" + text;
+                                            return Mono.zip(
+                                                    appSettingService.getSetting("ai.summary.primary.provider", AiConfig.SUMMARY_PRIMARY_PROVIDER),
+                                                    appSettingService.getSetting("ai.summary.primary.model", AiConfig.SUMMARY_PRIMARY_MODEL),
+                                                    appSettingService.getSetting("ai.summary.fallback.provider", AiConfig.SUMMARY_FALLBACK_PROVIDER),
+                                                    appSettingService.getSetting("ai.summary.fallback.model", AiConfig.SUMMARY_FALLBACK_MODEL),
+                                                    appSettingService.getSetting("ai.system_prompt", AiConfig.SYSTEM_PROMPT)
+                                            ).flatMap(tuple -> {
+                                                String primaryProvider = tuple.getT1();
+                                                String primaryModel = tuple.getT2();
+                                                String fallbackProvider = tuple.getT3();
+                                                String fallbackModel = tuple.getT4();
+                                                String systemPrompt = tuple.getT5();
+
+                                                return aiFallbackService.callWithFallback(
+                                                        primaryProvider, primaryModel,
+                                                        fallbackProvider, fallbackModel,
+                                                        systemPrompt, prompt
+                                                )
+                                                .flatMap(result -> quotaAndLogService.logTokenUsage(
+                                                        userId, "SUMMARY_PDF", primaryProvider, primaryModel, result)
+                                                        .thenReturn(result.content())
+                                                );
+                                            });
+                                        })
+                                )
+                        )
                         .subscribeOn(aiScheduler)
                         .flatMap(summaryText -> cacheService.cacheSummary(fileId, summaryText))
                         .map(AiResponse::new)
