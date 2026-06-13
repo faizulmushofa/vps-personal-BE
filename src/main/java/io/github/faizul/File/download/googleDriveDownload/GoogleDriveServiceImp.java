@@ -27,6 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GoogleDriveServiceImp implements DownloadService {
 
+    private static final java.util.Set<UUID> canceledSessions = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;
     private final DownloadSessionRepository downloadSessionRepository;
@@ -126,16 +128,15 @@ public class GoogleDriveServiceImp implements DownloadService {
 
     private Flux<byte[]> processDataStream(Flux<byte[]> dataStream, UUID sessionId) {
         return dataStream
-                .concatMap(chunk -> downloadSessionRepository.findById(sessionId)
-                        .flatMap(s -> {
-                            if (s.getStatus() == FileStatus.CANCELED) {
-                                return Mono.error(new IllegalArgumentException("Download canceled by user"));
-                            }
-                            return Mono.just(chunk);
-                        })
-                )
+                .map(chunk -> {
+                    if (canceledSessions.contains(sessionId)) {
+                        throw new IllegalArgumentException("Download canceled by user");
+                    }
+                    return chunk;
+                })
                 .doOnComplete(() -> finalizeSessionStatus(sessionId, FileStatus.COMPLETED, false))
-                .doOnError(err -> finalizeSessionStatus(sessionId, FileStatus.FAILED, true));
+                .doOnError(err -> finalizeSessionStatus(sessionId, FileStatus.FAILED, true))
+                .doFinally(signalType -> canceledSessions.remove(sessionId));
     }
 
     private void finalizeSessionStatus(UUID sessionId, FileStatus targetStatus, boolean isError) {
@@ -192,6 +193,7 @@ public class GoogleDriveServiceImp implements DownloadService {
                 .flatMap(userId -> getValidSession(fileId, userId))
                 .flatMap(session -> {
                     session.setStatus(FileStatus.CANCELED);
+                    canceledSessions.add(session.getId());
                     return downloadSessionRepository.save(session);
                 })
                 .then();

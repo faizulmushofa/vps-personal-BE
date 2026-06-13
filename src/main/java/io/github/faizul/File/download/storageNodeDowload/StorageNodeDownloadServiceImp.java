@@ -27,6 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StorageNodeDownloadServiceImp implements DownloadService {
 
+    private static final java.util.Set<UUID> canceledSessions = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;
     private final DownloadSessionRepository downloadSessionRepository;
@@ -119,14 +121,12 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                                             .map(chunk -> chunk.data());
 
                                     return dataStream
-                                            .concatMap(chunk -> downloadSessionRepository.findById(savedSession.getId())
-                                                    .flatMap(s -> {
-                                                        if (s.getStatus() == FileStatus.CANCELED) {
-                                                            return Mono.error(new IllegalArgumentException("Download canceled by user"));
-                                                        }
-                                                        return Mono.just(chunk);
-                                                    })
-                                            )
+                                            .map(chunk -> {
+                                                if (canceledSessions.contains(savedSession.getId())) {
+                                                    throw new IllegalArgumentException("Download canceled by user");
+                                                }
+                                                return chunk;
+                                            })
                                             .doOnComplete(() -> downloadSessionRepository.findById(savedSession.getId())
                                                     .flatMap(s -> {
                                                         if (s.getStatus() != FileStatus.CANCELED && s.getStatus() != FileStatus.FAILED) {
@@ -143,7 +143,8 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                                                         }
                                                         return downloadSessionRepository.save(s);
                                                     }).subscribe()
-                                            );
+                                            )
+                                            .doFinally(signalType -> canceledSessions.remove(savedSession.getId()));
                                 })
                         )
                 );
@@ -192,6 +193,7 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                 .flatMap(userId -> getValidSession(fileId, userId))
                 .flatMap(session -> {
                     session.setStatus(FileStatus.CANCELED);
+                    canceledSessions.add(session.getId());
                     return downloadSessionRepository.save(session);
                 })
                 .then();
