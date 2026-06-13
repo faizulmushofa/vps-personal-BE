@@ -7,6 +7,8 @@ import io.github.faizul.User.core.User;
 import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.security.userrole.UserRole;
 import io.github.faizul.security.userrole.UserRoleRepository;
+import io.github.faizul.setting.AppSetting;
+import io.github.faizul.setting.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -26,18 +28,44 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
     private final DatabaseClient databaseClient;
+    private final AppSettingRepository appSettingRepository;
 
     @Override
     public void run(String... args) throws Exception {
         log.info("Starting database seeder...");
+        java.io.File logFile = new java.io.File("seeder_status.log");
+        try {
+            java.nio.file.Files.writeString(logFile.toPath(), "=== SEEDER STARTING AT " + java.time.LocalDateTime.now() + " ===\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            log.error("Failed to write to seeder_status.log: {}", e.getMessage());
+        }
+
         createSchema()
                 .then(seedRoles())
                 .then(seedUsers())
                 .then(seedAppSettings())
                 .subscribe(
-                        success -> log.info("Successfully seeded users, roles, and settings!"),
-                        error -> log.error("Error seeding database: {}", error.getMessage()),
-                        () -> log.info("Database seeding completed.")
+                        success -> {
+                            log.info("Successfully seeded users, roles, and settings!");
+                            try {
+                                java.nio.file.Files.writeString(logFile.toPath(), "SEEDER SUCCESS: Successfully seeded users, roles, and settings!\n", java.nio.file.StandardOpenOption.APPEND);
+                            } catch (Exception e) {}
+                        },
+                        error -> {
+                            log.error("Error seeding database: {}", error.getMessage());
+                            try {
+                                java.io.StringWriter sw = new java.io.StringWriter();
+                                java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+                                error.printStackTrace(pw);
+                                java.nio.file.Files.writeString(logFile.toPath(), "SEEDER ERROR: " + error.getMessage() + "\n" + sw.toString() + "\n", java.nio.file.StandardOpenOption.APPEND);
+                            } catch (Exception e) {}
+                        },
+                        () -> {
+                            log.info("Database seeding completed.");
+                            try {
+                                java.nio.file.Files.writeString(logFile.toPath(), "SEEDER COMPLETED.\n", java.nio.file.StandardOpenOption.APPEND);
+                            } catch (Exception e) {}
+                        }
                 );
     }
 
@@ -52,13 +80,19 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private Mono<Void> seedUsers() {
-        return userRepository.findByEmail("admin@mail.com")
+        Mono<User> seedAdmin = userRepository.findByEmail("admin@mail.com")
+                .flatMap(existingAdmin -> {
+                    log.info("Admin user found. Ensuring password is 'password' and user is active...");
+                    existingAdmin.setPassword(passwordEncoder.encode("password"));
+                    existingAdmin.setIsActive(true);
+                    return userRepository.save(existingAdmin);
+                })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("Admin user not found. Seeding admin user...");
                     User admin = User.builder()
                             .username("admin")
                             .email("admin@mail.com")
-                            .password(passwordEncoder.encode("zP8#mX9$wQ2!"))
+                            .password(passwordEncoder.encode("password"))
                             .isActive(true)
                             .build();
 
@@ -70,14 +104,41 @@ public class DatabaseSeeder implements CommandLineRunner {
                                             .roleId(tuple.getT2().getId())
                                             .build()
                             ).thenReturn(tuple.getT1()));
-                }))
-                .then();
+                }));
+
+        Mono<User> seedRegularUser = userRepository.findByEmail("user@mail.com")
+                .flatMap(existingUser -> {
+                    log.info("Regular user found. Ensuring password is 'password' and user is active...");
+                    existingUser.setPassword(passwordEncoder.encode("password"));
+                    existingUser.setIsActive(true);
+                    return userRepository.save(existingUser);
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("Regular user not found. Seeding regular user...");
+                    User user = User.builder()
+                            .username("user")
+                            .email("user@mail.com")
+                            .password(passwordEncoder.encode("password"))
+                            .isActive(true)
+                            .build();
+
+                    return userRepository.save(user)
+                            .zipWith(roleRepository.findByName(Roles.USER))
+                            .flatMap(tuple -> userRoleRepository.save(
+                                    UserRole.builder()
+                                            .userId(tuple.getT1().getId())
+                                            .roleId(tuple.getT2().getId())
+                                            .build()
+                            ).thenReturn(tuple.getT1()));
+                }));
+
+        return seedAdmin.then(seedRegularUser).then();
     }
 
     private Mono<Void> createSchema() {
         String schema = """
                 CREATE TABLE IF NOT EXISTS users (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     username VARCHAR(255) NOT NULL,
                     email VARCHAR(255) NOT NULL,
                     password VARCHAR(255) NOT NULL,
@@ -91,7 +152,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                     deleted_at TIMESTAMP
                 );
                 CREATE TABLE IF NOT EXISTS roles (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     name VARCHAR(255) NOT NULL UNIQUE
                 );
                 CREATE TABLE IF NOT EXISTS user_roles (
@@ -102,12 +163,23 @@ public class DatabaseSeeder implements CommandLineRunner {
                     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS refresh_token (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     user_id BIGINT NOT NULL,
                     token VARCHAR(255) NOT NULL,
                     revoked BOOLEAN DEFAULT FALSE,
                     expired_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS external_users (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    user_id BIGINT,
+                    provider VARCHAR(255) NOT NULL,
+                    provider_user_id VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    expires_at BIGINT,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS files (
@@ -147,7 +219,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
                 CREATE TABLE IF NOT EXISTS file_shared (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     file_id UUID NOT NULL,
                     user_id BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -158,19 +230,8 @@ public class DatabaseSeeder implements CommandLineRunner {
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE(file_id, user_id)
                 );
-                CREATE TABLE IF NOT EXISTS external_users (
-                    id BIGSERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    provider VARCHAR(255) NOT NULL,
-                    provider_user_id VARCHAR(255) NOT NULL,
-                    email VARCHAR(255) NOT NULL,
-                    access_token TEXT,
-                    refresh_token TEXT,
-                    expires_at BIGINT,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                );
                 CREATE TABLE IF NOT EXISTS otp_verifications (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     email VARCHAR(255) NOT NULL,
                     otp_code VARCHAR(6) NOT NULL,
                     type VARCHAR(50) NOT NULL,
@@ -184,7 +245,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                 ALTER TABLE files ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'STORAGE_NODE';
                 ALTER TABLE files ADD COLUMN IF NOT EXISTS external_account_id BIGINT;
                 CREATE TABLE IF NOT EXISTS file_summaries (
-                    id BIGSERIAL PRIMARY KEY,
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                     file_id UUID NOT NULL UNIQUE,
                     summary TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -195,13 +256,13 @@ public class DatabaseSeeder implements CommandLineRunner {
                  ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS share_token VARCHAR(255) UNIQUE;
                  ALTER TABLE file_shared ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
                  CREATE TABLE IF NOT EXISTS app_settings (
-                     id BIGSERIAL PRIMARY KEY,
+                     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                      setting_key VARCHAR(255) NOT NULL UNIQUE,
                      setting_value TEXT NOT NULL,
                      description VARCHAR(1024)
                  );
                  CREATE TABLE IF NOT EXISTS user_activities (
-                     id BIGSERIAL PRIMARY KEY,
+                     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                      user_id BIGINT,
                      activity_type VARCHAR(255) NOT NULL,
                      description TEXT,
@@ -210,7 +271,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                  );
                  CREATE TABLE IF NOT EXISTS ai_token_logs (
-                     id BIGSERIAL PRIMARY KEY,
+                     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
                      user_id BIGINT,
                      activity_type VARCHAR(50) NOT NULL,
                      provider VARCHAR(50) NOT NULL,
@@ -234,20 +295,63 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private Mono<Void> seedAppSettings() {
-        String query = """
-                INSERT INTO app_settings (setting_key, setting_value, description) VALUES
-                ('ai.summary.primary.provider', 'groq', 'Penyedia model utama untuk rangkuman'),
-                ('ai.summary.primary.model', 'qwen/qwen3-next-80b-a3b-instruct', 'Model utama untuk rangkuman'),
-                ('ai.summary.fallback.provider', 'gemini', 'Penyedia model fallback untuk rangkuman'),
-                ('ai.summary.fallback.model', 'gemini-2.5-flash', 'Model fallback untuk rangkuman'),
-                ('ai.chat.primary.provider', 'groq', 'Penyedia model utama untuk chat PDF'),
-                ('ai.chat.primary.model', 'meta-llama/llama-3.3-70b-instruct', 'Model utama untuk chat PDF'),
-                ('ai.chat.fallback.provider', 'gemini', 'Penyedia model fallback untuk chat PDF'),
-                ('ai.chat.fallback.model', 'gemini-3.1-flash-lite', 'Model fallback untuk chat PDF'),
-                ('ai.guardrail.user_daily_request_limit', '5', 'Batas default request harian AI per user jika tidak diatur khusus'),
-                ('ai.system_prompt', 'Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: "Maaf, input tidak dapat diproses."', 'System prompt utama untuk AI')
-                ON CONFLICT (setting_key) DO NOTHING;
-                """;
-        return databaseClient.sql(query).then();
+        return Flux.just(
+                AppSetting.builder()
+                        .key("ai.summary.primary.provider")
+                        .value("groq")
+                        .description("Penyedia model utama untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.summary.primary.model")
+                        .value("qwen/qwen3-next-80b-a3b-instruct")
+                        .description("Model utama untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.summary.fallback.provider")
+                        .value("gemini")
+                        .description("Penyedia model fallback untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.summary.fallback.model")
+                        .value("gemini-2.5-flash")
+                        .description("Model fallback untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.primary.provider")
+                        .value("groq")
+                        .description("Penyedia model utama untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.primary.model")
+                        .value("meta-llama/llama-3.3-70b-instruct")
+                        .description("Model utama untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.fallback.provider")
+                        .value("gemini")
+                        .description("Penyedia model fallback untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.fallback.model")
+                        .value("gemini-3.1-flash-lite")
+                        .description("Model fallback untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.guardrail.user_daily_request_limit")
+                        .value("5")
+                        .description("Batas default request harian AI per user jika tidak diatur khusus")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.system_prompt")
+                        .value("Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"")
+                        .description("System prompt utama untuk AI")
+                        .build()
+        )
+        .flatMap(setting -> appSettingRepository.findByKey(setting.getKey())
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("Seeding setting: {}...", setting.getKey());
+                    return appSettingRepository.save(setting);
+                })))
+        .then();
     }
 }

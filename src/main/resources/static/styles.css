@@ -1070,6 +1070,183 @@ button:active {
 
 /* Modal body scrollable area for AI modal */
 .ai-modal-content .modal-body {
-  max-height: 70vh;
+  max-height: 75vh;
   overflow-y: auto;
+}
+
+/* ========================================
+   PREMIUM CUSTOM STYLES (TAB CONTROLS, CHART, CHAT & ACCORDION)
+   ======================================== */
+
+/* Active Tab Styles */
+.admin-tab-nav button.active,
+.ai-modal-tabs button.active,
+.shared-tabs button.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25) !important;
+}
+
+.admin-tab-nav button,
+.ai-modal-tabs button,
+.shared-tabs button {
+  transition: var(--transition-smooth);
+}
+
+/* CSS-based Token Trend Chart Styling */
+.chart-bar-wrapper {
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.chart-bar-wrapper:hover {
+  transform: translateY(-2px);
+}
+
+.chart-bar {
+  transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s;
+}
+
+.chart-bar:hover {
+  background: linear-gradient(to top, #818cf8, #c084fc) !important;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.8);
+}
+
+.chart-bar-tooltip {
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 11px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  line-height: 1.4;
+  white-space: nowrap;
+  bottom: 110%;
+  transform: translateX(-50%);
+  left: 50%;
+  position: absolute;
+  transition: opacity 0.15s ease-in-out;
+}
+
+/* Chat PDF Styling */
+.ai-chat-messages {
+  scrollbar-width: thin;
+}
+
+.ai-chat-messages::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.3);
+  border-radius: 99px;
+}
+
+.chat-message {
+  animation: messageAppear 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  word-break: break-word;
+}
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-user {
+  align-self: flex-end !important;
+  max-width: 85%;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+  border-radius: 12px 12px 0 12px !important;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #fff !important;
+  border: none !important;
+}
+
+.msg-ai {
+  align-self: flex-start !important;
+  max-width: 85%;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px 12px 12px 0 !important;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary) !important;
+  line-height: 1.5;
+}
+
+/* Typing indicator animation */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: typing 1.4s infinite both;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: .2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: .4s;
+}
+
+@keyframes typing {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Share modal details selector overrides */
+#shareExpirySelect:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+/* Custom Status Badge */
+.status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.status-badge.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.inactive {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }

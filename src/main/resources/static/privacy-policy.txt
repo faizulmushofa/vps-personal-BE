@@ -1,0 +1,88 @@
+PRIVACY POLICY
+Last Updated: June 13, 2026
+
+Welcome to Horizon Drive.
+This Privacy Policy explains how we collect, use, store, and protect your information when using Horizon Drive.
+
+1. INFORMATION WE COLLECT
+Account Information
+- Name (Full Name)
+- Email address
+- Phone number
+- Hashed password credentials
+- Profile picture (Avatar URL, optional)
+
+Connected Third-Party Accounts
+- Google Account tokens (Access Token, Refresh Token, and Expiry Time) when you link your Google Drive.
+
+Usage Information
+- Uploaded file metadata (file name, file size, upload provider, external file IDs, and share settings)
+- Storage quota utilization
+- Login activity and authentication status
+- System logs and error traces
+
+Technical Information
+- IP address
+- Browser and device information
+- Cookies and session details for maintaining active login states
+
+2. HOW WE USE YOUR INFORMATION
+We use collected information to:
+- Provide, maintain, and operate the Personal Multistorage Management service
+- Authenticate users and verify registration status via OTP codes
+- Manage, upload, download, and delete files on your behalf across Local Storage Nodes or connected Google Drive accounts
+- Process documents using artificial intelligence to generate summaries and chat insights
+- Improve product performance and troubleshoot service crashes
+- Detect abuse, secure accounts, and prevent unauthorized file access
+- Send system notifications and password recovery communications
+
+3. FILES AND USER CONTENT
+Users retain ownership of uploaded files.
+Horizon Drive may process files and metadata only to:
+- Store, transfer, and stream file contents (either locally on Storage Nodes or via Google Drive APIs)
+- Generate document previews (images, PDF, video, audio)
+- Enable search and filtering functionalities
+- Run AI recap and chat analysis services on document text extracts (such as PDFs)
+
+We do not manually access user files unless:
+- Explicitly requested by you to resolve technical support issues
+- Required to do so by applicable laws or court orders
+- Deemed necessary for security investigation regarding platform abuse
+
+4. THIRD-PARTY SERVICES
+Horizon Drive integrates with third-party providers to deliver essential features:
+- Google OAuth & Google Drive APIs (to manage Google Drive files)
+- Brevo Email API (to dispatch security OTPs for registration and forgot password flows)
+- Gemini AI API / Fallback Providers (to process PDF text for AI summaries and chat)
+- Supabase / PostgreSQL R2DBC Database (for user data, access tokens, and file metadata indexing)
+
+These third-party services operate under their own independent privacy policies.
+
+5. DATA RETENTION
+- Account profile data is stored as long as your account remains active.
+- We support soft-deletion of data; deleted files and user accounts are flagged with a deletion timestamp before permanent removal from the database and storage nodes.
+- Revoking Google Account access will purge stored Google refresh tokens from our system immediately.
+
+6. DATA SECURITY
+We implement security measures to protect your data:
+- SSL/TLS encryption for all data in transit (Web API, gRPC file transfers, and Google API requests)
+- Cryptographic password hashing (BCrypt)
+- Role-based access control (Admin, User roles) and JWT session validation
+- Stricter R2DBC prepared statement protections
+
+No system can guarantee absolute security.
+
+7. USER RIGHTS
+Users may:
+- Access their profile and active file lists
+- Correct or update account details (Full Name, Phone Number, Avatar URL)
+- Reset or update passwords securely
+- Revoke third-party app connections (such as disconnecting Google Drive)
+- Request account deletion
+
+8. CHANGES
+We may update this Privacy Policy from time to time. Continued use of Horizon Drive indicates acceptance of the updated policy.
+
+9. CONTACT
+Email: emuyforge@gmail.com
+Website: www.horizoncloud.my.id

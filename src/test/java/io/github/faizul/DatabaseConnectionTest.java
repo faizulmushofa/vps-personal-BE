@@ -49,4 +49,61 @@ public class DatabaseConnectionTest {
         System.out.println(">>> KONEKSI KE DATABASE SUPABASE BERHASIL & AKTIF!    <<<");
         System.out.println(">>> ================================================= <<<\n");
     }
+
+    @Test
+    public void testUsersTable() {
+        System.out.println("\n>>> ================================================= <<<");
+        System.out.println(">>> MEMBACA ISI TABEL USERS...                         <<<");
+        databaseClient.sql("SELECT id, username, email, password, is_active FROM users")
+                .map((row, metadata) -> {
+                    System.out.println("USER ROW -> id: " + row.get("id") + 
+                                       ", username: " + row.get("username") + 
+                                       ", email: " + row.get("email") + 
+                                       ", password_hash: " + row.get("password") + 
+                                       ", is_active: " + row.get("is_active"));
+                    return row.get("email", String.class);
+                })
+                .all()
+                .collectList()
+                .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL USERS: " + err.getMessage()))
+                .block();
+        System.out.println(">>> ================================================= <<<\n");
+    }
+
+    @Test
+    public void testFilesAndSharesTable() {
+        System.out.println("\n>>> ================================================= <<<");
+        System.out.println(">>> MEMBACA ISI TABEL FILES...                         <<<");
+        databaseClient.sql("SELECT id, original_file_name, size, provider, user_id FROM files")
+                .map((row, metadata) -> {
+                    System.out.println("FILE ROW -> id: " + row.get("id") + 
+                                       ", name: " + row.get("original_file_name") + 
+                                       ", size: " + row.get("size") + 
+                                       ", provider: " + row.get("provider") +
+                                       ", user_id: " + row.get("user_id"));
+                    return row.get("id", String.class);
+                })
+                .all()
+                .collectList()
+                .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL FILES: " + err.getMessage()))
+                .block();
+
+        System.out.println(">>> MEMBACA ISI TABEL FILE_SHARED...                  <<<");
+        databaseClient.sql("SELECT id, file_id, shared_with_email, is_public, share_link FROM file_shared")
+                .map((row, metadata) -> {
+                    System.out.println("SHARE ROW -> id: " + row.get("id") + 
+                                       ", file_id: " + row.get("file_id") + 
+                                       ", email: " + row.get("shared_with_email") + 
+                                       ", is_public: " + row.get("is_public") +
+                                       ", link: " + row.get("share_link"));
+                    return row.get("id", Integer.class);
+                })
+                .all()
+                .collectList()
+                .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL FILE_SHARED: " + err.getMessage()))
+                .block();
+        System.out.println(">>> ================================================= <<<\n");
+    }
 }
+
+

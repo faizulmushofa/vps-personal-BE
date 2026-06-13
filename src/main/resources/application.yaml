@@ -13,8 +13,8 @@ spring:
       channels:
         storage-node:
           address: ${STORAGE_NODE_URL}
-          negotiation-type: tls
-          secure: false
+          negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:plaintext}
+          secure: ${GRPC_CLIENT_SECURE:false}
   ai:
     openai:
       api-key: ${OPEN_ROUTER_API_KEY}

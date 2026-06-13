@@ -7,8 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-  <!-- Google GIS Script -->
+  <link rel="stylesheet" href="/styles.css?v=2.0.1">  <!-- Google GIS Script -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -437,6 +436,12 @@
             <span class="file-count-badge" id="fileCountBadge">0 file</span>
           </div>
 
+          <!-- Switcher Tab Berkas Terbagi (Shared Folder) -->
+          <div id="sharedTabsContainer" class="shared-tabs hidden" style="display: flex; gap: 8px; margin-top: 10px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
+            <button id="sharedWithMeTabBtn" class="secondary small active" style="flex: 1; min-height: 36px; font-size: 12px; padding: 4px 10px;">Dibagikan dengan Saya</button>
+            <button id="sharedByMeTabBtn" class="secondary small" style="flex: 1; min-height: 36px; font-size: 12px; padding: 4px 10px;">Dibagikan oleh Saya</button>
+          </div>
+
           <div class="file-grid-container">
             <!-- Loading Indicator -->
             <div id="loadingIndicator" class="loading-state hidden">
@@ -460,56 +465,177 @@
 
         <!-- Admin Dashboard View -->
         <div id="adminDashboardMain" class="dashboard-main glass-card hidden">
-          <div class="list-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; margin-bottom: 16px;">
-            <h3>Admin Panel - Kontrol Penyimpanan</h3>
+          <div class="list-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; margin-bottom: 12px;">
+            <h3>Admin Panel - Kontrol Sistem</h3>
             <button id="closeAdminPanelBtn" class="secondary small" type="button">Kembali ke Files</button>
           </div>
 
-          <!-- Admin Stats Grid -->
-          <div class="admin-stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 16px 0;">
-            <div class="stat-card glass-card" style="padding: 16px; border-radius: 12px; border-color: rgba(147, 51, 234, 0.2);">
-              <span class="eyebrow" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Total Pengguna Terdaftar</span>
-              <h2 id="adminStatTotalUsers" style="font-size: 2rem; font-weight: 700; margin-top: 4px; background: linear-gradient(135deg, #a855f7, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0</h2>
+          <!-- Tab Navigasi Admin -->
+          <div class="admin-tab-nav" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; overflow-x: auto;">
+            <button id="adminTabStatsBtn" class="secondary small active" style="min-height: 36px; font-size: 12px; padding: 6px 12px;">Statistik AI</button>
+            <button id="adminTabUsersBtn" class="secondary small" style="min-height: 36px; font-size: 12px; padding: 6px 12px;">Manajemen Pengguna</button>
+            <button id="adminTabLogsBtn" class="secondary small" style="min-height: 36px; font-size: 12px; padding: 6px 12px;">Log Aktivitas</button>
+            <button id="adminTabConfigBtn" class="secondary small" style="min-height: 36px; font-size: 12px; padding: 6px 12px;">Konfigurasi AI</button>
+          </div>
+
+          <!-- KONTEN TAB 1: STATISTIK AI -->
+          <div id="adminTabStatsContent" class="admin-tab-content">
+            <!-- Stats Grid -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+              <div class="stat-card glass-card" style="padding: 16px; border-radius: 12px; border-color: rgba(147, 51, 234, 0.2);">
+                <span class="eyebrow" style="font-size: 0.7rem;">Token Hari Ini (Total)</span>
+                <h2 id="adminStatTodayTokens" style="font-size: 1.8rem; font-weight: 700; margin-top: 4px; color: #a855f7;">0</h2>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">
+                  In: <span id="adminStatTodayIn">0</span> | Out: <span id="adminStatTodayOut">0</span>
+                </div>
+              </div>
+              <div class="stat-card glass-card" style="padding: 16px; border-radius: 12px; border-color: rgba(99, 102, 241, 0.2);">
+                <span class="eyebrow" style="font-size: 0.7rem;">Token Bulan Ini (Total)</span>
+                <h2 id="adminStatMonthTokens" style="font-size: 1.8rem; font-weight: 700; margin-top: 4px; color: #818cf8;">0</h2>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">
+                  In: <span id="adminStatMonthIn">0</span> | Out: <span id="adminStatMonthOut">0</span>
+                </div>
+              </div>
+              <div class="stat-card glass-card" style="padding: 16px; border-radius: 12px; border-color: rgba(16, 185, 129, 0.2);">
+                <span class="eyebrow" style="font-size: 0.7rem;">Model Provider</span>
+                <h2 style="font-size: 1.8rem; font-weight: 700; margin-top: 4px; color: #10b981;">AKTIF</h2>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Spring AI Terkoneksi</div>
+              </div>
             </div>
-            <div class="stat-card glass-card" style="padding: 16px; border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);">
-              <span class="eyebrow" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Akses Mode</span>
-              <h2 style="font-size: 2rem; font-weight: 700; margin-top: 4px; color: #3b82f6;">ADMINISTRATOR</h2>
+            
+            <h3>Tren Token AI (7 Hari Terakhir)</h3>
+            <div id="tokenChartContainer" style="display: flex; align-items: flex-end; justify-content: space-between; height: 180px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border-color); margin-top: 10px; position: relative;">
+              <!-- Dynamically populated by app.js -->
             </div>
           </div>
 
-          <!-- User Storage Table -->
-          <div class="admin-table-container" style="overflow-x: auto; margin-top: 20px;">
-            <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
-              <thead>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; color: var(--text-muted);">
-                  <th style="padding: 12px 8px;">Pengguna</th>
-                  <th style="padding: 12px 8px;">Email</th>
-                  <th style="padding: 12px 8px;">Progress Storage</th>
-                  <th style="padding: 12px 8px;">Kuota</th>
-                  <th style="padding: 12px 8px; text-align: center;">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="adminUserTableBody" style="font-size: 0.9rem;">
-                <!-- Will be populated dynamically by app.js -->
-              </tbody>
-            </table>
+          <!-- KONTEN TAB 2: MANAJEMEN PENGGUNA -->
+          <div id="adminTabUsersContent" class="admin-tab-content hidden">
+            <!-- User Storage Table -->
+            <div class="admin-table-container" style="overflow-x: auto; margin-top: 10px;">
+              <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; color: var(--text-muted);">
+                    <th style="padding: 12px 8px;">Pengguna</th>
+                    <th style="padding: 12px 8px;">Email</th>
+                    <th style="padding: 12px 8px;">Storage Usage</th>
+                    <th style="padding: 12px 8px;">Batas Harian AI</th>
+                    <th style="padding: 12px 8px;">Status</th>
+                    <th style="padding: 12px 8px; text-align: center;">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUserTableBodyExtended" style="font-size: 0.9rem;">
+                  <!-- Populate dynamically by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- KONTEN TAB 3: LOG AKTIVITAS -->
+          <div id="adminTabLogsContent" class="admin-tab-content hidden">
+            <div class="admin-table-container" style="overflow-x: auto; margin-top: 10px;">
+              <table class="admin-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.85rem; color: var(--text-muted);">
+                    <th style="padding: 12px 8px; width: 60px;">ID User</th>
+                    <th style="padding: 12px 8px; width: 140px;">Aktivitas</th>
+                    <th style="padding: 12px 8px;">Detail Keterangan</th>
+                    <th style="padding: 12px 8px; width: 120px;">IP Address</th>
+                    <th style="padding: 12px 8px; width: 160px;">Waktu</th>
+                  </tr>
+                </thead>
+                <tbody id="adminLogsTableBody" style="font-size: 0.85rem;">
+                  <!-- Populate dynamically by app.js -->
+                </tbody>
+              </table>
+            </div>
+            <!-- Pagination Controls -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+              <button id="prevLogPageBtn" class="secondary small" style="min-height: 34px; font-size: 11px; padding: 4px 12px;">Sebelumnya</button>
+              <span id="logPageIndicator" style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">Halaman 1</span>
+              <button id="nextLogPageBtn" class="secondary small" style="min-height: 34px; font-size: 11px; padding: 4px 12px;">Selanjutnya</button>
+            </div>
+          </div>
+
+          <!-- KONTEN TAB 4: KONFIGURASI AI -->
+          <div id="adminTabConfigContent" class="admin-tab-content hidden">
+            <form id="adminConfigForm" class="form" style="gap: 16px;">
+              <!-- Summary Config Section -->
+              <div style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 10px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--accent-color); margin-bottom: 12px; text-transform: uppercase;">Pengaturan Service Ringkasan</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Provider Utama</label>
+                    <input id="summaryProvider" type="text" placeholder="openai/gemini/groq" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Model ID Utama</label>
+                    <input id="summaryModel" type="text" placeholder="gpt-4o / gemini-2.5-flash" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Provider Fallback</label>
+                    <input id="summaryFallbackProvider" type="text" placeholder="groq" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Model ID Fallback</label>
+                    <input id="summaryFallbackModel" type="text" placeholder="llama-3.3-70b-versatile" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chat PDF Config Section -->
+              <div style="padding: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 10px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--accent-color); margin-bottom: 12px; text-transform: uppercase;">Pengaturan Service Chat PDF</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Provider Utama</label>
+                    <input id="chatProvider" type="text" placeholder="openai/gemini/groq" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Model ID Utama</label>
+                    <input id="chatModel" type="text" placeholder="gpt-4o / gemini-2.5-flash" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Provider Fallback</label>
+                    <input id="chatFallbackProvider" type="text" placeholder="groq" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                  <div class="input-group">
+                    <label style="font-size: 10px;">Model ID Fallback</label>
+                    <input id="chatFallbackModel" type="text" placeholder="llama-3.3-70b-versatile" style="min-height: 38px; padding: 8px 12px;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Collapsible System Prompt Section -->
+              <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
+                <div id="promptAccordionHeader" style="background: rgba(255,255,255,0.03); padding: 12px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                  <strong style="font-size: 13px; color: var(--text-primary);">System Prompt Utama AI</strong>
+                  <svg id="promptAccordionArrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                <div id="promptAccordionBody" class="hidden" style="padding: 14px; background: rgba(0,0,0,0.15); border-top: 1px solid var(--border-color);">
+                  <div class="input-group">
+                    <textarea id="appSystemPrompt" rows="6" style="width: 100%; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; color: var(--text-primary); font-family: monospace; font-size: 12px; resize: vertical; outline: none;" placeholder="Masukkan prompt instruksi sistem..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Global AI Limit -->
+              <div class="input-group">
+                <label style="font-size: 12px;">Batas Request AI Harian Global (Default Baru)</label>
+                <div class="input-wrapper">
+                  <input id="globalAiLimit" type="number" min="0" placeholder="Masukkan batas limit global" style="min-height: 40px; padding: 8px 12px;">
+                </div>
+              </div>
+
+              <button type="submit" class="primary-btn full-width" style="min-height: 42px; margin-top: 8px;">Simpan Semua Konfigurasi</button>
+            </form>
           </div>
         </div>
       </div>
-    </section>
-
-    <!-- Request Debugger Panel -->
-    <section class="debug-panel glass">
-      <details>
-        <summary class="debug-header">
-          <div class="debug-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-            <strong>Request Debugger</strong>
-          </div>
-          <button id="clearDebugButton" class="secondary small btn-clear-debug" type="button">Clear</button>
-        </summary>
-        <pre id="debugLog" class="debug-log"></pre>
-      </details>
     </section>
   </main>
 
@@ -544,7 +670,96 @@
     </div>
   </div>
 
-  <!-- AI Summary Modal -->
+  <!-- Modal Atur Limit AI User -->
+  <div id="aiLimitModal" class="modal-overlay hidden">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>Atur Batas Harian AI</h3>
+        <button id="closeAiLimitModalBtn" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Atur batas harian AI untuk: <strong id="aiLimitModalUser">user@example.com</strong></p>
+        <form id="aiLimitForm" class="form">
+          <div class="input-group" style="margin-top: 14px;">
+            <label for="aiLimitInput">Batas Request Harian</label>
+            <div class="input-wrapper">
+              <input id="aiLimitInput" type="number" min="0" placeholder="Masukkan batas request" required>
+            </div>
+          </div>
+          <button type="submit" class="primary-btn full-width" style="margin-top: 14px;">Simpan Perubahan</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Berbagi Berkas Premium (NEW) -->
+  <div id="shareModal" class="modal-overlay hidden">
+    <div class="modal-content glass" style="width: min(100% - 32px, 460px);">
+      <div class="modal-header">
+        <h3>Bagikan Berkas</h3>
+        <button id="closeShareModalBtn" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <p style="font-size: 13px; color: var(--text-secondary);">Bagikan berkas: <strong id="shareModalFileName" style="color: var(--text-primary); word-break: break-all;">file.txt</strong></p>
+        
+        <!-- Tab Selector: Privat vs Publik -->
+        <div style="display: flex; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); p: 2px; border-radius: 8px;">
+          <button id="shareTabPrivateBtn" class="secondary small active" style="flex: 1; border: none; min-height: 34px; font-size: 12px; margin: 2px;">Bagikan Privat</button>
+          <button id="shareTabPublicBtn" class="secondary small" style="flex: 1; border: none; min-height: 34px; font-size: 12px; margin: 2px;">Tautan Publik</button>
+        </div>
+
+        <!-- Section 1: Form Input Data -->
+        <form id="shareForm" class="form" style="gap: 12px;">
+          <div id="sharePrivateInputGroup" class="input-group">
+            <label for="shareEmailInput" style="font-size: 10px;">Alamat Email Pengguna</label>
+            <div class="input-wrapper">
+              <input id="shareEmailInput" type="email" placeholder="nama@email.com" required style="padding-left: 14px; min-height: 42px;">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="shareExpirySelect" style="font-size: 10px;">Masa Kadaluarsa Akses</label>
+            <div class="input-wrapper" style="width: 100%;">
+              <select id="shareExpirySelect" style="width: 100%; min-height: 42px; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-family: inherit; font-size: 14px; color: var(--text-primary); cursor: pointer; outline: none;">
+                <option value="infinite">Tanpa Batas Waktu</option>
+                <option value="1h">1 Jam</option>
+                <option value="1d">1 Hari</option>
+                <option value="7d">7 Hari</option>
+                <option value="custom">Kustom...</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="shareCustomExpiryGroup" class="hidden" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="input-group">
+              <label for="shareCustomDays" style="font-size: 9px;">Hari</label>
+              <input id="shareCustomDays" type="number" min="0" value="0" style="padding-left: 14px; min-height: 38px; text-align: center;">
+            </div>
+            <div class="input-group">
+              <label for="shareCustomHours" style="font-size: 9px;">Jam</label>
+              <input id="shareCustomHours" type="number" min="0" max="23" value="0" style="padding-left: 14px; min-height: 38px; text-align: center;">
+            </div>
+          </div>
+
+          <button type="submit" id="shareSubmitBtn" class="primary-btn full-width" style="min-height: 44px; margin-top: 8px;">Bagikan Akses</button>
+        </form>
+
+        <!-- Section 2: Generated Public Link Container -->
+        <div id="shareResultContainer" class="hidden" style="padding: 14px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; animation: modalZoomIn 0.2s;">
+          <div style="font-size: 12px; font-weight: 700; color: #818cf8; display: flex; align-items: center; gap: 6px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Tautan Publik Berhasil Dibuat
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 4px;">
+            <input id="shareResultLink" type="text" readonly style="padding: 8px 12px; min-height: 38px; font-size: 12px; background: rgba(0,0,0,0.2); border-color: var(--border-color); flex: 1;">
+            <button id="copyShareLinkBtn" class="primary-btn" style="min-height: 38px; padding: 0 14px; font-size: 12px;">Salin</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Summary Modal (Updated with Chat PDF) -->
   <div id="aiSummaryModal" class="modal-overlay hidden">
     <div class="modal-content glass ai-modal-content">
       <div class="modal-header">
@@ -555,34 +770,61 @@
             <line x1="9" y1="9" x2="9.01" y2="9"/>
             <line x1="15" y1="9" x2="15.01" y2="9"/>
           </svg>
-          <h3>Ringkasan AI</h3>
+          <h3>Asisten Dokumen AI</h3>
         </div>
         <button id="closeAiModalBtn" class="modal-close-btn">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="ai-modal-filename" id="aiModalFileName"></p>
+        <p class="ai-modal-filename" id="aiModalFileName" style="margin-bottom: 10px;"></p>
 
-        <!-- Loading State -->
-        <div id="aiSummaryLoading" class="ai-loading-state hidden">
-          <div class="ai-spinner"></div>
-          <p>Sedang menganalisis dan merangkum dokumen...</p>
+        <!-- Tab Selector: Ringkasan vs Tanya AI (Chat) -->
+        <div class="ai-modal-tabs" style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
+          <button id="aiModalSummaryTabBtn" class="secondary small active" style="flex: 1; min-height: 32px; font-size: 12px; padding: 4px 10px;">Ringkasan</button>
+          <button id="aiModalChatTabBtn" class="secondary small" style="flex: 1; min-height: 32px; font-size: 12px; padding: 4px 10px;">Tanya AI (Chat)</button>
         </div>
 
-        <!-- Result State -->
-        <div id="aiSummaryResult" class="ai-result-container hidden">
-          <div class="ai-result-header">
-            <span class="ai-badge">✨ Gemini AI</span>
-            <button id="copyAiResultBtn" class="secondary small" type="button">Salin</button>
+        <!-- TAB RINGKASAN CONTENT -->
+        <div id="aiModalSummaryTabContent">
+          <!-- Loading State -->
+          <div id="aiSummaryLoading" class="ai-loading-state hidden">
+            <div class="ai-spinner"></div>
+            <p>Sedang menganalisis dan merangkum dokumen...</p>
           </div>
-          <div id="aiSummaryText" class="ai-summary-text"></div>
+
+          <!-- Result State -->
+          <div id="aiSummaryResult" class="ai-result-container hidden">
+            <div class="ai-result-header">
+              <span class="ai-badge">✨ Gemini AI</span>
+              <button id="copyAiResultBtn" class="secondary small" type="button">Salin</button>
+            </div>
+            <div id="aiSummaryText" class="ai-summary-text"></div>
+          </div>
+
+          <!-- Error State -->
+          <div id="aiSummaryError" class="ai-error-state hidden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32" style="color: #ef4444;">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p id="aiSummaryErrorText">Gagal mengambil ringkasan.</p>
+          </div>
         </div>
 
-        <!-- Error State -->
-        <div id="aiSummaryError" class="ai-error-state hidden">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32" style="color: #ef4444;">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <p id="aiSummaryErrorText">Gagal mengambil ringkasan.</p>
+        <!-- TAB CHAT AI CONTENT (NEW) -->
+        <div id="aiModalChatTabContent" class="hidden" style="display: flex; flex-direction: column; gap: 10px; height: 380px;">
+          <div id="aiChatMessages" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="align-self: flex-start; max-width: 85%; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px 12px 12px 0; padding: 8px 12px; font-size: 13px; color: var(--text-primary); line-height: 1.5;">
+              Halo! Saya adalah asisten AI Anda. Silakan tanyakan hal-hal yang berkaitan dengan dokumen ini.
+            </div>
+          </div>
+          
+          <form id="aiChatForm" style="display: flex; gap: 8px; margin-top: auto; width: 100%;">
+            <div class="input-wrapper" style="flex: 1; min-height: 40px;">
+              <input id="aiChatInput" type="text" placeholder="Ketik pertanyaan Anda..." required style="padding-left: 12px; min-height: 40px; border-radius: var(--radius-md);">
+            </div>
+            <button id="aiChatSendBtn" type="submit" style="min-height: 40px; padding: 0 16px; border-radius: var(--radius-md); background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); font-size: 13px;">
+              Kirim
+            </button>
+          </form>
         </div>
       </div>
     </div>
@@ -598,7 +840,5 @@
     </div>
     <button class="toast-close" onclick="document.getElementById('toastAlert').classList.add('hidden')">×</button>
   </div>
-
-  <script src="/app.js"></script>
-</body>
+  <script src="/app.js?v=2.0.1"></script></body>
 </html>

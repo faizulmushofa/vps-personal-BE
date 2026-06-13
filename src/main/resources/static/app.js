@@ -136,9 +136,6 @@ function decodeJwtPayload(token) {
 }
 
 function appendDebug(data) {
-  const line = JSON.stringify(data, null, 2);
-  debugLog.textContent += (debugLog.textContent ? "\n\n" : "") + line;
-  debugLog.scrollTop = debugLog.scrollHeight;
   console.log("[request-debug]", data);
 }
 
@@ -1438,16 +1435,103 @@ document.getElementById("fpToLoginLink").addEventListener("click", (e) => {
 document.getElementById("logoutButton").addEventListener("click", handleLogout);
 document.getElementById("uploadForm").addEventListener("submit", handleUpload);
 document.getElementById("storageProvider").addEventListener("change", toggleStorageProviderSelect);
-document.getElementById("getAllButton").addEventListener("click", fetchMyFiles);
-document.getElementById("getSharedButton").addEventListener("click", () => fetchFiles("/api/files/share/shared-with-me", "get-shared", true));
-document.getElementById("getAllAdminButton").addEventListener("click", () => fetchFiles("/api/files/admin", "get-all-admin", false));
+
+// Custom Folder Action Buttons
+document.getElementById("getAllButton").addEventListener("click", () => {
+  document.getElementById("sharedTabsContainer").classList.add("hidden");
+  fetchMyFiles();
+});
+
+document.getElementById("getSharedButton").addEventListener("click", () => {
+  document.getElementById("sharedTabsContainer").classList.remove("hidden");
+  activeSharedTab = "with-me";
+  document.getElementById("sharedWithMeTabBtn").classList.add("active");
+  document.getElementById("sharedByMeTabBtn").classList.remove("active");
+  fetchSharedFiles();
+});
+
+document.getElementById("getAllAdminButton").addEventListener("click", () => {
+  document.getElementById("sharedTabsContainer").classList.add("hidden");
+  fetchFiles("/api/files/admin", "get-all-admin", false);
+});
+
+// Admin Panel Open/Close
 document.getElementById("adminPanelButton").addEventListener("click", openAdminDashboard);
 document.getElementById("closeAdminPanelBtn").addEventListener("click", closeAdminDashboard);
+
+// Modal Quota Event Bindings
 document.getElementById("closeQuotaModalBtn").addEventListener("click", closeQuotaModal);
 document.getElementById("quotaForm").addEventListener("submit", submitQuotaUpdate);
-document.getElementById("clearDebugButton").addEventListener("click", () => {
-  debugLog.textContent = "";
+
+// Modal AI Limit Event Bindings
+document.getElementById("closeAiLimitModalBtn").addEventListener("click", closeAiLimitModal);
+document.getElementById("aiLimitForm").addEventListener("submit", submitAiLimitUpdate);
+
+// Modal Share Event Bindings
+document.getElementById("closeShareModalBtn").addEventListener("click", closeShareModal);
+document.getElementById("shareForm").addEventListener("submit", submitShare);
+document.getElementById("shareTabPrivateBtn").addEventListener("click", () => switchShareTab("private"));
+document.getElementById("shareTabPublicBtn").addEventListener("click", () => switchShareTab("public"));
+document.getElementById("shareExpirySelect").addEventListener("change", (e) => {
+  document.getElementById("shareCustomExpiryGroup").classList.toggle("hidden", e.target.value !== "custom");
 });
+document.getElementById("copyShareLinkBtn").addEventListener("click", () => {
+  const link = document.getElementById("shareResultLink").value;
+  navigator.clipboard.writeText(link).then(() => {
+    showToast("Tautan publik disalin!", "success");
+  });
+});
+
+// Shared Folder Sub-Tabs Event Bindings
+document.getElementById("sharedWithMeTabBtn").addEventListener("click", () => {
+  activeSharedTab = "with-me";
+  document.getElementById("sharedWithMeTabBtn").classList.add("active");
+  document.getElementById("sharedByMeTabBtn").classList.remove("active");
+  fetchSharedFiles();
+});
+
+document.getElementById("sharedByMeTabBtn").addEventListener("click", () => {
+  activeSharedTab = "by-me";
+  document.getElementById("sharedByMeTabBtn").classList.add("active");
+  document.getElementById("sharedWithMeTabBtn").classList.remove("active");
+  fetchSharedFiles();
+});
+
+// AI Modal (Summary vs Chat) Tab switcher
+document.getElementById("aiModalSummaryTabBtn").addEventListener("click", () => switchAiModalTab("summary"));
+document.getElementById("aiModalChatTabBtn").addEventListener("click", () => switchAiModalTab("chat"));
+document.getElementById("aiChatForm").addEventListener("submit", sendPdfChatMessage);
+
+// Admin Dashboard Tabs event bindings
+document.getElementById("adminTabStatsBtn").addEventListener("click", () => showAdminTab("stats"));
+document.getElementById("adminTabUsersBtn").addEventListener("click", () => showAdminTab("users"));
+document.getElementById("adminTabLogsBtn").addEventListener("click", () => showAdminTab("logs"));
+document.getElementById("adminTabConfigBtn").addEventListener("click", () => showAdminTab("config"));
+
+// Admin Logs Pagination
+document.getElementById("prevLogPageBtn").addEventListener("click", () => {
+  if (currentLogPage > 0) {
+    currentLogPage--;
+    loadAdminLogs();
+  }
+});
+document.getElementById("nextLogPageBtn").addEventListener("click", () => {
+  currentLogPage++;
+  loadAdminLogs();
+});
+
+// Admin System Prompt Accordion
+document.getElementById("promptAccordionHeader").addEventListener("click", () => {
+  const body = document.getElementById("promptAccordionBody");
+  const arrow = document.getElementById("promptAccordionArrow");
+  const isHidden = body.classList.contains("hidden");
+  
+  body.classList.toggle("hidden");
+  arrow.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+});
+
+// Config Form Submit
+document.getElementById("adminConfigForm").addEventListener("submit", submitAdminConfig);
 
 // Preset quota buttons event bindings
 document.querySelectorAll(".preset-btn").forEach(btn => {
@@ -1466,7 +1550,17 @@ document.getElementById("quotaInput").addEventListener("input", (e) => {
 // Run init checks
 setPage();
 
-// --- STORAGE QUOTA & ADMIN PANEL FUNCTIONS ---
+// --- STATE VARIABLES ---
+let activeAdminTab = "stats";
+let activeSharedTab = "with-me";
+let activeAiModalTab = "summary";
+let currentLogPage = 0;
+const logPageSize = 10;
+let activeChatFileId = null;
+let currentShareFileId = null;
+let currentShareProvider = "STORAGE_NODE";
+
+// --- STORAGE QUOTA & PROBE FUNCTIONS ---
 
 async function fetchStorageQuota() {
   const activeToken = getToken();
@@ -1518,10 +1612,56 @@ async function probeAdminAccess() {
   }
 }
 
+// --- TAB SWITCHERS MANAGEMENT ---
+
+function showAdminTab(tabName) {
+  activeAdminTab = tabName;
+  
+  // Update nav buttons
+  document.getElementById("adminTabStatsBtn").classList.toggle("active", tabName === "stats");
+  document.getElementById("adminTabUsersBtn").classList.toggle("active", tabName === "users");
+  document.getElementById("adminTabLogsBtn").classList.toggle("active", tabName === "logs");
+  document.getElementById("adminTabConfigBtn").classList.toggle("active", tabName === "config");
+
+  // Update content divs
+  document.getElementById("adminTabStatsContent").classList.toggle("hidden", tabName !== "stats");
+  document.getElementById("adminTabUsersContent").classList.toggle("hidden", tabName !== "users");
+  document.getElementById("adminTabLogsContent").classList.toggle("hidden", tabName !== "logs");
+  document.getElementById("adminTabConfigContent").classList.toggle("hidden", tabName !== "config");
+
+  // Lazy load tab data
+  if (tabName === "stats") {
+    loadAdminStats();
+  } else if (tabName === "users") {
+    loadAdminUsers();
+  } else if (tabName === "logs") {
+    currentLogPage = 0;
+    loadAdminLogs();
+  } else if (tabName === "config") {
+    loadAdminConfig();
+  }
+}
+
+function switchAiModalTab(tabName) {
+  activeAiModalTab = tabName;
+  document.getElementById("aiModalSummaryTabBtn").classList.toggle("active", tabName === "summary");
+  document.getElementById("aiModalChatTabBtn").classList.toggle("active", tabName === "chat");
+
+  document.getElementById("aiModalSummaryTabContent").classList.toggle("hidden", tabName !== "summary");
+  document.getElementById("aiModalChatTabContent").classList.toggle("hidden", tabName !== "chat");
+  
+  if (tabName === "chat") {
+    const chatMsgs = document.getElementById("aiChatMessages");
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  }
+}
+
+// --- ADMIN DASHBOARD IMPLEMENTATION ---
+
 function openAdminDashboard() {
   document.querySelector(".dashboard-main").classList.add("hidden");
   document.getElementById("adminDashboardMain").classList.remove("hidden");
-  loadAdminDashboard();
+  showAdminTab("stats"); // Default tab
 }
 
 function closeAdminDashboard() {
@@ -1530,24 +1670,81 @@ function closeAdminDashboard() {
 }
 
 async function loadAdminDashboard() {
+  // Reload current active tab
+  showAdminTab(activeAdminTab);
+}
+
+// TAB 1: AI STATS & TREND
+async function loadAdminStats() {
   try {
-    const response = await debugFetch("load-admin-summary", "/api/files/storage-summary", {
-      headers: authHeaders()
-    });
-    if (!response.ok) {
-      showToast("Gagal memuat rekap admin.", "error");
+    const res = await debugFetch("get-token-stats", "/api/admin/ai/token-stats", { headers: authHeaders() });
+    if (!res.ok) {
+      showToast("Gagal memuat statistik token AI.", "error");
       return;
     }
-    const data = await response.json();
-    adminUsersList = data;
+    const data = await res.json();
     
-    document.getElementById("adminStatTotalUsers").textContent = data.length;
+    document.getElementById("adminStatTodayTokens").textContent = data.todayTotalTokens?.toLocaleString() || "0";
+    document.getElementById("adminStatTodayIn").textContent = data.todayInputTokens?.toLocaleString() || "0";
+    document.getElementById("adminStatTodayOut").textContent = data.todayOutputTokens?.toLocaleString() || "0";
     
-    const tbody = document.getElementById("adminUserTableBody");
+    document.getElementById("adminStatMonthTokens").textContent = data.monthTotalTokens?.toLocaleString() || "0";
+    document.getElementById("adminStatMonthIn").textContent = data.monthInputTokens?.toLocaleString() || "0";
+    document.getElementById("adminStatMonthOut").textContent = data.monthOutputTokens?.toLocaleString() || "0";
+
+    // Populate chart batang
+    const history = data.history || [];
+    const chartContainer = document.getElementById("tokenChartContainer");
+    
+    if (history.length === 0) {
+      chartContainer.innerHTML = `<div style="text-align: center; width: 100%; color: var(--text-secondary); font-size: 13px;">Belum ada riwayat penggunaan token AI 7 hari terakhir.</div>`;
+      return;
+    }
+
+    const maxTokens = Math.max(...history.map(d => d.totalTokens || 0), 1);
+    
+    chartContainer.innerHTML = history.map(d => {
+      const tokens = d.totalTokens || 0;
+      const heightPct = Math.max(5, Math.min(100, (tokens / maxTokens) * 100));
+      const dateLabel = d.date ? d.date.substring(5) : "-"; // MM-DD format
+      
+      return `
+        <div class="chart-bar-wrapper" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; position: relative;">
+          <div class="chart-bar-tooltip" style="display: none;">
+            <strong>${d.date || 'Tanggal'}</strong><br>
+            Input: ${d.inputTokens?.toLocaleString() || 0}<br>
+            Output: ${d.outputTokens?.toLocaleString() || 0}<br>
+            Total: ${tokens.toLocaleString()}
+          </div>
+          <div class="chart-bar" style="width: 28px; height: ${heightPct}%; background: linear-gradient(to top, #6366f1, #a855f7); border-radius: 4px; cursor: pointer;"
+               onmouseover="this.previousElementSibling.style.display='block'; this.previousElementSibling.style.opacity='1';" 
+               onmouseout="this.previousElementSibling.style.display='none'; this.previousElementSibling.style.opacity='0';"></div>
+          <span style="font-size: 10px; color: var(--text-secondary); font-weight: 500;">${dateLabel}</span>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Error loading admin stats", err);
+  }
+}
+
+// TAB 2: USER MANAGEMENT
+async function loadAdminUsers() {
+  try {
+    const res = await debugFetch("get-admin-users", "/api/admin/users", { headers: authHeaders() });
+    if (!res.ok) {
+      showToast("Gagal memuat daftar pengguna.", "error");
+      return;
+    }
+    const users = await res.json();
+    const tbody = document.getElementById("adminUserTableBodyExtended");
     tbody.innerHTML = "";
-    
-    data.forEach(user => {
-      const percentage = user.quotaBytes > 0 ? Math.min(100, Math.round((user.usedBytes / user.quotaBytes) * 100)) : 0;
+
+    users.forEach(user => {
+      const percentage = user.storageQuota > 0 ? Math.min(100, Math.round((user.usedStorage / user.storageQuota) * 100)) : 0;
+      const activeText = user.isActive ? "Aktif" : "Nonaktif";
+      const badgeClass = user.isActive ? "active" : "inactive";
+      
       const tr = document.createElement("tr");
       tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
       
@@ -1557,84 +1754,803 @@ async function loadAdminDashboard() {
         <td style="padding: 14px 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent-color); min-width: 32px;">${percentage}%</span>
-            <div class="progress-bar-container quota-bar-bg" style="height: 6px; width: 120px; flex-shrink: 0; margin: 0;">
+            <div class="progress-bar-container quota-bar-bg" style="height: 6px; width: 100px; flex-shrink: 0; margin: 0;">
               <div class="progress-bar-fill quota-bar-fill" style="width: ${percentage}%; height: 100%;"></div>
             </div>
+            <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">${formatBytes(user.usedStorage)} / ${formatBytes(user.storageQuota)}</span>
           </div>
         </td>
         <td style="padding: 14px 8px; font-weight: 500; font-size: 0.85rem; color: var(--text-primary);">
-          ${formatBytes(user.usedBytes)} / ${formatBytes(user.quotaBytes)}
+          ${user.dailyAiRequests || 0} / ${user.aiDailyLimit || 0} req
         </td>
-        <td style="padding: 14px 8px; text-align: center;">
-          <button class="secondary small btn-manage-quota" data-userid="${user.userId}" data-username="${user.username}" data-email="${user.email}" data-quota="${user.quotaBytes}" style="min-height: 32px; padding: 4px 10px; font-size: 11px;">
-            Atur Kuota
+        <td style="padding: 14px 8px;">
+          <span class="status-badge ${badgeClass}">${activeText}</span>
+        </td>
+        <td style="padding: 14px 8px; text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center;">
+          <button class="secondary small btn-manage-quota" data-userid="${user.id}" data-username="${user.username}" data-email="${user.email}" data-quota="${user.storageQuota}" style="min-height: 28px; padding: 2px 8px; font-size: 10px; box-shadow: none;">
+            Kuota
+          </button>
+          <button class="secondary small btn-manage-ai-limit" data-userid="${user.id}" data-username="${user.username}" data-email="${user.email}" data-limit="${user.aiDailyLimit || 0}" style="min-height: 28px; padding: 2px 8px; font-size: 10px; box-shadow: none;">
+            AI Limit
+          </button>
+          <button class="secondary small btn-toggle-status" data-userid="${user.id}" data-active="${user.isActive}" style="min-height: 28px; padding: 2px 8px; font-size: 10px; box-shadow: none; border-color: ${user.isActive ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}; color: ${user.isActive ? '#ef4444' : '#10b981'};">
+            ${user.isActive ? 'Blokir' : 'Aktifkan'}
           </button>
         </td>
       `;
       tbody.appendChild(tr);
     });
-    
+
+    // Bind handlers
     tbody.querySelectorAll(".btn-manage-quota").forEach(btn => {
-      btn.addEventListener("click", (e) => {
+      btn.onclick = (e) => {
         const userId = e.currentTarget.getAttribute("data-userid");
         const username = e.currentTarget.getAttribute("data-username");
         const email = e.currentTarget.getAttribute("data-email");
         const currentQuota = e.currentTarget.getAttribute("data-quota");
         openQuotaModal(userId, username, email, currentQuota);
-      });
+      };
     });
-    
+
+    tbody.querySelectorAll(".btn-manage-ai-limit").forEach(btn => {
+      btn.onclick = (e) => {
+        const userId = e.currentTarget.getAttribute("data-userid");
+        const username = e.currentTarget.getAttribute("data-username");
+        const email = e.currentTarget.getAttribute("data-email");
+        const currentLimit = e.currentTarget.getAttribute("data-limit");
+        openAiLimitModal(userId, username, email, currentLimit);
+      };
+    });
+
+    tbody.querySelectorAll(".btn-toggle-status").forEach(btn => {
+      btn.onclick = async (e) => {
+        const userId = e.currentTarget.getAttribute("data-userid");
+        const currentActive = e.currentTarget.getAttribute("data-active") === "true";
+        const nextActive = !currentActive;
+        const msg = nextActive ? "Mengaktifkan kembali pengguna?" : "Blokir pengguna ini dari akses sistem?";
+        if (!confirm(msg)) return;
+        
+        showToast("Memperbarui status pengguna...", "info");
+        try {
+          const res = await debugFetch("toggle-user-status", `/api/admin/users/${userId}/status`, {
+            method: "PUT",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ isActive: nextActive })
+          });
+          if (res.ok) {
+            showToast("Status pengguna berhasil diperbarui!", "success");
+            loadAdminUsers();
+          } else {
+            showToast("Gagal memperbarui status user.", "error");
+          }
+        } catch (err) {
+          showToast("Kesalahan jaringan saat memproses status.", "error");
+        }
+      };
+    });
   } catch (err) {
-    showToast("Koneksi gagal saat mengambil rekap admin.", "error");
+    console.error("Error loading admin users", err);
   }
 }
 
-function openQuotaModal(userId, username, email, currentQuotaBytes) {
-  currentTargetUserId = userId;
-  document.getElementById("quotaModalUser").textContent = `${username} (${email})`;
-  document.getElementById("quotaInput").value = currentQuotaBytes;
-  
-  updateHumanReadableQuota(currentQuotaBytes);
-  document.getElementById("quotaModal").classList.remove("hidden");
+// TAB 3: AUDIT LOGS
+async function loadAdminLogs() {
+  try {
+    const res = await debugFetch("get-admin-logs", `/api/admin/activities?page=${currentLogPage}&size=${logPageSize}`, { headers: authHeaders() });
+    if (!res.ok) {
+      showToast("Gagal memuat log audit aktivitas.", "error");
+      return;
+    }
+    const logs = await res.json();
+    const tbody = document.getElementById("adminLogsTableBody");
+    tbody.innerHTML = "";
+
+    if (logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-secondary);">Tidak ada log audit di halaman ini.</td></tr>`;
+      document.getElementById("nextLogPageBtn").disabled = true;
+      document.getElementById("logPageIndicator").textContent = `Halaman ${currentLogPage + 1}`;
+      return;
+    }
+
+    logs.forEach(log => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid rgba(255,255,255,0.03)";
+      const formattedDate = log.createdAt ? new Date(log.createdAt).toLocaleString() : "-";
+      
+      tr.innerHTML = `
+        <td style="padding: 10px 8px; font-weight: 500; color: var(--text-secondary);">${log.userId}</td>
+        <td style="padding: 10px 8px; font-weight: 700; color: var(--accent-color);">${log.activityType}</td>
+        <td style="padding: 10px 8px; color: var(--text-primary);">${log.description}</td>
+        <td style="padding: 10px 8px; font-family: monospace; color: var(--text-secondary);">${log.ipAddress || '-'}</td>
+        <td style="padding: 10px 8px; color: var(--text-muted); font-size: 11px;">${formattedDate}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById("logPageIndicator").textContent = `Halaman ${currentLogPage + 1}`;
+    document.getElementById("prevLogPageBtn").disabled = currentLogPage === 0;
+    // Assume if logs length is less than size, it's the last page
+    document.getElementById("nextLogPageBtn").disabled = logs.length < logPageSize;
+  } catch (err) {
+    console.error("Error loading admin logs", err);
+  }
 }
 
-function closeQuotaModal() {
-  document.getElementById("quotaModal").classList.add("hidden");
+// TAB 4: CONFIG AI SETTINGS
+async function loadAdminConfig() {
+  try {
+    const res = await debugFetch("get-admin-settings", "/api/admin/settings", { headers: authHeaders() });
+    if (!res.ok) {
+      showToast("Gagal memuat konfigurasi AI.", "error");
+      return;
+    }
+    const settings = await res.json();
+    
+    // Reset form
+    document.getElementById("adminConfigForm").reset();
+
+    settings.forEach(setting => {
+      const key = setting.key;
+      const val = setting.value || "";
+      
+      if (key === "summary_provider") document.getElementById("summaryProvider").value = val;
+      else if (key === "summary_model") document.getElementById("summaryModel").value = val;
+      else if (key === "summary_fallback_provider") document.getElementById("summaryFallbackProvider").value = val;
+      else if (key === "summary_fallback_model") document.getElementById("summaryFallbackModel").value = val;
+      else if (key === "chat_provider") document.getElementById("chatProvider").value = val;
+      else if (key === "chat_model") document.getElementById("chatModel").value = val;
+      else if (key === "chat_fallback_provider") document.getElementById("chatFallbackProvider").value = val;
+      else if (key === "chat_fallback_model") document.getElementById("chatFallbackModel").value = val;
+      else if (key === "system_prompt") document.getElementById("appSystemPrompt").value = val;
+      else if (key === "global_ai_limit") document.getElementById("globalAiLimit").value = val;
+    });
+  } catch (err) {
+    console.error("Error loading admin config", err);
+  }
+}
+
+async function submitAdminConfig(e) {
+  e.preventDefault();
+  
+  const payload = {
+    summary_provider: document.getElementById("summaryProvider").value.trim(),
+    summary_model: document.getElementById("summaryModel").value.trim(),
+    summary_fallback_provider: document.getElementById("summaryFallbackProvider").value.trim(),
+    summary_fallback_model: document.getElementById("summaryFallbackModel").value.trim(),
+    chat_provider: document.getElementById("chatProvider").value.trim(),
+    chat_model: document.getElementById("chatModel").value.trim(),
+    chat_fallback_provider: document.getElementById("chatFallbackProvider").value.trim(),
+    chat_fallback_model: document.getElementById("chatFallbackModel").value.trim(),
+    system_prompt: document.getElementById("appSystemPrompt").value.trim(),
+    global_ai_limit: document.getElementById("globalAiLimit").value.trim()
+  };
+
+  showToast("Menyimpan konfigurasi AI...", "info");
+  try {
+    const res = await debugFetch("save-admin-config", "/api/admin/settings", {
+      method: "PUT",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      showToast("Seluruh konfigurasi AI berhasil diperbarui!", "success");
+      loadAdminConfig();
+    } else {
+      showToast("Gagal menyimpan konfigurasi.", "error");
+    }
+  } catch (err) {
+    showToast("Kesalahan jaringan saat menyimpan konfigurasi.", "error");
+  }
+}
+
+// --- USER AI LIMIT MODAL ---
+
+function openAiLimitModal(userId, username, email, currentLimit) {
+  currentTargetUserId = userId;
+  document.getElementById("aiLimitModalUser").textContent = `${username} (${email})`;
+  document.getElementById("aiLimitInput").value = currentLimit;
+  document.getElementById("aiLimitModal").classList.remove("hidden");
+}
+
+function closeAiLimitModal() {
+  document.getElementById("aiLimitModal").classList.add("hidden");
   currentTargetUserId = null;
 }
 
-function updateHumanReadableQuota(bytes) {
-  const num = parseInt(bytes);
-  const text = isNaN(num) || num <= 0 ? "" : formatBytes(num);
-  document.getElementById("quotaHumanReadable").textContent = text ? `Setara dengan: ${text}` : "";
-}
-
-async function submitQuotaUpdate(e) {
+async function submitAiLimitUpdate(e) {
   e.preventDefault();
   if (!currentTargetUserId) return;
-  
-  const newQuotaBytes = parseInt(document.getElementById("quotaInput").value);
-  if (isNaN(newQuotaBytes) || newQuotaBytes < 1048576) {
-    showToast("Kuota minimal adalah 1 MB.", "error");
+
+  const limitVal = parseInt(document.getElementById("aiLimitInput").value);
+  if (isNaN(limitVal) || limitVal < 0) {
+    showToast("Batas harian request minimal adalah 0.", "error");
     return;
   }
-  
+
   try {
-    const response = await debugFetch("update-quota", `/api/files/users/${currentTargetUserId}/quota`, {
+    const response = await debugFetch("update-user-ai-limit", `/api/admin/users/${currentTargetUserId}/ai-limit`, {
       method: "PUT",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ quotaBytes: newQuotaBytes })
+      body: JSON.stringify({ aiLimit: limitVal })
     });
     
     if (response.ok) {
-      showToast("Kuota penyimpanan berhasil diperbarui!", "success");
-      closeQuotaModal();
-      loadAdminDashboard();
-      fetchStorageQuota();
+      showToast("Batas harian AI pengguna berhasil diperbarui!", "success");
+      closeAiLimitModal();
+      loadAdminUsers();
     } else {
-      showToast("Gagal memperbarui kuota.", "error");
+      showToast("Gagal memperbarui batas harian AI.", "error");
     }
   } catch (err) {
-    showToast("Koneksi terputus saat memperbarui kuota.", "error");
+    showToast("Kesalahan jaringan saat memperbarui AI limit.", "error");
   }
 }
+
+// --- PREMIUM SHARE MODAL IMPLEMENTATION ---
+
+function openShareModal(fileId, fileName, provider) {
+  currentShareFileId = fileId;
+  currentShareProvider = provider;
+  
+  document.getElementById("shareModalFileName").textContent = fileName;
+  document.getElementById("shareForm").reset();
+  document.getElementById("shareResultContainer").classList.add("hidden");
+  document.getElementById("shareForm").classList.remove("hidden");
+  document.getElementById("shareCustomExpiryGroup").classList.add("hidden");
+  
+  switchShareTab("private"); // default
+  
+  document.getElementById("shareModal").classList.remove("hidden");
+}
+
+function closeShareModal() {
+  document.getElementById("shareModal").classList.add("hidden");
+  currentShareFileId = null;
+}
+
+function switchShareTab(tabName) {
+  document.getElementById("shareTabPrivateBtn").classList.toggle("active", tabName === "private");
+  document.getElementById("shareTabPublicBtn").classList.toggle("active", tabName === "public");
+  
+  // Toggle input field
+  const emailGroup = document.getElementById("sharePrivateInputGroup");
+  const emailInput = document.getElementById("shareEmailInput");
+  const submitBtn = document.getElementById("shareSubmitBtn");
+  
+  if (tabName === "private") {
+    emailGroup.classList.remove("hidden");
+    emailInput.setAttribute("required", "true");
+    submitBtn.textContent = "Bagikan Akses";
+  } else {
+    emailGroup.classList.add("hidden");
+    emailInput.removeAttribute("required");
+    submitBtn.textContent = "Buat Tautan Publik";
+  }
+  
+  document.getElementById("shareResultContainer").classList.add("hidden");
+  document.getElementById("shareForm").classList.remove("hidden");
+}
+
+async function submitShare(e) {
+  e.preventDefault();
+  if (!currentShareFileId) return;
+
+  const isPublic = document.getElementById("shareTabPublicBtn").classList.contains("active");
+  const email = isPublic ? null : document.getElementById("shareEmailInput").value.trim();
+  const expiryType = document.getElementById("shareExpirySelect").value;
+  
+  let expiresInDays = null;
+  let expiresInHours = null;
+
+  if (expiryType === "1h") {
+    expiresInHours = 1;
+  } else if (expiryType === "1d") {
+    expiresInDays = 1;
+  } else if (expiryType === "7d") {
+    expiresInDays = 7;
+  } else if (expiryType === "custom") {
+    const days = parseInt(document.getElementById("shareCustomDays").value) || 0;
+    const hours = parseInt(document.getElementById("shareCustomHours").value) || 0;
+    if (days === 0 && hours === 0) {
+      showToast("Kustom kadaluarsa minimal 1 jam.", "error");
+      return;
+    }
+    if (days > 0) expiresInDays = days;
+    if (hours > 0) expiresInHours = hours;
+  }
+
+  const isGDrive = currentShareProvider === "GOOGLE_DRIVE";
+  const path = isGDrive ? `/api/google-drive/share/${currentShareFileId}` : `/api/files/share/${currentShareFileId}`;
+
+  showToast("Memproses pembagian berkas...", "info");
+  try {
+    const response = await debugFetch("share-file", path, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email, isPublic, expiresInDays, expiresInHours })
+    });
+
+    if (!response.ok) {
+      let errMsg = "Gagal memproses sharing berkas.";
+      try {
+        const errData = await response.json();
+        errMsg = errData.message || errMsg;
+      } catch (e) {}
+      showToast(errMsg, "error");
+      return;
+    }
+
+    const data = await response.json();
+
+    if (isPublic && data.shareLink) {
+      document.getElementById("shareResultLink").value = data.shareLink;
+      document.getElementById("shareForm").classList.add("hidden");
+      document.getElementById("shareResultContainer").classList.remove("hidden");
+      showToast("Tautan publik berhasil dibuat!", "success");
+    } else {
+      showToast(`Akses berkas berhasil dibagikan ke ${email || 'user'}!`, "success");
+      closeShareModal();
+      if (currentViewIsShared) fetchSharedFiles();
+    }
+  } catch (err) {
+    showToast("Kesalahan jaringan saat memproses sharing berkas.", "error");
+  }
+}
+
+// --- SHARED FILES MANAGEMENT (LOCAL + GDRIVE) ---
+
+async function fetchSharedFiles() {
+  loadingIndicator.classList.remove("hidden");
+  emptyState.classList.add("hidden");
+  fileList.innerHTML = "";
+  fileCountBadge.textContent = "0 file";
+  currentViewIsShared = true;
+
+  let localUrl = "";
+  let gdriveUrl = "";
+  
+  if (activeSharedTab === "with-me") {
+    localUrl = "/api/files/share/shared-with-me";
+    gdriveUrl = "/api/google-drive/share/shared-with-me";
+  } else {
+    localUrl = "/api/files/share/shared-by-me";
+    gdriveUrl = "/api/google-drive/share/shared-by-me";
+  }
+
+  let mergedFiles = [];
+
+  // 1. Fetch Local share files
+  try {
+    const res = await debugFetch(`get-local-shared-${activeSharedTab}`, localUrl, { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) mergedFiles.push(...data);
+    }
+  } catch (e) {
+    console.error("Gagal memuat local shared files", e);
+  }
+
+  // 2. Fetch Google Drive share files
+  try {
+    const res = await debugFetch(`get-gdrive-shared-${activeSharedTab}`, gdriveUrl, { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) mergedFiles.push(...data);
+    }
+  } catch (e) {
+    console.error("Gagal memuat Google Drive shared files", e);
+  }
+
+  loadingIndicator.classList.add("hidden");
+  loadedFiles = mergedFiles;
+  
+  renderSharedFiles(loadedFiles);
+}
+
+function renderSharedFiles(files) {
+  fileList.innerHTML = "";
+  
+  if (files.length === 0) {
+    emptyState.classList.remove("hidden");
+    fileCountBadge.textContent = "0 file";
+    return;
+  }
+
+  emptyState.classList.add("hidden");
+  fileCountBadge.textContent = `${files.length} file`;
+
+  files.forEach((f) => {
+    const card = document.createElement("div");
+    card.className = "file-card";
+    const isPdf = (f.originalFileName || "").toLowerCase().endsWith(".pdf");
+    const shortName = f.originalFileName || "Berkas Tanpa Nama";
+    const displaySize = formatBytes(f.size || 0);
+    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleString() : "-";
+    const isGDrive = f.provider === "GOOGLE_DRIVE" || f.provider === "google";
+
+    const providerBadge = isGDrive
+      ? `<span class="badge" style="background: rgba(59, 130, 246, 0.15) !important; color: #3b82f6 !important; border: 1px solid rgba(59, 130, 246, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Google Drive
+         </span>`
+      : `<span class="badge" style="background: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; border: 1px solid rgba(168, 85, 247, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Storage Node
+         </span>`;
+
+    let subMetaHtml = "";
+    let actionButtonsHtml = "";
+
+    if (activeSharedTab === "with-me") {
+      // Dibagikan dengan Saya
+      const owner = f.ownerEmail ? `Oleh: ${f.ownerEmail}` : "Owner tidak diketahui";
+      subMetaHtml = `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; font-weight: 550;">${owner}</div>`;
+      
+      actionButtonsHtml = `
+        <button class="btn-download-action" data-fileid="${f.id}" data-name="${f.originalFileName}" data-size="${f.size}" data-provider="${f.provider}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>Download</span>
+        </button>
+        ${isPdf ? `
+        <button class="btn-ai-action" data-fileid="${f.id}" data-name="${f.originalFileName}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <span>Rangkum AI</span>
+        </button>
+        ` : ''}
+      `;
+    } else {
+      // Dibagikan oleh Saya (Shared By Me)
+      const shareTypeBadge = f.isPublic 
+        ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important; font-size: 0.65rem; margin-left: 0;">Publik</span>`
+        : `<span class="badge" style="background: rgba(99, 102, 241, 0.15) !important; color: #818cf8 !important; border: 1px solid rgba(99, 102, 241, 0.3) !important; font-size: 0.65rem; margin-left: 0;">Privat</span>`;
+        
+      const sharedWithText = f.isPublic 
+        ? "Siapa pun dengan tautan" 
+        : (f.sharedWithEmail || "Tidak diketahui");
+
+      const expiryText = f.expiresAt 
+        ? `Exp: ${new Date(f.expiresAt).toLocaleString()}` 
+        : "Exp: Selamanya";
+
+      subMetaHtml = `
+        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; display: flex; align-items: center; gap: 4px; font-weight: 550;">
+          Ke: ${sharedWithText} ${shareTypeBadge}
+        </div>
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">${expiryText}</div>
+      `;
+
+      actionButtonsHtml = `
+        <button class="btn-download-action" data-fileid="${f.fileId}" data-name="${f.originalFileName}" data-size="${f.size}" data-provider="${f.provider}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>Download</span>
+        </button>
+        ${f.isPublic && f.shareLink ? `
+        <button class="btn-share-action btn-copy-public-link" data-link="${f.shareLink}" title="Salin Tautan Publik">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        ` : ''}
+        <button class="btn-delete-action btn-cancel-share-access" data-shareid="${f.id}" data-provider="${f.provider}" title="Batal Bagikan (Cabut Akses)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      `;
+    }
+
+    card.innerHTML = `
+      <div class="file-info-header">
+        <div class="file-icon-wrapper">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <div class="file-meta-text">
+          <div class="file-card-title" title="${shortName}">${shortName}</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 4px;">
+            <span class="file-card-size">${displaySize}</span>
+            ${providerBadge}
+          </div>
+          ${subMetaHtml}
+          <div class="file-card-date">${dateFormatted}</div>
+        </div>
+      </div>
+      <div class="file-card-actions">
+        ${actionButtonsHtml}
+      </div>
+    `;
+    // Bind actions
+    const fileId = activeSharedTab === "by-me" ? f.fileId : f.id;
+    card.querySelector(".btn-download-action").onclick = () => {
+      handleDownload(fileId, f.originalFileName, f.size, f.provider);
+    };
+
+    if (activeSharedTab === "with-me" && isPdf) {
+      card.querySelector(".btn-ai-action").onclick = () => {
+        handleSummarizePdf(fileId, f.originalFileName);
+      };
+    }
+
+    if (activeSharedTab === "by-me") {
+      if (f.isPublic && f.shareLink) {
+        card.querySelector(".btn-copy-public-link").onclick = () => {
+          navigator.clipboard.writeText(f.shareLink).then(() => {
+            showToast("Tautan publik disalin!", "success");
+          });
+        };
+      }
+
+      card.querySelector(".btn-cancel-share-access").onclick = () => {
+        cancelShareAccess(f.id, f.provider);
+      };
+    }
+    fileList.appendChild(card);
+  });
+}
+
+async function cancelShareAccess(shareId, provider) {
+  if (!confirm("Cabut pembagian akses berkas ini? Tautan atau otorisasi email tidak akan bisa diakses lagi.")) {
+    return;
+  }
+
+  const isGDrive = provider === "GOOGLE_DRIVE" || provider === "google";
+  const path = isGDrive ? `/api/google-drive/share/cancel/${shareId}` : `/api/files/share/cancel/${shareId}`;
+
+  showToast("Mencabut akses berbagi berkas...", "info");
+  try {
+    const response = await debugFetch("cancel-share", path, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    if (response.ok) {
+      showToast("Akses berbagi berkas berhasil dicabut!", "success");
+      fetchSharedFiles();
+    } else {
+      showToast("Gagal mencabut akses berbagi.", "error");
+    }
+  } catch (err) {
+    showToast("Kesalahan jaringan saat mencabut sharing.", "error");
+  }
+}
+
+// Override renderFiles list on home drive to support premium sharing
+function renderFiles(files) {
+  fileList.innerHTML = "";
+  
+  if (files.length === 0) {
+    emptyState.classList.remove("hidden");
+    fileCountBadge.textContent = "0 file";
+    return;
+  }
+
+  emptyState.classList.add("hidden");
+  fileCountBadge.textContent = `${files.length} file`;
+
+  files.forEach((f) => {
+    const card = document.createElement("div");
+    card.className = "file-card";
+    const isPdf = (f.originalFileName || "").toLowerCase().endsWith(".pdf");
+    
+    const shortName = f.originalFileName || "Berkas Tidak Bernama";
+    const dateFormatted = f.createdAt ? new Date(f.createdAt).toLocaleString() : "-";
+    const displaySize = formatBytes(f.size || 0);
+
+    const providerBadge = f.provider === "GOOGLE_DRIVE" 
+      ? `<span class="badge" style="background: rgba(59, 130, 246, 0.15) !important; color: #3b82f6 !important; border: 1px solid rgba(59, 130, 246, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Google Drive
+         </span>`
+      : `<span class="badge" style="background: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; border: 1px solid rgba(168, 85, 247, 0.3) !important; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-left: 0;">
+           <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Storage Node
+         </span>`;
+
+    card.innerHTML = `
+      <div class="file-info-header">
+        <div class="file-icon-wrapper">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </div>
+        <div class="file-meta-text">
+          <div class="file-card-title" title="${shortName}">${shortName}</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 4px;">
+            <span class="file-card-size">${displaySize}</span>
+            ${providerBadge}
+          </div>
+          <div class="file-card-date">${dateFormatted}</div>
+        </div>
+      </div>
+      <div class="file-card-actions">
+        <button class="btn-download-action" data-id="${f.id}" data-name="${f.originalFileName}" data-size="${f.size}" data-provider="${f.provider}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          <span>Download</span>
+        </button>
+        ${isPdf ? `
+        <button class="btn-ai-action" data-id="${f.id}" data-name="${f.originalFileName}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <span>Rangkum AI</span>
+        </button>
+        ` : ''}
+        <button class="btn-share-action" data-id="${f.id}" data-name="${f.originalFileName}" data-provider="${f.provider}" title="Bagikan File">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+        </button>
+        <button class="btn-delete-action" data-id="${f.id}" data-provider="${f.provider}" title="Hapus File">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
+      </div>
+    `;
+    card.querySelector(".btn-download-action").onclick = () => {
+      handleDownload(f.id, f.originalFileName, f.size, f.provider);
+    };
+
+    card.querySelector(".btn-share-action").onclick = () => {
+      openShareModal(f.id, f.originalFileName, f.provider);
+    };
+
+    card.querySelector(".btn-delete-action").onclick = () => {
+      handleDelete(f.id, f.provider);
+    };
+
+    const aiBtn = card.querySelector(".btn-ai-action");
+    if (aiBtn) {
+      aiBtn.onclick = () => {
+        handleSummarizePdf(f.id, f.originalFileName);
+      };
+    }
+    fileList.appendChild(card);
+  });
+}
+
+// --- AI PDF DOC ASSISTANT & CHAT INTEGRATION ---
+
+async function handleSummarizePdf(fileId, fileName) {
+  const activeToken = getToken();
+  if (!activeToken) {
+    clearSession("Login diperlukan.");
+    return;
+  }
+
+  activeChatFileId = fileId;
+  
+  // Set UI back to summary tab and reset chat messages area
+  switchAiModalTab("summary");
+  document.getElementById("aiModalFileName").textContent = `📄 ${fileName}`;
+  
+  const chatMsgs = document.getElementById("aiChatMessages");
+  chatMsgs.innerHTML = `
+    <div style="align-self: flex-start; max-width: 85%; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 12px 12px 12px 0; padding: 8px 12px; font-size: 13px; color: var(--text-primary); line-height: 1.5;">
+      Halo! Saya adalah asisten AI Anda. Silakan tanyakan hal-hal yang berkaitan dengan berkas PDF "${fileName}" ini.
+    </div>
+  `;
+
+  document.getElementById("aiSummaryLoading").classList.remove("hidden");
+  document.getElementById("aiSummaryResult").classList.add("hidden");
+  document.getElementById("aiSummaryError").classList.add("hidden");
+  document.getElementById("aiSummaryModal").classList.remove("hidden");
+
+  try {
+    const response = await debugFetch("summarize-pdf", `/api/ai/summary/pdf/${fileId}`, {
+      method: "POST",
+      headers: authHeaders()
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      clearSession("Akses ditolak.");
+      closeAiSummaryModal();
+      return;
+    }
+
+    if (!response.ok) {
+      document.getElementById("aiSummaryLoading").classList.add("hidden");
+      document.getElementById("aiSummaryError").classList.remove("hidden");
+      document.getElementById("aiSummaryErrorText").textContent =
+        `Gagal merangkum dokumen (HTTP ${response.status}). Pastikan file adalah PDF yang valid.`;
+      return;
+    }
+
+    const data = await response.json();
+    const summaryText = data.response || "Tidak ada ringkasan yang dihasilkan.";
+
+    document.getElementById("aiSummaryLoading").classList.add("hidden");
+    document.getElementById("aiSummaryText").textContent = summaryText;
+    document.getElementById("aiSummaryResult").classList.remove("hidden");
+
+  } catch (err) {
+    document.getElementById("aiSummaryLoading").classList.add("hidden");
+    document.getElementById("aiSummaryError").classList.remove("hidden");
+    document.getElementById("aiSummaryErrorText").textContent =
+      "Koneksi gagal. Pastikan server berjalan dan coba lagi.";
+  }
+}
+
+function closeAiSummaryModal() {
+  document.getElementById("aiSummaryModal").classList.add("hidden");
+  activeChatFileId = null;
+}
+
+// Chat PDF message processing
+async function sendPdfChatMessage(e) {
+  e.preventDefault();
+  const inputEl = document.getElementById("aiChatInput");
+  const question = inputEl.value.trim();
+  if (!question || !activeChatFileId) return;
+
+  inputEl.value = "";
+  appendChatMessage("user", question);
+
+  // Render typing indicator bubble
+  const typingId = appendChatTypingIndicator();
+
+  try {
+    const response = await fetch(`/api/ai/chat/pdf/${activeChatFileId}`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ teks: question })
+    });
+
+    removeChatTypingIndicator(typingId);
+
+    if (response.status === 401 || response.status === 403) {
+      clearSession("Sesi ditolak. Silakan login kembali.");
+      closeAiSummaryModal();
+      return;
+    }
+
+    if (!response.ok) {
+      appendChatMessage("ai", "Gagal mendapatkan respon AI. Silakan coba lagi nanti.");
+      return;
+    }
+
+    const data = await response.json();
+    const replyText = data.response || "Asisten AI tidak mengembalikan data.";
+    appendChatMessage("ai", replyText);
+
+  } catch (err) {
+    removeChatTypingIndicator(typingId);
+    appendChatMessage("ai", "Koneksi terputus saat menghubungi server asisten AI.");
+  }
+}
+
+function appendChatMessage(sender, text) {
+  const chatMsgs = document.getElementById("aiChatMessages");
+  const msgDiv = document.createElement("div");
+  
+  if (sender === "user") {
+    msgDiv.className = "chat-message msg-user";
+    msgDiv.textContent = text;
+  } else {
+    msgDiv.className = "chat-message msg-ai";
+    msgDiv.innerHTML = text.replace(/\n/g, "<br>");
+  }
+
+  chatMsgs.appendChild(msgDiv);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+function appendChatTypingIndicator() {
+  const chatMsgs = document.getElementById("aiChatMessages");
+  const typingDiv = document.createElement("div");
+  const id = "typing-" + Date.now();
+  
+  typingDiv.id = id;
+  typingDiv.className = "chat-message msg-ai";
+  typingDiv.innerHTML = `
+    <div class="typing-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  `;
+  
+  chatMsgs.appendChild(typingDiv);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  return id;
+}
+
+function removeChatTypingIndicator(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
