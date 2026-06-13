@@ -124,10 +124,8 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                                                         if (s.getStatus() == FileStatus.CANCELED) {
                                                             return Mono.error(new IllegalArgumentException("Download canceled by user"));
                                                         }
-                                                        s.setBytesSent(s.getBytesSent() + chunk.length);
-                                                        return downloadSessionRepository.save(s);
+                                                        return Mono.just(chunk);
                                                     })
-                                                    .thenReturn(chunk)
                                             )
                                             .doOnComplete(() -> downloadSessionRepository.findById(savedSession.getId())
                                                     .flatMap(s -> {

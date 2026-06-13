@@ -131,10 +131,8 @@ public class GoogleDriveServiceImp implements DownloadService {
                             if (s.getStatus() == FileStatus.CANCELED) {
                                 return Mono.error(new IllegalArgumentException("Download canceled by user"));
                             }
-                            s.setBytesSent(s.getBytesSent() + chunk.length);
-                            return downloadSessionRepository.save(s);
+                            return Mono.just(chunk);
                         })
-                        .thenReturn(chunk)
                 )
                 .doOnComplete(() -> finalizeSessionStatus(sessionId, FileStatus.COMPLETED, false))
                 .doOnError(err -> finalizeSessionStatus(sessionId, FileStatus.FAILED, true));
