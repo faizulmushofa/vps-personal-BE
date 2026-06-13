@@ -1,5 +1,6 @@
 package io.github.faizul.report;
 
+import io.github.faizul.notification.EmailTemplateFactory;
 import io.github.faizul.notification.NotificationService;
 import io.github.faizul.security.filter.CurrentUserContext;
 import lombok.RequiredArgsConstructor;
@@ -27,34 +28,18 @@ public class ReportController {
                 .flatMap(userDetails -> {
                     String userEmail = userDetails.getUsername(); // email user
                     String subject = "Laporan Kendala Baru dari Pengguna - Horizon Drive";
-                    String body = String.format(
-                            "Halo Developer,\n\n" +
-                            "Telah diterima laporan kendala baru di aplikasi Horizon Drive:\n\n" +
-                            "Pengirim: %s\n" +
-                            "Deskripsi Kendala:\n" +
-                            "%s\n\n" +
-                            "Salam,\n" +
-                            "Sistem Horizon Cloud",
-                            userEmail, request.description()
-                    );
+                    String htmlBody = EmailTemplateFactory.getBugReportTemplate(userEmail, request.description());
                     
                     log.info("Mengirimkan laporan bug ke developer dari user: {}", userEmail);
-                    return notificationService.sendNotification("emuyforge@gmail.com", subject, body);
+                    return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody);
                 })
                 // Fallback jika dikirim tanpa login (anonim)
                 .onErrorResume(e -> {
                     String subject = "Laporan Kendala Baru (Anonim) - Horizon Drive";
-                    String body = String.format(
-                            "Halo Developer,\n\n" +
-                            "Telah diterima laporan kendala baru di aplikasi Horizon Drive (dikirim secara anonim/belum login):\n\n" +
-                            "Deskripsi Kendala:\n" +
-                            "%s\n\n" +
-                            "Salam,\n" +
-                            "Sistem Horizon Cloud",
-                            request.description()
-                    );
+                    String htmlBody = EmailTemplateFactory.getBugReportTemplate("Anonymous (Not Logged In)", request.description());
+                    
                     log.info("Mengirimkan laporan bug anonim ke developer");
-                    return notificationService.sendNotification("emuyforge@gmail.com", subject, body);
+                    return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody);
                 })
                 .then(Mono.just(ResponseEntity.ok().build()));
     }

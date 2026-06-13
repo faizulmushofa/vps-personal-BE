@@ -34,12 +34,25 @@ public class EmailNotification implements NotificationService {
 
     @Override
     public Mono<Void> sendNotification(String to, String subject, String body) {
-        Map<String, Object> requestBody = Map.of(
-                "sender", Map.of("name", senderName, "email", senderEmail),
-                "to", List.of(Map.of("email", to)),
-                "subject", subject,
-                "textContent", body
-        );
+        boolean isHtml = body.trim().startsWith("<!DOCTYPE") || body.trim().startsWith("<html") || body.trim().startsWith("<div");
+        
+        Map<String, Object> requestBody;
+        if (isHtml) {
+            requestBody = Map.of(
+                    "sender", Map.of("name", senderName, "email", senderEmail),
+                    "to", List.of(Map.of("email", to)),
+                    "subject", subject,
+                    "htmlContent", body,
+                    "textContent", "Mohon buka email ini menggunakan client email yang mendukung HTML."
+            );
+        } else {
+            requestBody = Map.of(
+                    "sender", Map.of("name", senderName, "email", senderEmail),
+                    "to", List.of(Map.of("email", to)),
+                    "subject", subject,
+                    "textContent", body
+            );
+        }
 
         return webClient.post()
                 .uri("/smtp/email")

@@ -1,5 +1,6 @@
 package io.github.faizul.security.auth;
 
+import io.github.faizul.notification.EmailTemplateFactory;
 import io.github.faizul.security.auth.dtos.*;
 import io.github.faizul.security.jwt.JwtService;
 import io.github.faizul.User.core.UserRepository;
@@ -48,18 +49,14 @@ public class AuthService {
                             .build();
 
                     String emailSubject = "OTP Verifikasi Registrasi - Horizon Cloud";
-                    String emailBody = String.format(
-                            "Halo %s,\n\n" +
-                            "Terima kasih telah mendaftar di Premium VPS Personal Cloud Storage.\n" +
-                            "Kode OTP verifikasi Anda adalah: %s\n\n" +
-                            "Kode ini berlaku selama 5 menit. Mohon tidak membagikan kode ini kepada siapa pun.\n\n" +
-                            "Salam,\n" +
-                            "Tim Cloud Storage",
-                            request.fullName(), otpCode
+                    String htmlBody = EmailTemplateFactory.getOtpTemplate(
+                            "Verifikasi Pendaftaran Akun",
+                            String.format("Halo %s, terima kasih telah mendaftar di Premium VPS Personal Cloud Storage. Gunakan kode OTP berikut untuk memverifikasi akun Anda:", request.fullName()),
+                            otpCode
                     );
 
                     return otpVerificationRepository.save(otp)
-                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, emailBody)
+                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, htmlBody)
                                     .doOnError(err -> log.error("Gagal mengirim email OTP: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("Register Successfully. Silakan periksa email Anda untuk kode verifikasi OTP."));
                 });
@@ -125,19 +122,15 @@ public class AuthService {
                             .build();
 
                     String emailSubject = "OTP Pemulihan Kata Sandi - Horizon Cloud";
-                    String emailBody = String.format(
-                            "Halo %s,\n\n" +
-                            "Kami menerima permintaan pemulihan kata sandi untuk akun Anda.\n" +
-                            "Kode OTP pemulihan Anda adalah: %s\n\n" +
-                            "Kode ini berlaku selama 5 menit. Mohon tidak membagikan kode ini kepada siapa pun.\n\n" +
-                            "Jika Anda tidak melakukan permintaan ini, abaikan email ini.\n\n" +
-                            "Salam,\n" +
-                            "Tim Cloud Storage",
-                            user.getFullName() != null ? user.getFullName() : user.getUsername(), otpCode
+                    String name = user.getFullName() != null ? user.getFullName() : user.getUsername();
+                    String htmlBody = EmailTemplateFactory.getOtpTemplate(
+                            "Pemulihan Kata Sandi",
+                            String.format("Halo %s, kami menerima permintaan untuk mengatur ulang kata sandi Anda. Masukkan kode OTP berikut untuk melanjutkan proses pemulihan:", name),
+                            otpCode
                     );
 
                     return otpVerificationRepository.save(otp)
-                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, emailBody)
+                            .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, htmlBody)
                                     .doOnError(err -> log.error("Gagal mengirim email OTP lupa password: {}", err.getMessage(), err)))
                             .thenReturn(new RegisterResponse("OTP pemulihan kata sandi telah dikirim ke email Anda."));
                 });
