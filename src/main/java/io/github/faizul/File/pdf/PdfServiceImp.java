@@ -54,12 +54,12 @@ public class PdfServiceImp implements PdfService {
                                             .flatMap(os -> {
                                                 Flux<byte[]> dataStream;
                                                 if ("GOOGLE_DRIVE".equals(file.getProvider())) {
-                                                    log.info("Mulai mengunduh file dari Google Drive...");
-                                                    dataStream = googleDriveClient.downloadFile(userId, file.getStorageName());
+                                                    log.info("Mulai mengunduh file dari Google Drive using account: " + file.getExternalAccountId());
+                                                    dataStream = googleDriveClient.downloadFile(file.getExternalAccountId(), file.getStorageName());
                                                 } else {
-                                                    log.info("Mulai mengunduh file dari Storage Node...");
+                                                    log.info("Mulai mengunduh file dari Storage Node using owner ID: " + file.getUserId());
                                                     dataStream = downloadStorageService
-                                                            .downloadFile(userId, fileId)
+                                                            .downloadFile(file.getUserId(), fileId)
                                                             .map(chunk -> chunk.data());
                                                 }
 

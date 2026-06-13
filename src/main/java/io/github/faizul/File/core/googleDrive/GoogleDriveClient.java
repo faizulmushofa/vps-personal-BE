@@ -2,6 +2,7 @@ package io.github.faizul.File.core.googleDrive;
 
 import io.github.faizul.User.externalAccount.ExternalAccount;
 import io.github.faizul.User.externalAccount.ExternalAccountRepository;
+import io.github.faizul.Exception.GoogleDriveNotConnectedException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
@@ -39,7 +40,7 @@ public class GoogleDriveClient {
 
     public Mono<String> getValidAccessToken(Long externalAccountId) {
         return externalAccountRepository.findById(externalAccountId)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu.")))
+                .switchIfEmpty(Mono.error(new GoogleDriveNotConnectedException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu.")))
                 .flatMap(account -> {
                     long now = System.currentTimeMillis();
                     // Jika token kadaluarsa atau tersisa kurang dari 5 menit, lakukan refresh
@@ -52,7 +53,7 @@ public class GoogleDriveClient {
 
     private Mono<String> refreshAccessToken(ExternalAccount account) {
         if (account.getRefreshToken() == null) {
-            return Mono.error(new IllegalStateException("Kredensial Google Refresh Token tidak ditemukan. Silakan hubungkan ulang akun Google Anda."));
+            return Mono.error(new GoogleDriveNotConnectedException("Kredensial Google Refresh Token tidak ditemukan. Silakan hubungkan ulang akun Google Anda."));
         }
         return webClient.post()
                 .uri("https://oauth2.googleapis.com/token")

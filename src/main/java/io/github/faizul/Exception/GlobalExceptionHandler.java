@@ -15,6 +15,8 @@ import java.util.NoSuchElementException;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 
 @RestControllerAdvice
 @Slf4j
@@ -74,6 +76,34 @@ public class GlobalExceptionHandler {
                 .build();
 
         return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse));
+    }
+
+    @ExceptionHandler(GoogleDriveNotConnectedException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleGoogleDriveNotConnectedException(GoogleDriveNotConnectedException ex, ServerWebExchange exchange) {
+        log.warn("GoogleDriveNotConnectedException pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error(HttpStatus.UNAUTHORIZED.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(exchange.getRequest().getPath().value())
+                .build();
+
+        return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse));
+    }
+
+    @ExceptionHandler({WebClientResponseException.class, WebClientRequestException.class})
+    public Mono<ResponseEntity<ErrorResponse>> handleFailedDependencyExceptions(Exception ex, ServerWebExchange exchange) {
+        log.error("Failed Dependency Exception pada request {}: {}", exchange.getRequest().getPath().value(), ex.getMessage(), ex);
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.FAILED_DEPENDENCY.value())
+                .error(HttpStatus.FAILED_DEPENDENCY.getReasonPhrase())
+                .message("Gagal berkomunikasi dengan layanan eksternal (Google Drive API). Silakan hubungkan ulang atau coba lagi nanti.")
+                .path(exchange.getRequest().getPath().value())
+                .build();
+
+        return Mono.just(ResponseEntity.status(HttpStatus.FAILED_DEPENDENCY).body(errorResponse));
     }
 
     @ExceptionHandler(Exception.class)

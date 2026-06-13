@@ -46,7 +46,7 @@ public class AuthService {
                             .verified(false)
                             .build();
 
-                    String emailSubject = "OTP Verifikasi Registrasi - VPS Personal Cloud";
+                    String emailSubject = "OTP Verifikasi Registrasi - Horizon Cloud";
                     String emailBody = String.format(
                             "Halo %s,\n\n" +
                             "Terima kasih telah mendaftar di Premium VPS Personal Cloud Storage.\n" +
@@ -116,7 +116,7 @@ public class AuthService {
                             .verified(false)
                             .build();
 
-                    String emailSubject = "OTP Pemulihan Kata Sandi - VPS Personal Cloud";
+                    String emailSubject = "OTP Pemulihan Kata Sandi - Horizon Cloud";
                     String emailBody = String.format(
                             "Halo %s,\n\n" +
                             "Kami menerima permintaan pemulihan kata sandi untuk akun Anda.\n" +

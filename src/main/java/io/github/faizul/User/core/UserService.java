@@ -28,6 +28,9 @@ public class UserService {
     public Mono<UserDto> createUser(User user){
         String hashedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(hashedPassword);
+        if (user.getStorageQuota() == null) {
+            user.setStorageQuota(1073741824L);
+        }
 
         return userRepository.existsByEmail(user.getEmail())
             .flatMap(exist -> {

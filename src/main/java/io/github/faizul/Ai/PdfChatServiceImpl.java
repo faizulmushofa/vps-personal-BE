@@ -36,9 +36,6 @@ public class PdfChatServiceImpl implements PdfChatService {
                 })
                 .subscribeOn(aiScheduler)
                 .map(AiResponse::new)
-                .onErrorResume(Exception.class, e -> {
-                    log.error("Gagal melakukan chat PDF untuk fileId: {}", fileId, e);
-                    return Mono.just(new AiResponse("Gagal melakukan chat PDF karena masalah teknis."));
-                });
+                .doOnError(e -> log.error("Gagal melakukan chat PDF untuk fileId: {}", fileId, e));
     }
 }

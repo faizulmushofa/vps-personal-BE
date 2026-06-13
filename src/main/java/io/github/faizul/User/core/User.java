@@ -40,7 +40,8 @@ public class User {
     private LocalDateTime updatedAt;
 
     @Column("storage_quota")
-    private Long storageQuota;
+    @Builder.Default
+    private Long storageQuota = 1073741824L;
 
     @Column("full_name")
     private String fullName;

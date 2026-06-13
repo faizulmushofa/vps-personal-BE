@@ -33,10 +33,7 @@ public class AiServiceImpl implements AiService {
         )
                 .subscribeOn(aiScheduler)
                 .map(AiResponse::new)
-                .onErrorResume(Exception.class, e -> {
-                    log.error("Gagal memproses summary", e);
-                    return Mono.just(new AiResponse("Gagal menghasilkan ringkasan karena masalah teknis."));
-                });
+                .doOnError(e -> log.error("Gagal memproses summary", e));
     }
 
     @Override
@@ -56,9 +53,6 @@ public class AiServiceImpl implements AiService {
                         .flatMap(summaryText -> cacheService.cacheSummary(fileId, summaryText))
                         .map(AiResponse::new)
                 ))
-                .onErrorResume(Exception.class, e -> {
-                    log.error("Gagal memproses summary PDF untuk fileId: {}", fileId, e);
-                    return Mono.just(new AiResponse("Gagal menghasilkan ringkasan PDF karena masalah teknis."));
-                });
+                .doOnError(e -> log.error("Gagal memproses summary PDF untuk fileId: {}", fileId, e));
     }
 }
