@@ -10,7 +10,7 @@ public class CookieFactory {
                 .httpOnly(true)
                 .secure(true)
                 .path("/")
-                .sameSite("Strict")
+                .sameSite("None")
                 .maxAge(Duration.ofDays(7))
                 .build();
     }
@@ -20,7 +20,7 @@ public class CookieFactory {
                 .httpOnly(true)
                 .secure(true)
                 .path("/")
-                .sameSite("Strict")
+                .sameSite("None")
                 .maxAge(Duration.ofMinutes(15))
                 .build();
     }
