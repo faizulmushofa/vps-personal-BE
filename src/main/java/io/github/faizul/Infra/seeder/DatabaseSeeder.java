@@ -11,6 +11,7 @@ import io.github.faizul.setting.AppSetting;
 import io.github.faizul.setting.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,12 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final DatabaseClient databaseClient;
     private final AppSettingRepository appSettingRepository;
+
+    @Value("${app.seed.admin-password:AdminSecurePass123!}")
+    private String adminSeedPassword;
+
+    @Value("${app.seed.user-password:UserSecurePass123!}")
+    private String userSeedPassword;
 
     @Override
     public void run(String... args) throws Exception {
@@ -82,17 +89,19 @@ public class DatabaseSeeder implements CommandLineRunner {
     private Mono<Void> seedUsers() {
         Mono<User> seedAdmin = userRepository.findByEmail("admin@mail.com")
                 .flatMap(existingAdmin -> {
-                    log.info("Admin user found. Ensuring password is 'password' and user is active...");
-                    existingAdmin.setPassword(passwordEncoder.encode("password"));
-                    existingAdmin.setIsActive(true);
-                    return userRepository.save(existingAdmin);
+                    log.info("Admin user already exists. Ensuring user is active...");
+                    if (!Boolean.TRUE.equals(existingAdmin.getIsActive())) {
+                        existingAdmin.setIsActive(true);
+                        return userRepository.save(existingAdmin);
+                    }
+                    return Mono.just(existingAdmin);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("Admin user not found. Seeding admin user...");
                     User admin = User.builder()
                             .username("admin")
                             .email("admin@mail.com")
-                            .password(passwordEncoder.encode("password"))
+                            .password(passwordEncoder.encode(adminSeedPassword))
                             .isActive(true)
                             .build();
 
@@ -108,17 +117,19 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         Mono<User> seedRegularUser = userRepository.findByEmail("user@mail.com")
                 .flatMap(existingUser -> {
-                    log.info("Regular user found. Ensuring password is 'password' and user is active...");
-                    existingUser.setPassword(passwordEncoder.encode("password"));
-                    existingUser.setIsActive(true);
-                    return userRepository.save(existingUser);
+                    log.info("Regular user already exists. Ensuring user is active...");
+                    if (!Boolean.TRUE.equals(existingUser.getIsActive())) {
+                        existingUser.setIsActive(true);
+                        return userRepository.save(existingUser);
+                    }
+                    return Mono.just(existingUser);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("Regular user not found. Seeding regular user...");
                     User user = User.builder()
                             .username("user")
                             .email("user@mail.com")
-                            .password(passwordEncoder.encode("password"))
+                            .password(passwordEncoder.encode(userSeedPassword))
                             .isActive(true)
                             .build();
 
