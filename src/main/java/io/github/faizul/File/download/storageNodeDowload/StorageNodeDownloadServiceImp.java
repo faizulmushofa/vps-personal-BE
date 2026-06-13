@@ -86,6 +86,7 @@ public class StorageNodeDownloadServiceImp implements DownloadService {
                             return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunduh berkas ini"));
                         }
                         return downloadSessionRepository.findFirstByFileIdOrderByCreatedAtDesc(fileId)
+                                .filter(session -> session.getStatus() == FileStatus.INIT || session.getStatus() == FileStatus.STREAMING)
                                 .switchIfEmpty(Mono.defer(() -> {
                                     UUID sessionId = UUID.randomUUID();
                                     DownloadSession session = DownloadSession.builder()

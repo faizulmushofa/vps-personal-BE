@@ -43,7 +43,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                 .flatMap(userId -> fileRepository.findById(fileId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
-                            if (!"STORAGE_NODE".equals(file.getProvider())) {
+                            if (!isStorageNode(file.getProvider())) {
                                 return Mono.error(new IllegalArgumentException("Hanya berkas dari provider STORAGE_NODE yang dapat dibagikan melalui layanan ini"));
                             }
                             if (!file.getUserId().equals(userId)) {
@@ -141,7 +141,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                 .flatMap(userId -> fileRepository.findById(fileId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
-                            if (!"STORAGE_NODE".equals(file.getProvider())) {
+                            if (!isStorageNode(file.getProvider())) {
                                 return Mono.error(new IllegalArgumentException("Hanya berkas dari provider STORAGE_NODE yang dapat dibatalkan pembagiannya melalui layanan ini"));
                             }
                             if (!file.getUserId().equals(userId) && !targetUserId.equals(userId)) {
@@ -159,7 +159,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                         .flatMap(shared -> fileRepository.findById(shared.getFileId())
                                 .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                                 .flatMap(file -> {
-                                    if (!"STORAGE_NODE".equals(file.getProvider())) {
+                                    if (!isStorageNode(file.getProvider())) {
                                         return Mono.error(new IllegalArgumentException("Hanya berkas dari provider STORAGE_NODE yang dapat dibatalkan pembagiannya melalui layanan ini"));
                                     }
                                     if (!file.getUserId().equals(userId) && !userId.equals(shared.getUserId())) {
@@ -180,7 +180,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                 return Mono.empty();
                             }
                             return fileRepository.findById(shared.getFileId())
-                                    .filter(file -> "STORAGE_NODE".equals(file.getProvider()))
+                                    .filter(file -> isStorageNode(file.getProvider()))
                                     .flatMap(file -> userRepository.findById(file.getUserId())
                                             .map(owner -> new FileResponse(
                                                     file.getId(),
@@ -210,7 +210,7 @@ public class StorageNodeShareServiceImp implements ShareService {
         return fileRepository.findById(fileId)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
-                    if (!"STORAGE_NODE".equals(file.getProvider())) {
+                    if (!isStorageNode(file.getProvider())) {
                         return Mono.just(false);
                     }
                     if (file.getUserId().equals(userId)) {
@@ -231,7 +231,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                         return Mono.error(new AccessDeniedException("Tautan pembagian telah kadaluarsa"));
                     }
                     return fileRepository.findById(shared.getFileId())
-                            .filter(file -> "STORAGE_NODE".equals(file.getProvider()))
+                            .filter(file -> isStorageNode(file.getProvider()))
                             .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                             .flatMap(file -> userRepository.findById(file.getUserId())
                                     .map(owner -> new FileResponse(
@@ -265,7 +265,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                         return Flux.error(new AccessDeniedException("Tautan pembagian telah kadaluarsa"));
                     }
                     return fileRepository.findById(shared.getFileId())
-                            .filter(file -> "STORAGE_NODE".equals(file.getProvider()))
+                            .filter(file -> isStorageNode(file.getProvider()))
                             .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                             .flatMapMany(file -> downloadStorageService.downloadFile(file.getUserId(), file.getId())
                                     .map(chunk -> chunk.data()));
@@ -276,7 +276,7 @@ public class StorageNodeShareServiceImp implements ShareService {
     public Flux<io.github.faizul.File.dtos.SharedByMeResponse> getSharedByMe() {
         return currentUserContext.getUserId()
                 .flatMapMany(userId -> fileRepository.findByUserId(userId)
-                        .filter(file -> "STORAGE_NODE".equals(file.getProvider()))
+                        .filter(file -> isStorageNode(file.getProvider()))
                         .flatMap(file -> fileSharedRepository.findByFileId(file.getId())
                                 .flatMap(shared -> {
                                     if (Boolean.TRUE.equals(shared.getIsPublic())) {
@@ -325,5 +325,9 @@ public class StorageNodeShareServiceImp implements ShareService {
                                 })
                         )
                 );
+    }
+
+    private boolean isStorageNode(String provider) {
+        return provider == null || "STORAGE_NODE".equalsIgnoreCase(provider);
     }
 }
