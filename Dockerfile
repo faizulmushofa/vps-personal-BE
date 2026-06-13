@@ -20,7 +20,7 @@ COPY src src
 
 # Single-threaded build with aggressive memory limit
 ENV MAVEN_OPTS="-Xmx512m"
-RUN ./mvnw clean package -DskipTests -B -T 1C
+RUN ./mvnw clean package -Dmaven.test.skip=true -B -T 1C
 
 # Stage 3: Runtime (ultra-minimal for 1GB VPS)
 FROM eclipse-temurin:21-jre-alpine
