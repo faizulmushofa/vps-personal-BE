@@ -52,28 +52,26 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private Mono<Void> seedUsers() {
-        return userRepository.count()
-                .flatMap(count -> {
-                    if (count == 0) {
-                        log.info("Seeding admin user...");
-                        User admin = User.builder()
-                                .username("admin")
-                                .email("admin@mail.com")
-                                .password(passwordEncoder.encode("zP8#mX9$wQ2!"))
-                                .isActive(true)
-                                .build();
+        return userRepository.findByEmail("admin@mail.com")
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("Admin user not found. Seeding admin user...");
+                    User admin = User.builder()
+                            .username("admin")
+                            .email("admin@mail.com")
+                            .password(passwordEncoder.encode("zP8#mX9$wQ2!"))
+                            .isActive(true)
+                            .build();
 
-                        return userRepository.save(admin)
-                                .zipWith(roleRepository.findByName(Roles.ADMIN))
-                                .flatMap(tuple -> userRoleRepository.save(
-                                        UserRole.builder()
-                                                .userId(tuple.getT1().getId())
-                                                .roleId(tuple.getT2().getId())
-                                                .build()
-                                ));
-                    }
-                    return Mono.empty();
-                }).then();
+                    return userRepository.save(admin)
+                            .zipWith(roleRepository.findByName(Roles.ADMIN))
+                            .flatMap(tuple -> userRoleRepository.save(
+                                    UserRole.builder()
+                                            .userId(tuple.getT1().getId())
+                                            .roleId(tuple.getT2().getId())
+                                            .build()
+                            ).thenReturn(tuple.getT1()));
+                }))
+                .then();
     }
 
     private Mono<Void> createSchema() {
