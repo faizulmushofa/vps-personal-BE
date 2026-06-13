@@ -31,7 +31,9 @@ RUN apk add --no-cache curl
 
 COPY --from=builder /build/target/*.jar app.jar
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup -s /sbin/nologin
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup -s /sbin/nologin && \
+    mkdir -p /app/Data && \
+    chown -R appuser:appgroup /app
 USER appuser
 
 EXPOSE 8090
