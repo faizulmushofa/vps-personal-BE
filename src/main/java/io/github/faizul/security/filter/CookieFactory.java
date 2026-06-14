@@ -24,4 +24,15 @@ public class CookieFactory {
                 .maxAge(Duration.ofMinutes(15))
                 .build();
     }
+
+    public static ResponseCookie deleteRefreshTokenCookie() {
+        return ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .sameSite("None")
+                .maxAge(0)
+                .build();
+    }
 }
+

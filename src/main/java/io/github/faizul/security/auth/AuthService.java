@@ -100,10 +100,16 @@ public class AuthService {
                     }
                     String accessToken = jwtService.generateAccessToken(user);
 
-                    return jwtService.generateRefreshToken(user)
+                    return jwtService.revokeAllUserTokens(user.getId())
+                            .then(jwtService.generateRefreshToken(user))
                             .map(refreshToken -> new Response(accessToken, refreshToken));
                 });
     }
+
+    public Mono<Void> logout(String refreshToken) {
+        return jwtService.revokeToken(refreshToken);
+    }
+
 
     public Mono<RegisterResponse> requestForgotPassword(ForgotPasswordRequest request) {
         String emailNormalized = request.email().toLowerCase().trim();

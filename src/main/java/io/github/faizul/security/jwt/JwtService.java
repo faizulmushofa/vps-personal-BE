@@ -70,18 +70,33 @@ public class JwtService {
                             }
 
                             existing.setRevoked(true);
-
-                            RefreshToken newRefreshToken = RefreshToken.builder()
-                                    .userId(existing.getUserId())
-                                    .token(generateUID())
-                                    .createdAt(LocalDateTime.now())
-                                    .revoked(false)
-                                    .expiredAt(
-                                            LocalDateTime.now().plusDays(3)
-                                    ).build();
-                            return refreshTokenRepository.save(newRefreshToken);
+                            return refreshTokenRepository.save(existing)
+                                    .flatMap(saved -> {
+                                        RefreshToken newRefreshToken = RefreshToken.builder()
+                                                .userId(saved.getUserId())
+                                                .token(generateUID())
+                                                .createdAt(LocalDateTime.now())
+                                                .revoked(false)
+                                                .expiredAt(
+                                                        LocalDateTime.now().plusDays(3)
+                                                ).build();
+                                        return refreshTokenRepository.save(newRefreshToken);
+                                    });
                         });
     }
+
+    public Mono<Void> revokeToken(String token) {
+        return refreshTokenRepository.findByToken(token)
+                .flatMap(existing -> {
+                    existing.setRevoked(true);
+                    return refreshTokenRepository.save(existing);
+                }).then();
+    }
+
+    public Mono<Void> revokeAllUserTokens(Long userId) {
+        return refreshTokenRepository.revokeAllByUserId(userId);
+    }
+
 
 
     public String extractEmail(String token){

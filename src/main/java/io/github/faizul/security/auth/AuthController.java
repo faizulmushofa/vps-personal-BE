@@ -80,4 +80,18 @@ public class AuthController {
         return authService.resetPassword(request)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
+
+    @PostMapping("/logout")
+    public Mono<ResponseEntity<Void>> logout(
+            @CookieValue(value = "refreshToken", required = false) String refreshToken,
+            ServerHttpResponse response
+    ) {
+        response.addCookie(CookieFactory.deleteRefreshTokenCookie());
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            return Mono.just(ResponseEntity.ok().build());
+        }
+        return authService.logout(refreshToken)
+                .thenReturn(ResponseEntity.ok().build());
+    }
 }
+
