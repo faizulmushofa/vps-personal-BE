@@ -28,7 +28,6 @@ public class RefreshToken {
 
     private Boolean revoked;
 
-    @LastModifiedDate
     LocalDateTime expiredAt;
 
     @CreatedDate
