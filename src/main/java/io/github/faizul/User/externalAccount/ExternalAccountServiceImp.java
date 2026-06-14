@@ -20,6 +20,7 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     private final CurrentUserContext currentUserContext;
     private final FileRepository fileRepository;
     private final UserRepository userRepository;
+    private final io.github.faizul.security.jwt.EncryptionService encryptionService;
 
     @Override
     public Mono<String> getAuthUrl(String provider) {
@@ -59,11 +60,13 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
                                                 "Batas maksimal akun cloud terhubung (" + maxAccounts + ") telah tercapai untuk paket Anda."));
                                     }
                                     return providerFactory.getProvider(provider)
-                                            .exchangeCode(code)
-                                            .flatMap(account -> {
-                                                account.setUserId(userId);
-                                                return externalAccountRepository.save(account);
-                                            });
+                                             .exchangeCode(code)
+                                             .flatMap(account -> {
+                                                 account.setUserId(userId);
+                                                 account.setAccessToken(encryptionService.encrypt(account.getAccessToken()));
+                                                 account.setRefreshToken(encryptionService.encrypt(account.getRefreshToken()));
+                                                 return externalAccountRepository.save(account);
+                                             });
                                     })
                         )
                 )

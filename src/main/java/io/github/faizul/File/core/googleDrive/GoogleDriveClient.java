@@ -23,14 +23,17 @@ public class GoogleDriveClient {
     private final WebClient webClient;
     private final String clientId;
     private final String clientSecret;
+    private final io.github.faizul.security.jwt.EncryptionService encryptionService;
 
     public GoogleDriveClient(
             ExternalAccountRepository externalAccountRepository,
             @Value("${google.client-id:${GOOGLE_GLIENT_ID:}}") String clientId,
-            @Value("${google.client-secret:${GOOGLE_CLIENT_SECRET:}}") String clientSecret) {
+            @Value("${google.client-secret:${GOOGLE_CLIENT_SECRET:}}") String clientSecret,
+            io.github.faizul.security.jwt.EncryptionService encryptionService) {
         this.externalAccountRepository = externalAccountRepository;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.encryptionService = encryptionService;
         io.netty.resolver.DefaultAddressResolverGroup resolver = io.netty.resolver.DefaultAddressResolverGroup.INSTANCE;
         reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create().resolver(resolver);
         this.webClient = WebClient.builder()
@@ -42,6 +45,8 @@ public class GoogleDriveClient {
         return externalAccountRepository.findById(externalAccountId)
                 .switchIfEmpty(Mono.error(new GoogleDriveNotConnectedException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu.")))
                 .flatMap(account -> {
+                    account.setAccessToken(encryptionService.decrypt(account.getAccessToken()));
+                    account.setRefreshToken(encryptionService.decrypt(account.getRefreshToken()));
                     long now = System.currentTimeMillis();
                     // Jika token kadaluarsa atau tersisa kurang dari 5 menit, lakukan refresh
                     if (account.getExpiresAt() == null || now + 300000 > account.getExpiresAt()) {
@@ -69,7 +74,8 @@ public class GoogleDriveClient {
                     Number expiresIn = (Number) response.get("expires_in");
                     long expiresAt = System.currentTimeMillis() + (expiresIn != null ? expiresIn.longValue() * 1000 : 3600000L);
 
-                    account.setAccessToken(newAccessToken);
+                    account.setAccessToken(encryptionService.encrypt(newAccessToken));
+                    account.setRefreshToken(encryptionService.encrypt(account.getRefreshToken()));
                     account.setExpiresAt(expiresAt);
                     return externalAccountRepository.save(account)
                             .thenReturn(newAccessToken);
@@ -214,6 +220,16 @@ public class GoogleDriveClient {
     public Mono<String> uploadChunkResumable(Long externalAccountId, String uploadUrl, Path chunkPath, long start, long end, long totalSize) {
         return getValidAccessToken(externalAccountId)
                 .flatMap(token -> {
+                    try {
+                        java.net.URI uri = new java.net.URI(uploadUrl);
+                        String host = uri.getHost();
+                        if (host == null || (!host.endsWith("googleapis.com") && !host.endsWith("googleusercontent.com"))) {
+                            return Mono.error(new SecurityException("Akses diblokir: Host tujuan tidak diizinkan untuk menghindari SSRF."));
+                        }
+                    } catch (Exception e) {
+                        return Mono.error(new IllegalArgumentException("URL unggah tidak valid."));
+                    }
+
                     FileSystemResource resource = new FileSystemResource(chunkPath);
                     String contentRange = "bytes " + start + "-" + end + "/" + totalSize;
 

@@ -26,6 +26,41 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class AuthController {
     private final AuthService authService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    private boolean isValidOrigin(ServerWebExchange exchange) {
+        String origin = exchange.getRequest().getHeaders().getFirst("Origin");
+        String referer = exchange.getRequest().getHeaders().getFirst("Referer");
+        
+        String targetUrl = (origin != null && !origin.isBlank()) ? origin : referer;
+        if (targetUrl == null || targetUrl.isBlank()) {
+            return false;
+        }
+
+        try {
+            java.net.URI targetUri = new java.net.URI(targetUrl);
+            java.net.URI frontendUri = new java.net.URI(frontendUrl);
+            
+            String targetHost = targetUri.getHost();
+            String frontendHost = frontendUri.getHost();
+            
+            if (targetHost == null || frontendHost == null) {
+                return false;
+            }
+            
+            targetHost = targetHost.toLowerCase();
+            frontendHost = frontendHost.toLowerCase();
+            
+            String cleanTarget = targetHost.startsWith("www.") ? targetHost.substring(4) : targetHost;
+            String cleanFrontend = frontendHost.startsWith("www.") ? frontendHost.substring(4) : frontendHost;
+            
+            return cleanTarget.equals(cleanFrontend) || targetHost.endsWith("." + cleanFrontend);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     // ====== RATE LIMITER: In-memory per-IP tracker (OWASP A07) ======
     private static final int MAX_AUTH_ATTEMPTS = 10;    // max attempts per window
     private static final long WINDOW_MS = 15 * 60 * 1000L; // 15 minutes
@@ -100,8 +135,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public Mono<ResponseEntity<RefreshResponse>> refresh(
             @CookieValue(value = "refreshToken", required = false) String refreshToken,
-            ServerHttpResponse response
+            ServerHttpResponse response,
+            ServerWebExchange exchange
     ){
+        if (!isValidOrigin(exchange)) {
+            return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
+        }
         if (refreshToken == null || refreshToken.isEmpty()) {
             return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
         }
@@ -152,8 +191,12 @@ public class AuthController {
     @PostMapping("/logout")
     public Mono<ResponseEntity<Void>> logout(
             @CookieValue(value = "refreshToken", required = false) String refreshToken,
-            ServerHttpResponse response
+            ServerHttpResponse response,
+            ServerWebExchange exchange
     ) {
+        if (!isValidOrigin(exchange)) {
+            return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
+        }
         response.addCookie(CookieFactory.deleteRefreshTokenCookie());
         if (refreshToken == null || refreshToken.isEmpty()) {
             return Mono.just(ResponseEntity.ok().build());
