@@ -37,6 +37,9 @@ build/
 .env
 .DS_Store
 
+### Static Resources ###
+src/main/resources/static/
+
 ### Security ###
 *.p12
 *.jks

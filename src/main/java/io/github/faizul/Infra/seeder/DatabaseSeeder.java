@@ -31,10 +31,10 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final DatabaseClient databaseClient;
     private final AppSettingRepository appSettingRepository;
 
-    @Value("${app.seed.admin-password:AdminSecurePass123!}")
+    @Value("${app.seed.admin-password}")
     private String adminSeedPassword;
 
-    @Value("${app.seed.user-password:UserSecurePass123!}")
+    @Value("${app.seed.user-password}")
     private String userSeedPassword;
 
     @Override
