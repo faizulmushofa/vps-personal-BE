@@ -7,7 +7,7 @@ public record PlanLimits(
     long storageQuota,
     int maxCloudAccounts,
     int aiDailyLimit,
-    int migrationMonthlyLimit,
+    int migrationDailyLimit,
     long migrationMaxFileSize,
     int publicShareLimit,
     int privateShareLimit

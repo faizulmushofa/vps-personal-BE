@@ -5,7 +5,7 @@ public enum SubscriptionPlanType {
         .storageQuota(1073741824L)          // Kapasitas Penyimpanan: 1 GB
         .maxCloudAccounts(1)                // Maksimal Akun Cloud: 1
         .aiDailyLimit(5)                    // Batas AI per Hari: 5 request
-        .migrationMonthlyLimit(3)           // Batas Migrasi per Bulan: 3 kali
+        .migrationDailyLimit(3)             // Batas Migrasi per Hari: 3 kali
         .migrationMaxFileSize(268435456L)   // Maks. Ukuran File Migrasi: 256 MB
         .publicShareLimit(30)               // Batas Link Share Publik Aktif: 30 link
         .privateShareLimit(30)              // Batas Share Privat Aktif: 30 email
@@ -15,7 +15,7 @@ public enum SubscriptionPlanType {
         .storageQuota(16106127360L)         // Kapasitas Penyimpanan: 15 GB
         .maxCloudAccounts(5)                // Maksimal Akun Cloud: 5
         .aiDailyLimit(50)                   // Batas AI per Hari: 50 request
-        .migrationMonthlyLimit(-1)          // Batas Migrasi per Bulan: Tanpa Batas (-1)
+        .migrationDailyLimit(-1)            // Batas Migrasi per Hari: Tanpa Batas (-1)
         .migrationMaxFileSize(-1L)          // Maks. Ukuran File Migrasi: Tanpa Batas (-1)
         .publicShareLimit(-1)               // Batas Link Share Publik Aktif: Tanpa Batas (-1)
         .privateShareLimit(-1)              // Batas Share Privat Aktif: Tanpa Batas (-1)
@@ -25,8 +25,8 @@ public enum SubscriptionPlanType {
         .storageQuota(10737418240L)         // Kapasitas Penyimpanan: 10 GB
         .maxCloudAccounts(3)                // Maksimal Akun Cloud: 3
         .aiDailyLimit(30)                   // Batas AI per Hari: 30 request
-        .migrationMonthlyLimit(-1)          // Batas Migrasi per Bulan: Tanpa Batas (-1)
-        .migrationMaxFileSize(-1L)          // Maks. Ukuran File Migrasi: Tanpa Batas (-1)
+        .migrationDailyLimit(30)            // Batas Migrasi per Hari: 30 kali
+        .migrationMaxFileSize(10737418240L) // Maks. Ukuran File Migrasi: 10 GB
         .publicShareLimit(100)              // Batas Link Share Publik Aktif: 100 link
         .privateShareLimit(100)             // Batas Share Privat Aktif: 100 email
         .build());

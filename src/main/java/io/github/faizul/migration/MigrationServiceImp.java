@@ -55,15 +55,15 @@ public class MigrationServiceImp implements MigrationService {
                             return activeUserMono;
                         })
                         .flatMap(user -> {
-                            Instant thirtyDaysAgo = java.time.LocalDateTime.now().minusDays(30).atZone(ZoneId.systemDefault()).toInstant();
-                            return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, thirtyDaysAgo)
+                            Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
+                            return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
                                     .defaultIfEmpty(0L)
                                     .map(count -> {
                                         long maxFileSize = user.getSubscriptionPlan().getLimits().migrationMaxFileSize();
-                                        int monthlyLimit = user.getSubscriptionPlan().getLimits().migrationMonthlyLimit();
+                                        int dailyLimit = user.getSubscriptionPlan().getLimits().migrationDailyLimit();
                                         return Map.<String, Object>of(
                                                 "maxFileSizeBytes", maxFileSize,
-                                                "maxDailyLimit", monthlyLimit, // mapped as limit key for UI
+                                                "maxDailyLimit", dailyLimit, // mapped as limit key for UI
                                                 "todayTasksCount", count
                                         );
                                     });
@@ -119,17 +119,17 @@ public class MigrationServiceImp implements MigrationService {
                                     return Mono.error(new IllegalStateException("Ada proses migrasi lain yang sedang berjalan. Silakan tunggu hingga selesai."));
                                 }
 
-                                int monthlyLimit = user.getSubscriptionPlan().getLimits().migrationMonthlyLimit();
-                                if (monthlyLimit == -1) {
+                                int dailyLimit = user.getSubscriptionPlan().getLimits().migrationDailyLimit();
+                                if (dailyLimit == -1) {
                                     return Mono.empty(); // Unlimited
                                 }
 
-                                // Check monthly limit (last 30 days)
-                                Instant thirtyDaysAgo = java.time.LocalDateTime.now().minusDays(30).atZone(ZoneId.systemDefault()).toInstant();
-                                return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, thirtyDaysAgo)
+                                // Check daily limit (since midnight today)
+                                Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
+                                return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
                                         .flatMap(count -> {
-                                            if (count >= monthlyLimit) {
-                                                return Mono.error(new IllegalArgumentException("Batas bulanan migrasi Anda (" + monthlyLimit + " kali) telah tercapai. Harap upgrade paket Anda!"));
+                                            if (count >= dailyLimit) {
+                                                return Mono.error(new IllegalArgumentException("Batas harian migrasi Anda (" + dailyLimit + " kali) telah tercapai. Harap upgrade paket Anda!"));
                                             }
                                             return Mono.empty();
                                         });
