@@ -8,6 +8,7 @@ import io.github.faizul.infra.config.StorageConfig;
 import io.github.faizul.migration.*;
 import io.github.faizul.migration.dtos.MigrationRequest;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.activity.UserActivityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -39,6 +40,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
     private final StorageConfig storageConfig;
     private final DatabaseClient databaseClient;
     private final MigrationService migrationService;
+    private final UserActivityService userActivityService;
     private final Scheduler migrationScheduler;
 
     public StorageNodeMigrationServiceImp(
@@ -50,6 +52,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
             StorageConfig storageConfig,
             DatabaseClient databaseClient,
             MigrationService migrationService,
+            UserActivityService userActivityService,
             @Qualifier("migrationScheduler") Scheduler migrationScheduler) {
         this.migrationTaskRepository = migrationTaskRepository;
         this.fileRepository = fileRepository;
@@ -59,6 +62,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
         this.storageConfig = storageConfig;
         this.databaseClient = databaseClient;
         this.migrationService = migrationService;
+        this.userActivityService = userActivityService;
         this.migrationScheduler = migrationScheduler;
     }
 
@@ -126,6 +130,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                         .collectList()
                                         .flatMap(savedTasks -> {
                                             runMigrationTasksInBackground(savedTasks, validFiles)
+                                                    .delaySubscription(java.time.Duration.ofMillis(500))
                                                     .subscribeOn(migrationScheduler)
                                                     .subscribe(
                                                             success -> log.info("Batch Storage Node migration {} completed successfully", batchId),
@@ -146,10 +151,28 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
         return Flux.fromIterable(tasks)
                 .concatMap(task -> {
                     File file = fileMap.get(task.getFileId());
-                    return runSingleFileMigration(task, file)
-                            .onErrorResume(err -> {
-                                log.error("Error migrating file to Storage Node: " + file.getOriginalFileName(), err);
-                                return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage());
+                    return migrationTaskRepository.findById(task.getId())
+                            .flatMap(currentTask -> {
+                                if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                    log.info("Task {} already cancelled in queue, skipping.", task.getId());
+                                    return userActivityService.log(task.getUserId(), "MIGRATION_FAILED", 
+                                            "Migrasi berkas dibatalkan: " + file.getOriginalFileName(), null)
+                                            .then();
+                                }
+                                return runSingleFileMigration(task, file)
+                                        .then(Mono.defer(() -> userActivityService.log(task.getUserId(), "MIGRATION_SUCCESS", 
+                                                "Migrasi berkas berhasil: " + file.getOriginalFileName() + " dari " + file.getProvider() + " ke " + task.getTargetProvider(), null)))
+                                        .onErrorResume(err -> {
+                                            log.error("Error migrating file to Storage Node: " + file.getOriginalFileName(), err);
+                                            try {
+                                                org.springframework.util.FileSystemUtils.deleteRecursively(storageConfig.tempDir(task.getUserId(), task.getFileId()));
+                                            } catch (IOException e) {
+                                                log.warn("Failed to clean up temp dir on failure", e);
+                                            }
+                                            return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage())
+                                                    .then(Mono.defer(() -> userActivityService.log(task.getUserId(), "MIGRATION_FAILED", 
+                                                            "Migrasi berkas gagal: " + file.getOriginalFileName() + " (" + err.getMessage() + ")", null)));
+                                        });
                             });
                 })
                 .then();
@@ -183,27 +206,33 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
 
         return Flux.range(0, totalChunks)
                 .concatMap(i -> {
-                    long start = i * chunkSize;
-                    long end = Math.min(fileSize - 1, start + chunkSize - 1);
-                    Path tempFile = tempDir.resolve("chunk-" + i);
-
-                    Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(externalAccountId, googleFileId, start, end);
-                    
-                    return writeBytesToFile(dataRange, tempFile)
-                            .then(Mono.defer(() -> {
-                                return uploadStorageService.sendBatch(userId, fileId, i, i);
-                            }))
-                            .then(Mono.fromRunnable(() -> {
-                                try {
-                                    Files.deleteIfExists(tempFile);
-                                } catch (IOException e) {
-                                    log.warn("Failed to delete temp migration chunk {}", tempFile, e);
+                    return migrationTaskRepository.findById(task.getId())
+                            .flatMap(currentTask -> {
+                                if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                    return Mono.error(new IllegalStateException("Migrasi dibatalkan oleh pengguna."));
                                 }
-                            }))
-                            .then(Mono.defer(() -> {
-                                double progress = ((double) (i + 1) / totalChunks) * 100.0;
-                                return migrationService.updateTaskProgress(task.getId(), progress);
-                            }));
+                                long start = i * chunkSize;
+                                long end = Math.min(fileSize - 1, start + chunkSize - 1);
+                                Path tempFile = tempDir.resolve("chunk-" + i);
+
+                                Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(externalAccountId, googleFileId, start, end);
+                                
+                                return writeBytesToFile(dataRange, tempFile)
+                                        .then(Mono.defer(() -> {
+                                            return uploadStorageService.sendBatch(userId, fileId, i, i);
+                                        }))
+                                        .then(Mono.fromRunnable(() -> {
+                                            try {
+                                                Files.deleteIfExists(tempFile);
+                                            } catch (IOException e) {
+                                                log.warn("Failed to delete temp migration chunk {}", tempFile, e);
+                                            }
+                                        }))
+                                        .then(Mono.defer(() -> {
+                                            double progress = ((double) (i + 1) / totalChunks) * 100.0;
+                                            return migrationService.updateTaskProgress(task.getId(), progress);
+                                        }));
+                            });
                 })
                 .then(Mono.defer(() -> {
                     return uploadStorageService.sendFinalSignal(userId, fileId, totalChunks);

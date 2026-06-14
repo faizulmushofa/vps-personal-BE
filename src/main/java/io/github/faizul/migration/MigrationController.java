@@ -34,4 +34,19 @@ public class MigrationController {
     public Flux<MigrationTask> getTasks(@RequestParam(required = false) UUID batchId) {
         return migrationService.getTasks(batchId);
     }
+
+    @PostMapping("/tasks/{id}/cancel")
+    public Mono<ResponseEntity<Map<String, Object>>> cancelTask(@PathVariable UUID id) {
+        return migrationService.cancelTask(id)
+                .thenReturn(ResponseEntity.ok(Map.of("success", true)));
+    }
+
+    @PostMapping("/tasks/cancel")
+    public Mono<ResponseEntity<Map<String, Object>>> cancelTaskByBatchAndFile(
+            @RequestParam UUID batchId,
+            @RequestParam UUID fileId) {
+        return migrationService.cancelTaskByBatchIdAndFileId(batchId, fileId)
+                .thenReturn(ResponseEntity.ok(Map.of("success", true)));
+    }
 }
+

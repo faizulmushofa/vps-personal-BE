@@ -38,16 +38,26 @@ public class MigrationServiceImp implements MigrationService {
 
     @Override
     public Mono<Map<String, Object>> getMigrationConfig() {
+        Mono<Long> todayTasksCountMono = currentUserContext.getUserId()
+                .flatMap(userId -> {
+                    Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
+                    return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday);
+                })
+                .defaultIfEmpty(0L)
+                .onErrorReturn(0L);
+
         return Mono.zip(
                 appSettingRepository.findByKey("migration.max_file_size_bytes")
                         .map(setting -> Long.parseLong(setting.getValue()))
                         .defaultIfEmpty(DEFAULT_MAX_SIZE),
                 appSettingRepository.findByKey("migration.max_daily_limit")
                         .map(setting -> Integer.parseInt(setting.getValue()))
-                        .defaultIfEmpty(DEFAULT_DAILY_LIMIT)
+                        .defaultIfEmpty(DEFAULT_DAILY_LIMIT),
+                todayTasksCountMono
         ).map(tuple -> Map.of(
                 "maxFileSizeBytes", tuple.getT1(),
-                "maxDailyLimit", tuple.getT2()
+                "maxDailyLimit", tuple.getT2(),
+                "todayTasksCount", tuple.getT3()
         ));
     }
 
@@ -148,5 +158,39 @@ public class MigrationServiceImp implements MigrationService {
         }
         return currentUserContext.getUserId()
                 .flatMapMany(migrationTaskRepository::findByUserId);
+    }
+
+    @Override
+    public Mono<Void> cancelTask(UUID taskId) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> migrationTaskRepository.findById(taskId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Tugas migrasi tidak ditemukan.")))
+                        .flatMap(task -> {
+                            if (!task.getUserId().equals(userId)) {
+                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses ke tugas ini."));
+                            }
+                            if (task.getStatus() == MigrationStatus.SUCCESS || task.getStatus() == MigrationStatus.FAILED) {
+                                return Mono.empty();
+                            }
+                            return updateTaskStatus(taskId, MigrationStatus.FAILED, task.getProgress(), "Dibatalkan oleh pengguna");
+                        }));
+    }
+
+    @Override
+    public Mono<Void> cancelTaskByBatchIdAndFileId(UUID batchId, UUID fileId) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> migrationTaskRepository.findByBatchId(batchId)
+                        .filter(task -> task.getFileId().equals(fileId))
+                        .next()
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("Tugas migrasi tidak ditemukan.")))
+                        .flatMap(task -> {
+                            if (!task.getUserId().equals(userId)) {
+                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses ke tugas ini."));
+                            }
+                            if (task.getStatus() == MigrationStatus.SUCCESS || task.getStatus() == MigrationStatus.FAILED) {
+                                return Mono.empty();
+                            }
+                            return updateTaskStatus(task.getId(), MigrationStatus.FAILED, task.getProgress(), "Dibatalkan oleh pengguna");
+                        }));
     }
 }

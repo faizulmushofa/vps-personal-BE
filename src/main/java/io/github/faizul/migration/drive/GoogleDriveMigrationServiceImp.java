@@ -9,6 +9,7 @@ import io.github.faizul.infra.config.StorageConfig;
 import io.github.faizul.migration.*;
 import io.github.faizul.migration.dtos.MigrationRequest;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.activity.UserActivityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -39,6 +40,7 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
     private final CurrentUserContext currentUserContext;
     private final StorageConfig storageConfig;
     private final MigrationService migrationService;
+    private final UserActivityService userActivityService;
     private final Scheduler migrationScheduler;
 
     public GoogleDriveMigrationServiceImp(
@@ -50,6 +52,7 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
             CurrentUserContext currentUserContext,
             StorageConfig storageConfig,
             MigrationService migrationService,
+            UserActivityService userActivityService,
             @Qualifier("migrationScheduler") Scheduler migrationScheduler) {
         this.migrationTaskRepository = migrationTaskRepository;
         this.fileRepository = fileRepository;
@@ -59,6 +62,7 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
         this.currentUserContext = currentUserContext;
         this.storageConfig = storageConfig;
         this.migrationService = migrationService;
+        this.userActivityService = userActivityService;
         this.migrationScheduler = migrationScheduler;
     }
 
@@ -108,6 +112,7 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
                                         .collectList()
                                         .flatMap(savedTasks -> {
                                             runMigrationTasksInBackground(savedTasks, validFiles)
+                                                    .delaySubscription(java.time.Duration.ofMillis(500))
                                                     .subscribeOn(migrationScheduler)
                                                     .subscribe(
                                                             success -> log.info("Batch Google Drive migration {} completed successfully", batchId),
@@ -128,14 +133,33 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
         return Flux.fromIterable(tasks)
                 .concatMap(task -> {
                     File file = fileMap.get(task.getFileId());
-                    return runSingleFileMigration(task, file)
-                            .onErrorResume(err -> {
-                                log.error("Error migrating file to Google Drive: " + file.getOriginalFileName(), err);
-                                return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage());
+                    return migrationTaskRepository.findById(task.getId())
+                            .flatMap(currentTask -> {
+                                if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                    log.info("Task {} already cancelled in queue, skipping.", task.getId());
+                                    return userActivityService.log(task.getUserId(), "MIGRATION_FAILED", 
+                                            "Migrasi berkas dibatalkan: " + file.getOriginalFileName(), null)
+                                            .then();
+                                }
+                                return runSingleFileMigration(task, file)
+                                        .then(Mono.defer(() -> userActivityService.log(task.getUserId(), "MIGRATION_SUCCESS", 
+                                                "Migrasi berkas berhasil: " + file.getOriginalFileName() + " dari " + file.getProvider() + " ke " + task.getTargetProvider(), null)))
+                                        .onErrorResume(err -> {
+                                            log.error("Error migrating file to Google Drive: " + file.getOriginalFileName(), err);
+                                            try {
+                                                org.springframework.util.FileSystemUtils.deleteRecursively(storageConfig.tempDir(task.getUserId(), task.getFileId()));
+                                            } catch (IOException e) {
+                                                log.warn("Failed to clean up temp dir on failure", e);
+                                            }
+                                            return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage())
+                                                    .then(Mono.defer(() -> userActivityService.log(task.getUserId(), "MIGRATION_FAILED", 
+                                                            "Migrasi berkas gagal: " + file.getOriginalFileName() + " (" + err.getMessage() + ")", null)));
+                                        });
                             });
                 })
                 .then();
     }
+
 
     private Mono<Void> runSingleFileMigration(MigrationTask task, File file) {
         log.info("Starting GDrive migration for task {} (File: {})", task.getId(), file.getOriginalFileName());
@@ -171,29 +195,36 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
             return downloadStorageService.downloadFile(userId, fileId)
                     .index()
                     .concatMap(tuple -> {
-                        int index = tuple.getT1().intValue();
-                        byte[] data = tuple.getT2().data();
-                        
-                        long start = index * 1024 * 1024L; // gRPC chunks are 1MB
-                        long end = start + data.length - 1;
-                        
-                        Path tempFile = tempDir.resolve("chunk-grpc-" + index);
-
-                        return writeBytesToFile(Flux.just(data), tempFile)
-                                .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(targetAccountId, uploadUrl, tempFile, start, end, fileSize)))
-                                .flatMap(googleFileId -> {
-                                    try {
-                                        Files.deleteIfExists(tempFile);
-                                    } catch (IOException e) {
-                                        log.warn("Failed to delete temp chunk {}", tempFile, e);
+                        return migrationTaskRepository.findById(task.getId())
+                                .flatMap(currentTask -> {
+                                    if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                        return Mono.error(new IllegalStateException("Migrasi dibatalkan oleh pengguna."));
                                     }
-                                    double progress = ((double) (end + 1) / fileSize) * 100.0;
-                                    return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
-                                            .thenReturn(googleFileId);
+                                    int index = tuple.getT1().intValue();
+                                    byte[] data = tuple.getT2().data();
+                                    
+                                    long start = index * 1024 * 1024L; // gRPC chunks are 1MB
+                                    long end = start + data.length - 1;
+                                    
+                                    Path tempFile = tempDir.resolve("chunk-grpc-" + index);
+
+                                    return writeBytesToFile(Flux.just(data), tempFile)
+                                            .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(targetAccountId, uploadUrl, tempFile, start, end, fileSize)))
+                                            .flatMap(googleFileId -> {
+                                                try {
+                                                    Files.deleteIfExists(tempFile);
+                                                } catch (IOException e) {
+                                                    log.warn("Failed to delete temp chunk {}", tempFile, e);
+                                                }
+                                                double progress = ((double) (end + 1) / fileSize) * 100.0;
+                                                return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
+                                                        .thenReturn(googleFileId);
+                                            });
                                 });
                     })
                     .last()
-                    .flatMap(googleFileId -> {
+                    .flatMap(googleFileObj -> {
+                        String googleFileId = (String) googleFileObj;
                         if (googleFileId == null || googleFileId.isEmpty()) {
                             return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
                         }
@@ -254,27 +285,34 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
         ).flatMap(uploadUrl -> {
             return Flux.range(0, totalChunks)
                     .concatMap(i -> {
-                        long start = i * chunkSize;
-                        long end = Math.min(fileSize - 1, start + chunkSize - 1);
-                        Path tempFile = tempDir.resolve("chunk-gdgd-" + i);
-
-                        Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(srcAccountId, googleFileId, start, end);
-
-                        return writeBytesToFile(dataRange, tempFile)
-                                .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(destAccountId, uploadUrl, tempFile, start, end, fileSize)))
-                                .flatMap(newId -> {
-                                    try {
-                                        Files.deleteIfExists(tempFile);
-                                    } catch (IOException e) {
-                                        log.warn("Failed to delete temp chunk {}", tempFile, e);
+                        return migrationTaskRepository.findById(task.getId())
+                                .flatMap(currentTask -> {
+                                    if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                        return Mono.error(new IllegalStateException("Migrasi dibatalkan oleh pengguna."));
                                     }
-                                    double progress = ((double) (i + 1) / totalChunks) * 100.0;
-                                    return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
-                                            .thenReturn(newId);
+                                    long start = i * chunkSize;
+                                    long end = Math.min(fileSize - 1, start + chunkSize - 1);
+                                    Path tempFile = tempDir.resolve("chunk-gdgd-" + i);
+
+                                    Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(srcAccountId, googleFileId, start, end);
+
+                                    return writeBytesToFile(dataRange, tempFile)
+                                            .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(destAccountId, uploadUrl, tempFile, start, end, fileSize)))
+                                            .flatMap(newId -> {
+                                                try {
+                                                    Files.deleteIfExists(tempFile);
+                                                } catch (IOException e) {
+                                                    log.warn("Failed to delete temp chunk {}", tempFile, e);
+                                                }
+                                                double progress = ((double) (i + 1) / totalChunks) * 100.0;
+                                                return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
+                                                        .thenReturn(newId);
+                                            });
                                 });
                     })
                     .last()
-                    .flatMap(newGoogleFileId -> {
+                    .flatMap(newGoogleFileObj -> {
+                        String newGoogleFileId = (String) newGoogleFileObj;
                         if (newGoogleFileId == null || newGoogleFileId.isEmpty()) {
                             return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
                         }

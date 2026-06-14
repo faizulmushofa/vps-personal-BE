@@ -18,4 +18,7 @@ public interface MigrationService {
     Mono<List<File>> validateAndGetSourceFiles(List<UUID> fileIds, Long userId, Long maxFileSizeBytes, String targetProvider, Long targetExternalAccountId);
     Mono<Void> updateTaskProgress(UUID taskId, double progress);
     Mono<Void> updateTaskStatus(UUID taskId, MigrationStatus status, double progress, String errorMessage);
+    Mono<Void> cancelTask(UUID taskId);
+    Mono<Void> cancelTaskByBatchIdAndFileId(UUID batchId, UUID fileId);
 }
+
