@@ -1,12 +1,6 @@
 spring:
   application:
     name: vps-personal-backend
-  ssl:
-    bundle:
-      pem:
-        storage-node-bundle:
-          truststore:
-            certificate: "classpath:storage-node.crt"
   r2dbc:
     url: ${DATABASE_URL}
   sql:
@@ -22,7 +16,7 @@ spring:
           negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:tls}
           secure: ${GRPC_CLIENT_SECURE:true}
           ssl:
-            bundle: storage-node-bundle
+            bundle: trust-all-bundle
   ai:
     openai:
       api-key: ${OPEN_ROUTER_API_KEY}
