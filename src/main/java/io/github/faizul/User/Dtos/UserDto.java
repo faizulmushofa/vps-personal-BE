@@ -15,6 +15,8 @@ public record UserDto(
         List<String> roles,
         LocalDateTime createAt,
         LocalDateTime updateAt,
-        LocalDateTime deleteAt
+        LocalDateTime deleteAt,
+        String subscriptionTier,
+        LocalDateTime subscriptionExpiresAt
 ) {
 }

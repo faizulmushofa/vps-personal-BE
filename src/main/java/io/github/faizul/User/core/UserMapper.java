@@ -18,6 +18,8 @@ public class UserMapper {
                 .createdAt(userDto.createAt())
                 .deletedAt(userDto.deleteAt())
                 .updatedAt(userDto.updateAt())
+                .subscriptionTier(userDto.subscriptionTier())
+                .subscriptionExpiresAt(userDto.subscriptionExpiresAt())
                 .build();
     }
 
@@ -38,7 +40,9 @@ public class UserMapper {
                 roles,
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
-                user.getDeletedAt()
+                user.getDeletedAt(),
+                user.getSubscriptionTier(),
+                user.getSubscriptionExpiresAt()
         );
     }
 }

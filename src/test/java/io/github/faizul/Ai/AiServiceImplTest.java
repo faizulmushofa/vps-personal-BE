@@ -5,6 +5,9 @@ import io.github.faizul.Ai.dtos.AiRequest;
 import io.github.faizul.Ai.dtos.AiResponse;
 import io.github.faizul.Ai.fallback.AiFallbackService;
 import io.github.faizul.File.pdf.PdfService;
+import io.github.faizul.setting.AppSettingService;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.User.core.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,13 +32,30 @@ class AiServiceImplTest {
     @Mock private AiFallbackService aiFallbackService;
     @Mock private SummaryCacheService cacheService;
     @Mock private PdfService pdfService;
+    @Mock private AppSettingService appSettingService;
+    @Mock private AiQuotaAndLogService quotaAndLogService;
+    @Mock private CurrentUserContext currentUserContext;
 
     private AiServiceImpl aiService;
 
     @BeforeEach
     void setUp() {
         Scheduler testScheduler = Schedulers.immediate();
-        aiService = new AiServiceImpl(aiFallbackService, cacheService, pdfService, testScheduler);
+        aiService = new AiServiceImpl(
+                aiFallbackService, cacheService, pdfService, testScheduler,
+                appSettingService, quotaAndLogService, currentUserContext
+        );
+
+        User mockUser = new User();
+        mockUser.setId(1L);
+        mockUser.setSubscriptionTier("FREEMIUM");
+
+        lenient().when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        lenient().when(quotaAndLogService.checkAndIncrementQuota(anyLong())).thenReturn(Mono.just(mockUser));
+        lenient().when(appSettingService.getSetting(anyString(), anyString()))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(1)));
+        lenient().when(quotaAndLogService.logTokenUsage(anyLong(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(Mono.empty());
     }
 
     @Nested
@@ -49,7 +69,7 @@ class AiServiceImplTest {
 
             when(aiFallbackService.callWithFallback(
                     anyString(), anyString(), anyString(), anyString(), anyString(), eq("Some text to summarize")))
-                    .thenReturn(Mono.just("This is a summary"));
+                    .thenReturn(Mono.just(new io.github.faizul.Ai.client.AiGenerationResult("This is a summary", 10, 10)));
 
             StepVerifier.create(aiService.summary(request))
                     .assertNext(response -> assertThat(response.response()).isEqualTo("This is a summary"))
@@ -100,7 +120,7 @@ class AiServiceImplTest {
             when(pdfService.extractFile(fileId)).thenReturn(Mono.just("PDF text content"));
             when(aiFallbackService.callWithFallback(
                     anyString(), anyString(), anyString(), anyString(), anyString(), contains("PDF text content")))
-                    .thenReturn(Mono.just("Generated summary"));
+                    .thenReturn(Mono.just(new io.github.faizul.Ai.client.AiGenerationResult("Generated summary", 10, 10)));
             when(cacheService.cacheSummary(fileId, "Generated summary"))
                     .thenReturn(Mono.just("Generated summary"));
 

@@ -28,7 +28,7 @@ public class AiConnectionTest {
         try {
             groqService.generate("Say hello briefly", "Hello", "qwen/qwen3-next-80b-a3b-instruct")
                     .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
+                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
                     .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
                     .as(StepVerifier::create)
                     .expectNextCount(1)
@@ -42,7 +42,7 @@ public class AiConnectionTest {
         try {
             groqService.generate("Say hello briefly", "Hello", "meta-llama/llama-3.3-70b-instruct")
                     .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
+                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
                     .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
                     .as(StepVerifier::create)
                     .expectNextCount(1)
@@ -56,7 +56,7 @@ public class AiConnectionTest {
         try {
             geminiService.generate("Say hello briefly", "Hello", "gemini-2.5-flash")
                     .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
+                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
                     .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
                     .as(StepVerifier::create)
                     .expectNextCount(1)
@@ -70,7 +70,7 @@ public class AiConnectionTest {
         try {
             geminiService.generate("Say hello briefly", "Hello", "gemini-3.1-flash-lite")
                     .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
+                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
                     .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
                     .as(StepVerifier::create)
                     .expectNextCount(1)

@@ -42,25 +42,32 @@ public class MigrationServiceImp implements MigrationService {
     @Override
     public Mono<Map<String, Object>> getMigrationConfig() {
         return currentUserContext.getUserId()
-                .flatMap(userId -> {
-                    Mono<Long> todayTasksCountMono = migrationTaskRepository.countByUserIdAndCreatedAtAfter(
-                            userId, 
-                            LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
-                    ).defaultIfEmpty(0L).onErrorReturn(0L);
-
-                    Mono<User> userMono = userRepository.findById(userId);
-
-                    return Mono.zip(userMono, todayTasksCountMono)
-                            .map(tuple -> {
-                                User user = tuple.getT1();
-                                Long todayCount = tuple.getT2();
-                                return Map.<String, Object>of(
-                                        "maxFileSizeBytes", user.getMigrationMaxFileSize() != null ? user.getMigrationMaxFileSize() : DEFAULT_MAX_SIZE,
-                                        "maxDailyLimit", user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : DEFAULT_DAILY_LIMIT,
-                                        "todayTasksCount", todayCount
-                                );
-                            });
-                })
+                .flatMap(userId -> userRepository.findById(userId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("User tidak ditemukan.")))
+                        .flatMap(user -> {
+                            Mono<User> activeUserMono = Mono.just(user);
+                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                user.setSubscriptionTier("FREEMIUM");
+                                user.setStorageQuota(1073741824L);
+                                user.setSubscriptionExpiresAt(null);
+                                activeUserMono = userRepository.save(user);
+                            }
+                            return activeUserMono;
+                        })
+                        .flatMap(user -> {
+                            Instant thirtyDaysAgo = java.time.LocalDateTime.now().minusDays(30).atZone(ZoneId.systemDefault()).toInstant();
+                            return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, thirtyDaysAgo)
+                                    .defaultIfEmpty(0L)
+                                    .map(count -> {
+                                        long maxFileSize = user.getSubscriptionPlan().getLimits().migrationMaxFileSize();
+                                        int monthlyLimit = user.getSubscriptionPlan().getLimits().migrationMonthlyLimit();
+                                        return Map.<String, Object>of(
+                                                "maxFileSizeBytes", maxFileSize,
+                                                "maxDailyLimit", monthlyLimit, // mapped as limit key for UI
+                                                "todayTasksCount", count
+                                        );
+                                    });
+                        }))
                 .switchIfEmpty(Mono.defer(() -> {
                     return Mono.just(Map.<String, Object>of(
                             "maxFileSizeBytes", DEFAULT_MAX_SIZE,
@@ -83,24 +90,46 @@ public class MigrationServiceImp implements MigrationService {
 
     @Override
     public Mono<Void> validateCommonLimits(Long userId) {
-        // 1. Cek limit paralel (apakah ada migrasi sedang berjalan untuk user)
         return userRepository.findById(userId)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("User tidak ditemukan.")))
                 .flatMap(user -> {
-                    return migrationTaskRepository.existsByUserIdAndStatus(userId, MigrationStatus.RUNNING)
+                    Mono<User> activeUserMono = Mono.just(user);
+                    if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                        user.setSubscriptionTier("FREEMIUM");
+                        user.setStorageQuota(1073741824L);
+                        user.setSubscriptionExpiresAt(null);
+                        activeUserMono = userRepository.save(user);
+                    }
+                    return activeUserMono;
+                })
+                .flatMap(user -> {
+                    // Check if current user is over-quota
+                    return fileRepository.calculateUsedStorageByUserId(userId)
+                            .defaultIfEmpty(0L)
+                            .flatMap(usedStorage -> {
+                                long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                if (usedStorage > quota) {
+                                    return Mono.error(new IllegalArgumentException("Kapasitas penyimpanan Anda penuh. Harap upgrade paket Anda untuk menggunakan fitur migrasi."));
+                                }
+                                return Mono.empty();
+                            })
+                            .then(migrationTaskRepository.existsByUserIdAndStatus(userId, MigrationStatus.RUNNING))
                             .flatMap(hasActive -> {
                                 if (hasActive) {
                                     return Mono.error(new IllegalStateException("Ada proses migrasi lain yang sedang berjalan. Silakan tunggu hingga selesai."));
                                 }
 
-                                int maxLimit = user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : DEFAULT_DAILY_LIMIT;
+                                int monthlyLimit = user.getSubscriptionPlan().getLimits().migrationMonthlyLimit();
+                                if (monthlyLimit == -1) {
+                                    return Mono.empty(); // Unlimited
+                                }
 
-                                // 2. Cek batas harian (midnight boundary)
-                                Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
-                                return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
-                                        .flatMap(dailyCount -> {
-                                            if (dailyCount >= maxLimit) {
-                                                return Mono.error(new IllegalArgumentException("Batas harian migrasi terlampaui (Maksimal " + maxLimit + " kali migrasi per hari)."));
+                                // Check monthly limit (last 30 days)
+                                Instant thirtyDaysAgo = java.time.LocalDateTime.now().minusDays(30).atZone(ZoneId.systemDefault()).toInstant();
+                                return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, thirtyDaysAgo)
+                                        .flatMap(count -> {
+                                            if (count >= monthlyLimit) {
+                                                return Mono.error(new IllegalArgumentException("Batas bulanan migrasi Anda (" + monthlyLimit + " kali) telah tercapai. Harap upgrade paket Anda!"));
                                             }
                                             return Mono.empty();
                                         });
@@ -115,6 +144,7 @@ public class MigrationServiceImp implements MigrationService {
             Long maxFileSizeBytes, 
             String targetProvider, 
             Long targetExternalAccountId) {
+        long finalMaxFileSizeBytes = maxFileSizeBytes == -1L ? Long.MAX_VALUE : maxFileSizeBytes;
         return Flux.fromIterable(fileIds)
                 .flatMap(fileId -> fileRepository.findById(fileId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan: " + fileId)))
@@ -132,8 +162,8 @@ public class MigrationServiceImp implements MigrationService {
                             }
 
                             // Validasi file size
-                            if (file.getSize() > maxFileSizeBytes) {
-                                return Mono.error(new IllegalArgumentException("Berkas " + file.getOriginalFileName() + " melebihi batas ukuran migrasi premium (" + (maxFileSizeBytes / 1024 / 1024) + " MB)."));
+                            if (file.getSize() > finalMaxFileSizeBytes) {
+                                return Mono.error(new IllegalArgumentException("Berkas " + file.getOriginalFileName() + " melebihi batas ukuran migrasi paket Anda (" + (finalMaxFileSizeBytes / 1024 / 1024) + " MB)."));
                             }
 
                             return Mono.just(file);

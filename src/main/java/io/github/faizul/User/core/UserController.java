@@ -4,6 +4,8 @@ import io.github.faizul.User.dtos.UserDto;
 import io.github.faizul.User.dtos.UpdateProfileRequest;
 import io.github.faizul.User.dtos.UpdatePasswordRequest;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.User.subscription.SubscriptionRequest;
+import io.github.faizul.User.subscription.SubscriptionRequestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,22 @@ public class UserController {
 
     private final UserService userService;
     private final CurrentUserContext currentUserContext;
+    private final SubscriptionRequestService subscriptionRequestService;
+
+    @PostMapping("/me/subscription-request")
+    public Mono<ResponseEntity<SubscriptionRequest>> createSubscriptionRequest(@RequestParam String tier) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> subscriptionRequestService.createRequest(userId, tier))
+                .map(req -> ResponseEntity.status(HttpStatus.CREATED).body(req));
+    }
+
+    @GetMapping("/me/subscription-request")
+    public Mono<ResponseEntity<SubscriptionRequest>> getMySubscriptionRequest() {
+        return currentUserContext.getUserId()
+                .flatMap(subscriptionRequestService::getPendingRequest)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.noContent().build());
+    }
 
     @GetMapping("/me")
     public Mono<ResponseEntity<UserDto>> getMyProfile() {

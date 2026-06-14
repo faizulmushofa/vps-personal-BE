@@ -76,4 +76,15 @@ public class User {
 
     @Column("last_ai_request_date")
     private java.time.LocalDate lastAiRequestDate;
+
+    @Column("subscription_tier")
+    @Builder.Default
+    private String subscriptionTier = "FREEMIUM";
+
+    @Column("subscription_expires_at")
+    private LocalDateTime subscriptionExpiresAt;
+
+    public SubscriptionPlanType getSubscriptionPlan() {
+        return SubscriptionPlanType.getPlan(this.subscriptionTier);
+    }
 }

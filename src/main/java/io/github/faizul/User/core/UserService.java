@@ -67,9 +67,20 @@ public class UserService {
                 );
     }
 
+    public Mono<User> checkAndApplyDowngrade(User user) {
+        if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            user.setSubscriptionTier("FREEMIUM");
+            user.setStorageQuota(1073741824L); // 1 GB
+            user.setSubscriptionExpiresAt(null);
+            return userRepository.save(user);
+        }
+        return Mono.just(user);
+    }
+
     public Mono<UserDto> getUserById(Long id){
         return this.userRepository.findById(id)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Id Not Found")))
+                .flatMap(this::checkAndApplyDowngrade)
                 .flatMap(user -> userRoleRepository.findByUserId(user.getId())
                         .flatMap(userRole -> roleRepository.findById(userRole.getRoleId()))
                         .map(role -> role.getName().name())

@@ -6,6 +6,7 @@ import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.Storage.upload.UploadStorageService;
 import io.github.faizul.User.core.UserRepository;
+import io.github.faizul.User.core.User;
 import io.github.faizul.File.dtos.UserProfileResponse;
 import io.github.faizul.File.dtos.UserStorageResponse;
 import io.github.faizul.File.dtos.UserStorageSummary;
@@ -129,6 +130,16 @@ public class FileServiceImp implements FileService {
         public Mono<UserStorageResponse> getCurrentUserStorage() {
                 return currentUserContext.getUserId()
                                 .flatMap(userId -> userRepository.findById(userId)
+                                                .flatMap(user -> {
+                                                        Mono<User> activeUserMono = Mono.just(user);
+                                                        if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                                                user.setSubscriptionTier("FREEMIUM");
+                                                                user.setStorageQuota(1073741824L);
+                                                                user.setSubscriptionExpiresAt(null);
+                                                                activeUserMono = userRepository.save(user);
+                                                        }
+                                                        return activeUserMono;
+                                                })
                                                 .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
                                                                 .map(usedBytes -> new UserStorageResponse(
                                                                                 usedBytes,

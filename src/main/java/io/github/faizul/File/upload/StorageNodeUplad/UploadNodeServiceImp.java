@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import io.github.faizul.User.core.UserRepository;
+import io.github.faizul.User.core.User;
 
 @Service("storageNodeUploadService")
 @Transactional
@@ -56,10 +57,24 @@ public class UploadNodeServiceImp implements UploadService {
                 .flatMap(userId -> userRepository.findById(userId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
                         .flatMap(user -> {
+                            Mono<User> activeUserMono = Mono.just(user);
+                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                user.setSubscriptionTier("FREEMIUM");
+                                user.setStorageQuota(1073741824L);
+                                user.setSubscriptionExpiresAt(null);
+                                activeUserMono = userRepository.save(user);
+                            }
+                            return activeUserMono;
+                        })
+                        .flatMap(user -> {
                             Mono<Void> quotaCheck = fileRepository.calculateUsedStorageByUserId(userId)
                                     .flatMap(usedStorage -> {
                                         long totalSize = request.totalSize();
                                         long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                        if (usedStorage > quota) {
+                                            return Mono.error(new IllegalArgumentException(
+                                                    "Kapasitas penyimpanan Anda sudah melebihi batas. Harap upgrade paket Anda!"));
+                                        }
                                         if (usedStorage + totalSize > quota) {
                                             return Mono.error(new IllegalArgumentException(
                                                     "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));

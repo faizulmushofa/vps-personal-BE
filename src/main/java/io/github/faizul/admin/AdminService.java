@@ -2,6 +2,7 @@ package io.github.faizul.admin;
 
 import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.User.core.UserRepository;
+import io.github.faizul.User.core.User;
 import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
 import io.github.faizul.admin.dtos.TokenHistoryEntry;
@@ -35,30 +36,42 @@ public class AdminService {
     public Flux<AdminUserResponse> getAllUsers() {
         return userRepository.findAll()
                 .flatMap(user -> {
-                    Mono<Long> usedStorageMono = fileRepository.calculateUsedStorageByUserId(user.getId())
-                            .defaultIfEmpty(0L);
+                    Mono<User> checkDowngradeMono = Mono.just(user);
+                    if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(LocalDateTime.now())) {
+                        user.setSubscriptionTier("FREEMIUM");
+                        user.setStorageQuota(1073741824L);
+                        user.setSubscriptionExpiresAt(null);
+                        checkDowngradeMono = userRepository.save(user);
+                    }
 
-                    Mono<List<String>> rolesMono = userRoleRepository.findByUserId(user.getId())
-                            .flatMap(userRole -> roleRepository.findById(userRole.getRoleId()))
-                            .map(role -> role.getName().name())
-                            .collectList()
-                            .defaultIfEmpty(List.of("USER"));
+                    return checkDowngradeMono.flatMap(activeUser -> {
+                        Mono<Long> usedStorageMono = fileRepository.calculateUsedStorageByUserId(activeUser.getId())
+                                .defaultIfEmpty(0L);
 
-                    return Mono.zip(usedStorageMono, rolesMono)
-                            .map(tuple -> new AdminUserResponse(
-                                    user.getId(),
-                                    user.getUsername(),
-                                    user.getEmail(),
-                                    user.getFullName() != null ? user.getFullName() : "",
-                                    user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L,
-                                    tuple.getT1(),
-                                    user.getIsActive() != null ? user.getIsActive() : true,
-                                    user.getAiDailyLimit() != null ? user.getAiDailyLimit() : 5,
-                                    user.getDailyAiRequests() != null ? user.getDailyAiRequests() : 0,
-                                    tuple.getT2(),
-                                    user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : 3,
-                                    user.getMigrationMaxFileSize() != null ? user.getMigrationMaxFileSize() : 268435456L
-                            ));
+                        Mono<List<String>> rolesMono = userRoleRepository.findByUserId(activeUser.getId())
+                                .flatMap(userRole -> roleRepository.findById(userRole.getRoleId()))
+                                .map(role -> role.getName().name())
+                                .collectList()
+                                .defaultIfEmpty(List.of("USER"));
+
+                        return Mono.zip(usedStorageMono, rolesMono)
+                                .map(tuple -> new AdminUserResponse(
+                                        activeUser.getId(),
+                                        activeUser.getUsername(),
+                                        activeUser.getEmail(),
+                                        activeUser.getFullName() != null ? activeUser.getFullName() : "",
+                                        activeUser.getStorageQuota() != null ? activeUser.getStorageQuota() : 1073741824L,
+                                        tuple.getT1(),
+                                        activeUser.getIsActive() != null ? activeUser.getIsActive() : true,
+                                        activeUser.getAiDailyLimit() != null ? activeUser.getAiDailyLimit() : 5,
+                                        activeUser.getDailyAiRequests() != null ? activeUser.getDailyAiRequests() : 0,
+                                        tuple.getT2(),
+                                        activeUser.getMigrationDailyLimit() != null ? activeUser.getMigrationDailyLimit() : 3,
+                                        activeUser.getMigrationMaxFileSize() != null ? activeUser.getMigrationMaxFileSize() : 268435456L,
+                                        activeUser.getSubscriptionTier() != null ? activeUser.getSubscriptionTier() : "FREEMIUM",
+                                        activeUser.getSubscriptionExpiresAt()
+                                ));
+                    });
                 });
     }
 

@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import io.github.faizul.User.subscription.SubscriptionRequest;
+import io.github.faizul.User.subscription.SubscriptionRequestService;
 import java.util.Map;
 
 @RestController
@@ -27,6 +29,7 @@ public class AdminController {
     private final AppSettingService appSettingService;
     private final UserActivityService userActivityService;
     private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final SubscriptionRequestService subscriptionRequestService;
 
     @GetMapping("/settings")
     public Flux<AppSetting> getSettings() {
@@ -97,6 +100,41 @@ public class AdminController {
                         .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_MAX_SIZE", 
                                 "Mengubah batas ukuran migrasi maks user (ID: " + id + ") menjadi " + request.maxFileSize() + " bytes", exchange))
                         .then()
+                );
+    }
+
+    @GetMapping("/subscription-requests")
+    public Flux<SubscriptionRequest> getSubscriptionRequests() {
+        return subscriptionRequestService.getPendingRequests();
+    }
+
+    @PostMapping("/subscription-requests/{id}/approve")
+    public Mono<io.github.faizul.User.dtos.UserDto> approveSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.approveRequest(id)
+                        .flatMap(userDto -> userActivityService.log(adminId, "APPROVE_SUBSCRIPTION", 
+                                "Menyetujui permintaan upgrade paket pengguna (ID: " + userDto.id() + ", Tier: " + userDto.subscriptionTier() + ")", exchange)
+                                .thenReturn(userDto))
+                );
+    }
+
+    @PostMapping("/subscription-requests/{id}/reject")
+    public Mono<SubscriptionRequest> rejectSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.rejectRequest(id)
+                        .flatMap(req -> userActivityService.log(adminId, "REJECT_SUBSCRIPTION", 
+                                "Menolak permintaan upgrade paket pengguna (ID: " + req.getUserId() + ", Tier: " + req.getRequestedTier() + ")", exchange)
+                                .thenReturn(req))
+                );
+    }
+
+    @PutMapping("/users/{id}/subscription")
+    public Mono<io.github.faizul.User.dtos.UserDto> directUpdateSubscription(@PathVariable Long id, @RequestParam String tier, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.directUpdateSubscription(id, tier)
+                        .flatMap(userDto -> userActivityService.log(adminId, "DIRECT_UPDATE_SUBSCRIPTION", 
+                                "Mengubah paket langganan pengguna secara langsung (ID: " + id + ", Tier: " + tier + ")", exchange)
+                                .thenReturn(userDto))
                 );
     }
 

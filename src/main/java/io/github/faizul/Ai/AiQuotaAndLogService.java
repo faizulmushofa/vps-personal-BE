@@ -3,6 +3,7 @@ package io.github.faizul.Ai;
 import io.github.faizul.Ai.client.AiGenerationResult;
 import io.github.faizul.User.core.User;
 import io.github.faizul.User.core.UserRepository;
+import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.setting.AppSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,36 +22,48 @@ public class AiQuotaAndLogService {
     private final UserRepository userRepository;
     private final AppSettingService appSettingService;
     private final AiTokenLogRepository aiTokenLogRepository;
+    private final FileRepository fileRepository;
 
     public Mono<User> checkAndIncrementQuota(Long userId) {
         return userRepository.findById(userId)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Pengguna tidak ditemukan")))
                 .flatMap(user -> {
-                    LocalDate today = LocalDate.now();
-                    
-                    // Logika Auto-Refresh Harian
-                    if (user.getLastAiRequestDate() == null || !user.getLastAiRequestDate().isEqual(today)) {
-                        user.setDailyAiRequests(0);
-                        user.setLastAiRequestDate(today);
+                    Mono<User> activeUserMono = Mono.just(user);
+                    if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                        user.setSubscriptionTier("FREEMIUM");
+                        user.setStorageQuota(1073741824L);
+                        user.setSubscriptionExpiresAt(null);
+                        activeUserMono = userRepository.save(user);
                     }
+                    return activeUserMono;
+                })
+                .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
+                        .defaultIfEmpty(0L)
+                        .flatMap(usedStorage -> {
+                            long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                            if (usedStorage > quota) {
+                                return Mono.error(new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, 
+                                        "Kapasitas penyimpanan Anda penuh. Harap upgrade paket Anda untuk menggunakan fitur AI."));
+                            }
+                            
+                            LocalDate today = LocalDate.now();
+                            if (user.getLastAiRequestDate() == null || !user.getLastAiRequestDate().isEqual(today)) {
+                                user.setDailyAiRequests(0);
+                                user.setLastAiRequestDate(today);
+                            }
 
-                    // Tentukan limit harian
-                    Mono<Integer> dailyLimitMono = user.getAiDailyLimit() != null 
-                            ? Mono.just(user.getAiDailyLimit())
-                            : appSettingService.getSettingAsInt("ai.guardrail.user_daily_request_limit", 5);
+                            int limit = user.getSubscriptionPlan().getLimits().aiDailyLimit();
+                            if (user.getDailyAiRequests() >= limit) {
+                                log.warn("User {} telah mencapai batas request AI harian ({}/{})", userId, user.getDailyAiRequests(), limit);
+                                return Mono.error(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, 
+                                        "Batas penggunaan harian AI Anda (" + limit + " request) telah tercapai. Silakan coba lagi besok."));
+                            }
 
-                    return dailyLimitMono.flatMap(limit -> {
-                        if (user.getDailyAiRequests() >= limit) {
-                            log.warn("User {} telah mencapai batas request AI harian ({}/{})", userId, user.getDailyAiRequests(), limit);
-                            return Mono.error(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, 
-                                    "Batas penggunaan harian AI Anda (" + limit + " request) telah tercapai. Silakan coba lagi besok."));
-                        }
-
-                        user.setDailyAiRequests(user.getDailyAiRequests() + 1);
-                        return userRepository.save(user)
-                                .doOnSuccess(saved -> log.info("Berhasil menginkremen kuota AI user {}: {}/{}", userId, saved.getDailyAiRequests(), limit));
-                    });
-                });
+                            user.setDailyAiRequests(user.getDailyAiRequests() + 1);
+                            return userRepository.save(user)
+                                    .doOnSuccess(saved -> log.info("Berhasil menginkremen kuota AI user {}: {}/{}", userId, saved.getDailyAiRequests(), limit));
+                        })
+                );
     }
 
     public Mono<Void> logTokenUsage(Long userId, String activityType, String provider, String model, AiGenerationResult result) {

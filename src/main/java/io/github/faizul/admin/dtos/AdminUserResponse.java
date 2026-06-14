@@ -14,5 +14,7 @@ public record AdminUserResponse(
     Integer dailyAiRequests,
     List<String> roles,
     Integer migrationDailyLimit,
-    Long migrationMaxFileSize
+    Long migrationMaxFileSize,
+    String subscriptionTier,
+    java.time.LocalDateTime subscriptionExpiresAt
 ) {}

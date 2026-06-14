@@ -1,6 +1,7 @@
 package io.github.faizul.Ai.fallback;
 
 import io.github.faizul.Ai.client.AiClient;
+import io.github.faizul.Ai.client.AiGenerationResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,11 +29,7 @@ class AiFallbackServiceTest {
         fallbackClient = mock(AiClient.class);
 
         lenient().when(primaryClient.supports("groq")).thenReturn(true);
-        lenient().when(primaryClient.supports("gemini")).thenReturn(false);
-        lenient().when(primaryClient.supports(anyString())).thenReturn(false);
         lenient().when(fallbackClient.supports("gemini")).thenReturn(true);
-        lenient().when(fallbackClient.supports("groq")).thenReturn(false);
-        lenient().when(fallbackClient.supports(anyString())).thenReturn(false);
 
         aiFallbackService = new AiFallbackService(List.of(primaryClient, fallbackClient));
     }
@@ -41,13 +38,13 @@ class AiFallbackServiceTest {
     @DisplayName("should use primary provider when it succeeds")
     void callWithFallback_primarySuccess() {
         when(primaryClient.generate(anyString(), anyString(), eq("groq-model")))
-                .thenReturn(Mono.just("Primary response"));
+                .thenReturn(Mono.just(new AiGenerationResult("Primary response", 10, 10)));
 
         StepVerifier.create(aiFallbackService.callWithFallback(
                 "groq", "groq-model",
                 "gemini", "gemini-model",
                 "system prompt", "user message"))
-                .assertNext(response -> assertThat(response).isEqualTo("Primary response"))
+                .assertNext(response -> assertThat(response.content()).isEqualTo("Primary response"))
                 .verifyComplete();
 
         verify(fallbackClient, never()).generate(anyString(), anyString(), anyString());
@@ -59,13 +56,13 @@ class AiFallbackServiceTest {
         when(primaryClient.generate(anyString(), anyString(), eq("groq-model")))
                 .thenReturn(Mono.error(new RuntimeException("Primary timeout")));
         when(fallbackClient.generate(anyString(), anyString(), eq("gemini-model")))
-                .thenReturn(Mono.just("Fallback response"));
+                .thenReturn(Mono.just(new AiGenerationResult("Fallback response", 10, 10)));
 
         StepVerifier.create(aiFallbackService.callWithFallback(
                 "groq", "groq-model",
                 "gemini", "gemini-model",
                 "system prompt", "user message"))
-                .assertNext(response -> assertThat(response).isEqualTo("Fallback response"))
+                .assertNext(response -> assertThat(response.content()).isEqualTo("Fallback response"))
                 .verifyComplete();
 
         verify(primaryClient).generate(anyString(), anyString(), eq("groq-model"));

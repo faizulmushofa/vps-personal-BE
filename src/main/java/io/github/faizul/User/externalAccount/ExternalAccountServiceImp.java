@@ -4,6 +4,8 @@ import io.github.faizul.User.dtos.ExternalAccountDto;
 import io.github.faizul.User.externalAccount.ExternalProvider.ExternalProviderFactory;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.User.core.User;
+import io.github.faizul.User.core.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -17,6 +19,7 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     private final ExternalAccountRepository externalAccountRepository;
     private final CurrentUserContext currentUserContext;
     private final FileRepository fileRepository;
+    private final UserRepository userRepository;
 
     @Override
     public Mono<String> getAuthUrl(String provider) {
@@ -26,13 +29,44 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     @Override
     public Mono<Void> handleCallback(String provider, String code) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> providerFactory.getProvider(provider)
-                        .exchangeCode(code)
-                        .map(account -> {
-                            account.setUserId(userId);
-                            return account;
-                        }))
-                .flatMap(externalAccountRepository::save)
+                .flatMap(userId -> userRepository.findById(userId)
+                        .switchIfEmpty(Mono.error(new java.util.NoSuchElementException("User Not Found")))
+                        .flatMap(user -> {
+                            Mono<User> activeUserMono = Mono.just(user);
+                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                user.setSubscriptionTier("FREEMIUM");
+                                user.setStorageQuota(1073741824L);
+                                user.setSubscriptionExpiresAt(null);
+                                activeUserMono = userRepository.save(user);
+                            }
+                            return activeUserMono;
+                        })
+                        .flatMap(user -> fileRepository.calculateUsedStorageByUserId(userId)
+                                .defaultIfEmpty(0L)
+                                .flatMap(usedStorage -> {
+                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                    if (usedStorage > quota) {
+                                        return Mono.error(new IllegalArgumentException(
+                                                "Kapasitas penyimpanan Anda sudah melebihi batas. Fitur menghubungkan akun baru dinonaktifkan."));
+                                    }
+                                    return Mono.empty();
+                                })
+                                .then(externalAccountRepository.findAllByUserId(userId).collectList())
+                                .flatMap(accounts -> {
+                                    int maxAccounts = user.getSubscriptionPlan().getLimits().maxCloudAccounts();
+                                    if (accounts.size() >= maxAccounts) {
+                                        return Mono.error(new IllegalArgumentException(
+                                                "Batas maksimal akun cloud terhubung (" + maxAccounts + ") telah tercapai untuk paket Anda."));
+                                    }
+                                    return providerFactory.getProvider(provider)
+                                            .exchangeCode(code)
+                                            .flatMap(account -> {
+                                                account.setUserId(userId);
+                                                return externalAccountRepository.save(account);
+                                            });
+                                    })
+                        )
+                )
                 .then();
     }
 

@@ -69,8 +69,9 @@ class AuthServiceTest {
 
             UserDto createdDto = new UserDto(1L, "newuser", "new@example.com",
                     "New User", null, "081234567890", null, false, List.of("USER"),
-                    LocalDateTime.now(), null, null);
+                    LocalDateTime.now(), null, null, "FREEMIUM", null);
 
+            when(userRepository.findByEmail(anyString())).thenReturn(Mono.empty());
             when(userService.createUser(any(User.class))).thenReturn(Mono.just(createdDto));
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));

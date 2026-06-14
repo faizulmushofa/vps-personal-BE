@@ -4,6 +4,9 @@ import io.github.faizul.Ai.dtos.AiRequest;
 import io.github.faizul.Ai.dtos.AiResponse;
 import io.github.faizul.Ai.fallback.AiFallbackService;
 import io.github.faizul.File.pdf.PdfService;
+import io.github.faizul.setting.AppSettingService;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.User.core.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,13 +29,19 @@ class PdfChatServiceImplTest {
 
     @Mock private AiFallbackService aiFallbackService;
     @Mock private PdfService pdfService;
+    @Mock private AppSettingService appSettingService;
+    @Mock private AiQuotaAndLogService quotaAndLogService;
+    @Mock private CurrentUserContext currentUserContext;
 
     private PdfChatServiceImpl pdfChatService;
 
     @BeforeEach
     void setUp() {
         Scheduler testScheduler = Schedulers.immediate();
-        pdfChatService = new PdfChatServiceImpl(aiFallbackService, pdfService, testScheduler);
+        pdfChatService = new PdfChatServiceImpl(
+                aiFallbackService, pdfService, testScheduler,
+                appSettingService, quotaAndLogService, currentUserContext
+        );
     }
 
     @Test
@@ -40,12 +49,24 @@ class PdfChatServiceImplTest {
     void chatPdf_success() {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this document about?");
+        User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
 
+        when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(pdfService.extractFile(fileId)).thenReturn(Mono.just("This document describes cloud storage."));
+
+        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
+        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
+
+        io.github.faizul.Ai.client.AiGenerationResult mockResult = new io.github.faizul.Ai.client.AiGenerationResult("This document is about cloud storage systems.", 10, 10);
         when(aiFallbackService.callWithFallback(
                 anyString(), anyString(), anyString(), anyString(),
                 contains("cloud storage"), eq("What is this document about?")))
-                .thenReturn(Mono.just("This document is about cloud storage systems."));
+                .thenReturn(Mono.just(mockResult));
+        when(quotaAndLogService.logTokenUsage(eq(1L), eq("CHAT"), anyString(), anyString(), eq(mockResult)))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(pdfChatService.chatPdf(fileId, request))
                 .assertNext(response -> assertThat(response.response())
@@ -58,14 +79,16 @@ class PdfChatServiceImplTest {
     void chatPdf_extractionError() {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this about?");
+        User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
 
+        when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(pdfService.extractFile(fileId))
                 .thenReturn(Mono.error(new RuntimeException("Cannot access file")));
 
         StepVerifier.create(pdfChatService.chatPdf(fileId, request))
-                .assertNext(response -> assertThat(response.response())
-                        .contains("Gagal melakukan chat PDF"))
-                .verifyComplete();
+                .expectErrorMatches(t -> t.getMessage().contains("Cannot access file"))
+                .verify();
     }
 
     @Test
@@ -73,15 +96,23 @@ class PdfChatServiceImplTest {
     void chatPdf_aiError() {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("Summarize");
+        User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
 
+        when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(pdfService.extractFile(fileId)).thenReturn(Mono.just("Some text"));
+
+        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
+        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
+
         when(aiFallbackService.callWithFallback(
                 anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Mono.error(new RuntimeException("AI timeout")));
 
         StepVerifier.create(pdfChatService.chatPdf(fileId, request))
-                .assertNext(response -> assertThat(response.response())
-                        .contains("Gagal melakukan chat PDF"))
-                .verifyComplete();
+                .expectErrorMatches(t -> t.getMessage().contains("AI timeout"))
+                .verify();
     }
 }
