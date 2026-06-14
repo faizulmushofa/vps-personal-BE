@@ -13,8 +13,10 @@ spring:
       channels:
         storage-node:
           address: ${STORAGE_NODE_URL}
-          negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:plaintext}
-          secure: ${GRPC_CLIENT_SECURE:false}
+          negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:tls}
+          secure: ${GRPC_CLIENT_SECURE:true}
+          ssl:
+            bundle: trust-all-bundle
   ai:
     openai:
       api-key: ${OPEN_ROUTER_API_KEY}
