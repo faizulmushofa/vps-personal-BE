@@ -67,6 +67,16 @@ public class AuthController {
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
+    @PostMapping("/register/resend-otp")
+    public Mono<ResponseEntity<RegisterResponse>> resendRegistrationOtp(@RequestParam String email, ServerWebExchange exchange) {
+        if (isRateLimited(exchange)) {
+            return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
+        }
+        return authService.resendRegistrationOtp(email)
+                .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
+    }
+
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@Valid @RequestBody LoginRequest request, ServerHttpResponse response, ServerWebExchange exchange){
         if (isRateLimited(exchange)) {
