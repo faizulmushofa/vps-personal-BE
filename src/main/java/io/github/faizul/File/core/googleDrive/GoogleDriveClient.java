@@ -171,4 +171,69 @@ public class GoogleDriveClient {
                         })
                 );
     }
+
+    public Flux<byte[]> downloadFileRange(Long externalAccountId, String googleFileId, long start, long end) {
+        return getValidAccessToken(externalAccountId)
+                .flatMapMany(token -> webClient.get()
+                        .uri("https://www.googleapis.com/drive/v3/files/" + googleFileId + "?alt=media")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Range", "bytes=" + start + "-" + end)
+                        .header("Connection", "close")
+                        .retrieve()
+                        .bodyToFlux(byte[].class)
+                        .retryWhen(reactor.util.retry.Retry.backoff(3, java.time.Duration.ofMillis(200))
+                                .filter(throwable -> throwable instanceof reactor.netty.http.client.PrematureCloseException ||
+                                        (throwable instanceof org.springframework.web.reactive.function.client.WebClientRequestException &&
+                                         throwable.getCause() instanceof reactor.netty.http.client.PrematureCloseException)))
+                );
+    }
+
+    public Mono<String> initiateResumableUpload(Long externalAccountId, String fileName, String mimeType, long totalSize) {
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> webClient.post()
+                        .uri("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Upload-Content-Type", mimeType != null ? mimeType : "application/octet-stream")
+                        .header("X-Upload-Content-Length", String.valueOf(totalSize))
+                        .header("Content-Type", "application/json; charset=UTF-8")
+                        .bodyValue(Map.of("name", fileName))
+                        .exchangeToMono(response -> {
+                            if (response.statusCode().isError()) {
+                                return response.bodyToMono(String.class)
+                                        .flatMap(body -> Mono.error(new RuntimeException("Failed to initiate resumable upload: " + body)));
+                            }
+                            String location = response.headers().asHttpHeaders().getFirst("Location");
+                            if (location == null) {
+                                return Mono.error(new IllegalStateException("Failed to get Google Drive upload session location"));
+                            }
+                            return Mono.just(location);
+                        })
+                );
+    }
+
+    public Mono<String> uploadChunkResumable(Long externalAccountId, String uploadUrl, Path chunkPath, long start, long end, long totalSize) {
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> {
+                    FileSystemResource resource = new FileSystemResource(chunkPath);
+                    String contentRange = "bytes " + start + "-" + end + "/" + totalSize;
+
+                    return webClient.put()
+                            .uri(uploadUrl)
+                            .header("Authorization", "Bearer " + token)
+                            .header("Content-Range", contentRange)
+                            .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                            .bodyValue(resource)
+                            .exchangeToMono(res -> {
+                                if (res.statusCode().isError()) {
+                                    return res.bodyToMono(String.class)
+                                            .flatMap(body -> Mono.error(new RuntimeException("GDrive resumable chunk upload failed: " + body)));
+                                }
+                                if (res.statusCode().value() == 308) {
+                                    return Mono.just("");
+                                }
+                                return res.bodyToMono(Map.class)
+                                        .map(body -> (String) body.get("id"));
+                            });
+                });
+    }
 }

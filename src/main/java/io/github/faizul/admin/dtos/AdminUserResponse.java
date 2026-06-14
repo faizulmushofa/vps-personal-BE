@@ -1,4 +1,4 @@
-package io.github.faizul.admin;
+package io.github.faizul.admin.dtos;
 
 import java.util.List;
 

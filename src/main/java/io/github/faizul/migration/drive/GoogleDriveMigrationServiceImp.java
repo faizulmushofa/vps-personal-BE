@@ -1,0 +1,331 @@
+package io.github.faizul.migration.drive;
+
+import io.github.faizul.File.core.File;
+import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
+import io.github.faizul.Storage.download.DownloadStorageService;
+import io.github.faizul.Storage.upload.UploadStorageService;
+import io.github.faizul.infra.config.StorageConfig;
+import io.github.faizul.migration.*;
+import io.github.faizul.migration.dtos.MigrationRequest;
+import io.github.faizul.security.filter.CurrentUserContext;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.*;
+
+@Slf4j
+@Service
+@Transactional
+public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationService {
+
+    private final MigrationTaskRepository migrationTaskRepository;
+    private final FileRepository fileRepository;
+    private final GoogleDriveClient googleDriveClient;
+    private final UploadStorageService uploadStorageService;
+    private final DownloadStorageService downloadStorageService;
+    private final CurrentUserContext currentUserContext;
+    private final StorageConfig storageConfig;
+    private final MigrationService migrationService;
+    private final Scheduler migrationScheduler;
+
+    public GoogleDriveMigrationServiceImp(
+            MigrationTaskRepository migrationTaskRepository,
+            FileRepository fileRepository,
+            GoogleDriveClient googleDriveClient,
+            UploadStorageService uploadStorageService,
+            DownloadStorageService downloadStorageService,
+            CurrentUserContext currentUserContext,
+            StorageConfig storageConfig,
+            MigrationService migrationService,
+            @Qualifier("migrationScheduler") Scheduler migrationScheduler) {
+        this.migrationTaskRepository = migrationTaskRepository;
+        this.fileRepository = fileRepository;
+        this.googleDriveClient = googleDriveClient;
+        this.uploadStorageService = uploadStorageService;
+        this.downloadStorageService = downloadStorageService;
+        this.currentUserContext = currentUserContext;
+        this.storageConfig = storageConfig;
+        this.migrationService = migrationService;
+        this.migrationScheduler = migrationScheduler;
+    }
+
+    @Override
+    public Mono<UUID> startGoogleDriveMigration(MigrationRequest request) {
+        if (request.fileIds() == null || request.fileIds().isEmpty()) {
+            return Mono.error(new IllegalArgumentException("Daftar berkas migrasi tidak boleh kosong."));
+        }
+
+        UUID batchId = UUID.randomUUID();
+
+        return currentUserContext.getUserId()
+                .flatMap(userId -> {
+                    return migrationService.validateCommonLimits(userId)
+                            .then(migrationService.getMigrationConfig())
+                            .flatMap(configMap -> {
+                                Long maxFileSizeBytes = (Long) configMap.get("maxFileSizeBytes");
+                                return migrationService.validateAndGetSourceFiles(
+                                        request.fileIds(),
+                                        userId,
+                                        maxFileSizeBytes,
+                                        request.targetProvider(),
+                                        request.targetExternalAccountId()
+                                );
+                            })
+                            .flatMap(validFiles -> {
+                                List<MigrationTask> tasks = new ArrayList<>();
+                                for (File file : validFiles) {
+                                    tasks.add(MigrationTask.builder()
+                                            .id(UUID.randomUUID())
+                                            .batchId(batchId)
+                                            .userId(userId)
+                                            .fileId(file.getId())
+                                            .fileName(file.getOriginalFileName())
+                                            .sourceProvider(file.getProvider())
+                                            .targetProvider(request.targetProvider())
+                                            .targetExternalAccountId(request.targetExternalAccountId())
+                                            .deleteSource(request.deleteSource())
+                                            .status(MigrationStatus.PENDING)
+                                            .progress(0.0)
+                                            .createdAt(Instant.now())
+                                            .updatedAt(Instant.now())
+                                            .build());
+                                }
+
+                                return migrationTaskRepository.saveAll(tasks)
+                                        .collectList()
+                                        .flatMap(savedTasks -> {
+                                            runMigrationTasksInBackground(savedTasks, validFiles)
+                                                    .subscribeOn(migrationScheduler)
+                                                    .subscribe(
+                                                            success -> log.info("Batch Google Drive migration {} completed successfully", batchId),
+                                                            error -> log.error("Batch Google Drive migration " + batchId + " failed", error)
+                                                    );
+                                            return Mono.just(batchId);
+                                        });
+                            });
+                });
+    }
+
+    private Mono<Void> runMigrationTasksInBackground(List<MigrationTask> tasks, List<File> files) {
+        Map<UUID, File> fileMap = new HashMap<>();
+        for (File f : files) {
+            fileMap.put(f.getId(), f);
+        }
+
+        return Flux.fromIterable(tasks)
+                .concatMap(task -> {
+                    File file = fileMap.get(task.getFileId());
+                    return runSingleFileMigration(task, file)
+                            .onErrorResume(err -> {
+                                log.error("Error migrating file to Google Drive: " + file.getOriginalFileName(), err);
+                                return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage());
+                            });
+                })
+                .then();
+    }
+
+    private Mono<Void> runSingleFileMigration(MigrationTask task, File file) {
+        log.info("Starting GDrive migration for task {} (File: {})", task.getId(), file.getOriginalFileName());
+
+        return migrationService.updateTaskStatus(task.getId(), MigrationStatus.RUNNING, 0.0, null)
+                .then(Mono.defer(() -> {
+                    String src = file.getProvider();
+                    if ("STORAGE_NODE".equalsIgnoreCase(src)) {
+                        return migrateStorageNodeToGoogle(task, file);
+                    } else if ("GOOGLE_DRIVE".equalsIgnoreCase(src)) {
+                        return migrateGoogleToGoogle(task, file);
+                    } else {
+                        return Mono.error(new IllegalArgumentException("Kombinasi perpindahan dari " + src + " ke Google Drive tidak didukung."));
+                    }
+                }));
+    }
+
+    private Mono<Void> migrateStorageNodeToGoogle(MigrationTask task, File file) {
+        UUID fileId = file.getId();
+        Long userId = file.getUserId();
+        long fileSize = file.getSize();
+        String fileName = file.getOriginalFileName();
+        Long targetAccountId = task.getTargetExternalAccountId();
+
+        Path tempDir = storageConfig.tempDir(userId, fileId);
+
+        return googleDriveClient.initiateResumableUpload(
+                targetAccountId,
+                fileName,
+                detectMimeType(fileName),
+                fileSize
+        ).flatMap(uploadUrl -> {
+            return downloadStorageService.downloadFile(userId, fileId)
+                    .index()
+                    .concatMap(tuple -> {
+                        int index = tuple.getT1().intValue();
+                        byte[] data = tuple.getT2().data();
+                        
+                        long start = index * 1024 * 1024L; // gRPC chunks are 1MB
+                        long end = start + data.length - 1;
+                        
+                        Path tempFile = tempDir.resolve("chunk-grpc-" + index);
+
+                        return writeBytesToFile(Flux.just(data), tempFile)
+                                .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(targetAccountId, uploadUrl, tempFile, start, end, fileSize)))
+                                .flatMap(googleFileId -> {
+                                    try {
+                                        Files.deleteIfExists(tempFile);
+                                    } catch (IOException e) {
+                                        log.warn("Failed to delete temp chunk {}", tempFile, e);
+                                    }
+                                    double progress = ((double) (end + 1) / fileSize) * 100.0;
+                                    return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
+                                            .thenReturn(googleFileId);
+                                });
+                    })
+                    .last()
+                    .flatMap(googleFileId -> {
+                        if (googleFileId == null || googleFileId.isEmpty()) {
+                            return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
+                        }
+
+                        Mono<Void> cleanupSource = Mono.empty();
+                        if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                            cleanupSource = uploadStorageService.deleteFile(userId, fileId.toString())
+                                    .onErrorResume(err -> {
+                                        log.warn("Failed to delete physical file from Storage Node", err);
+                                        return Mono.empty();
+                                    });
+                        }
+
+                        return cleanupSource.then(Mono.defer(() -> {
+                            if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                                file.setProvider("GOOGLE_DRIVE");
+                                file.setStorageName(googleFileId);
+                                file.setExternalAccountId(targetAccountId);
+                                return fileRepository.save(file);
+                            } else {
+                                File copyFile = File.builder()
+                                        .id(UUID.randomUUID())
+                                        .userId(userId)
+                                        .originalFileName(fileName)
+                                        .storageName(googleFileId)
+                                        .size(fileSize)
+                                        .provider("GOOGLE_DRIVE")
+                                        .externalAccountId(targetAccountId)
+                                        .createdAt(Instant.now())
+                                        .build();
+                                return fileRepository.save(copyFile);
+                            }
+                        }));
+                    })
+                    .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null));
+        }).then();
+    }
+
+    private Mono<Void> migrateGoogleToGoogle(MigrationTask task, File file) {
+        Long srcAccountId = file.getExternalAccountId();
+        String googleFileId = file.getStorageName();
+        UUID fileId = file.getId();
+        Long userId = file.getUserId();
+        long fileSize = file.getSize();
+        String fileName = file.getOriginalFileName();
+        Long destAccountId = task.getTargetExternalAccountId();
+
+        long chunkSize = 5 * 1024 * 1024L; // 5 MB
+        int totalChunks = (int) Math.ceil((double) fileSize / chunkSize);
+
+        Path tempDir = storageConfig.tempDir(userId, fileId);
+
+        return googleDriveClient.initiateResumableUpload(
+                destAccountId,
+                fileName,
+                detectMimeType(fileName),
+                fileSize
+        ).flatMap(uploadUrl -> {
+            return Flux.range(0, totalChunks)
+                    .concatMap(i -> {
+                        long start = i * chunkSize;
+                        long end = Math.min(fileSize - 1, start + chunkSize - 1);
+                        Path tempFile = tempDir.resolve("chunk-gdgd-" + i);
+
+                        Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(srcAccountId, googleFileId, start, end);
+
+                        return writeBytesToFile(dataRange, tempFile)
+                                .then(Mono.defer(() -> googleDriveClient.uploadChunkResumable(destAccountId, uploadUrl, tempFile, start, end, fileSize)))
+                                .flatMap(newId -> {
+                                    try {
+                                        Files.deleteIfExists(tempFile);
+                                    } catch (IOException e) {
+                                        log.warn("Failed to delete temp chunk {}", tempFile, e);
+                                    }
+                                    double progress = ((double) (i + 1) / totalChunks) * 100.0;
+                                    return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0))
+                                            .thenReturn(newId);
+                                });
+                    })
+                    .last()
+                    .flatMap(newGoogleFileId -> {
+                        if (newGoogleFileId == null || newGoogleFileId.isEmpty()) {
+                            return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
+                        }
+
+                        Mono<Void> deleteSource = Mono.empty();
+                        if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                            deleteSource = googleDriveClient.deleteFile(srcAccountId, googleFileId)
+                                    .onErrorResume(err -> {
+                                        log.warn("Failed to delete source file from GDrive A", err);
+                                        return Mono.empty();
+                                    });
+                        }
+
+                        return deleteSource.then(Mono.defer(() -> {
+                            if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                                file.setStorageName(newGoogleFileId);
+                                file.setExternalAccountId(destAccountId);
+                                return fileRepository.save(file);
+                            } else {
+                                File copyFile = File.builder()
+                                        .id(UUID.randomUUID())
+                                        .userId(userId)
+                                        .originalFileName(fileName)
+                                        .storageName(newGoogleFileId)
+                                        .size(fileSize)
+                                        .provider("GOOGLE_DRIVE")
+                                        .externalAccountId(destAccountId)
+                                        .createdAt(Instant.now())
+                                        .build();
+                                return fileRepository.save(copyFile);
+                            }
+                        }));
+                    })
+                    .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null));
+        }).then();
+    }
+
+    private Mono<Void> writeBytesToFile(Flux<byte[]> bytesFlux, Path path) {
+        try {
+            Files.createDirectories(path.getParent());
+        } catch (IOException e) {
+            return Mono.error(e);
+        }
+        DefaultDataBufferFactory bufferFactory = new DefaultDataBufferFactory();
+        Flux<DataBuffer> dataBufferFlux = bytesFlux.map(bufferFactory::wrap);
+        return DataBufferUtils.write(dataBufferFlux, path).then();
+    }
+
+    private String detectMimeType(String filename) {
+        return org.springframework.http.MediaTypeFactory.getMediaType(filename)
+                .map(org.springframework.http.MediaType::toString)
+                .orElse("application/octet-stream");
+    }
+}

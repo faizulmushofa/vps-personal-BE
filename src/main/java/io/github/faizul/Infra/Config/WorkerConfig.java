@@ -82,4 +82,9 @@ public class WorkerConfig {
         return Schedulers.newBoundedElastic(10, 1000, "google-sync");
     }
 
+    @Bean("migrationScheduler")
+    public Scheduler migrationScheduler() {
+        return Schedulers.newBoundedElastic(10, 10000, "migration-worker");
+    }
+
 }

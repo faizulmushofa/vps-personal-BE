@@ -296,6 +296,26 @@ public class DatabaseSeeder implements CommandLineRunner {
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_daily_limit INTEGER DEFAULT 5;
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_requests INTEGER DEFAULT 0;
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ai_request_date DATE DEFAULT CURRENT_DATE;
+                 CREATE TABLE IF NOT EXISTS migration_tasks (
+                     id UUID PRIMARY KEY,
+                     batch_id UUID NOT NULL,
+                     user_id BIGINT NOT NULL,
+                     file_id UUID NOT NULL,
+                     file_name VARCHAR(255),
+                     source_provider VARCHAR(50) NOT NULL,
+                     target_provider VARCHAR(50) NOT NULL,
+                     target_external_account_id BIGINT,
+                     delete_source BOOLEAN DEFAULT FALSE,
+                     status VARCHAR(50) NOT NULL,
+                     progress DOUBLE PRECISION DEFAULT 0.0,
+                     error_message TEXT,
+                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+                     FOREIGN KEY (target_external_account_id) REFERENCES external_users(id) ON DELETE SET NULL
+                 );
+                 ALTER TABLE migration_tasks ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);
                  """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))
@@ -356,6 +376,16 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .key("ai.system_prompt")
                         .value("Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"")
                         .description("System prompt utama untuk AI")
+                        .build(),
+                AppSetting.builder()
+                        .key("migration.max_file_size_bytes")
+                        .value("268435456")
+                        .description("Batas maksimum ukuran satu berkas yang diizinkan untuk migrasi (dalam bytes)")
+                        .build(),
+                AppSetting.builder()
+                        .key("migration.max_daily_limit")
+                        .value("3")
+                        .description("Batas harian maksimum migrasi per user")
                         .build()
         )
         .flatMap(setting -> appSettingRepository.findByKey(setting.getKey())

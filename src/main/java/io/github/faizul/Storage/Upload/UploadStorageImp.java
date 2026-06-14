@@ -180,4 +180,9 @@ public class UploadStorageImp implements UploadStorageService {
             }
         }));
     }
+
+    @Override
+    public Mono<Void> uploadBatchDirect(Flux<UploadChunkRequest> requestFlux) {
+        return uploadBatch(requestFlux);
+    }
 }
