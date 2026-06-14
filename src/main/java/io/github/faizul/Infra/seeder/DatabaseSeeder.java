@@ -158,6 +158,8 @@ public class DatabaseSeeder implements CommandLineRunner {
                     avatar_url VARCHAR(1024),
                     phone_number VARCHAR(50),
                     is_active BOOLEAN DEFAULT TRUE,
+                    migration_daily_limit INTEGER DEFAULT 3,
+                    migration_max_file_size BIGINT DEFAULT 268435456,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     deleted_at TIMESTAMP
@@ -296,6 +298,8 @@ public class DatabaseSeeder implements CommandLineRunner {
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_daily_limit INTEGER DEFAULT 5;
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_ai_requests INTEGER DEFAULT 0;
                  ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ai_request_date DATE DEFAULT CURRENT_DATE;
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS migration_daily_limit INTEGER DEFAULT 3;
+                 ALTER TABLE users ADD COLUMN IF NOT EXISTS migration_max_file_size BIGINT DEFAULT 268435456;
                  CREATE TABLE IF NOT EXISTS migration_tasks (
                      id UUID PRIMARY KEY,
                      batch_id UUID NOT NULL,

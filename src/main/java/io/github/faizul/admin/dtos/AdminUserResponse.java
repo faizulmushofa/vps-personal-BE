@@ -12,5 +12,7 @@ public record AdminUserResponse(
     Boolean isActive,
     Integer aiDailyLimit,
     Integer dailyAiRequests,
-    List<String> roles
+    List<String> roles,
+    Integer migrationDailyLimit,
+    Long migrationMaxFileSize
 ) {}

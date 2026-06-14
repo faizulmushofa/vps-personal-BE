@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
     phone_number VARCHAR(50),
     storage_quota BIGINT DEFAULT 1073741824,
     is_active   BOOLEAN DEFAULT FALSE,
+    migration_daily_limit INTEGER DEFAULT 3,
+    migration_max_file_size BIGINT DEFAULT 268435456,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at  TIMESTAMP

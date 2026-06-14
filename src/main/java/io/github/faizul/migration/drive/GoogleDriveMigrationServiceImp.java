@@ -103,7 +103,6 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
                                             .deleteSource(request.deleteSource())
                                             .status(MigrationStatus.PENDING)
                                             .progress(0.0)
-                                            .createdAt(Instant.now())
                                             .updatedAt(Instant.now())
                                             .build());
                                 }

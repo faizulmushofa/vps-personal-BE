@@ -78,7 +78,29 @@ public class AdminController {
         return adminService.getAiTokenStats();
     }
 
+    @PutMapping("/users/{id}/migration-limit")
+    public Mono<Void> updateUserMigrationLimit(@PathVariable Long id, @RequestBody UpdateMigrationLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> adminService.updateUserMigrationLimit(id, request.migrationLimit())
+                        .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_LIMIT", 
+                                "Mengubah batas migrasi harian user (ID: " + id + ") menjadi " + request.migrationLimit() + " request", exchange))
+                        .then()
+                );
+    }
+
+    @PutMapping("/users/{id}/migration-max-size")
+    public Mono<Void> updateUserMigrationMaxSize(@PathVariable Long id, @RequestBody UpdateMigrationMaxSizeRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> adminService.updateUserMigrationMaxSize(id, request.maxFileSize())
+                        .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_MAX_SIZE", 
+                                "Mengubah batas ukuran migrasi maks user (ID: " + id + ") menjadi " + request.maxFileSize() + " bytes", exchange))
+                        .then()
+                );
+    }
+
     // Inner request records
     public record ToggleStatusRequest(Boolean isActive) {}
     public record UpdateAiLimitRequest(Integer aiLimit) {}
+    public record UpdateMigrationLimitRequest(Integer migrationLimit) {}
+    public record UpdateMigrationMaxSizeRequest(Long maxFileSize) {}
 }

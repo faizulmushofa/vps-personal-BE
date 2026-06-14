@@ -55,7 +55,9 @@ public class AdminService {
                                     user.getIsActive() != null ? user.getIsActive() : true,
                                     user.getAiDailyLimit() != null ? user.getAiDailyLimit() : 5,
                                     user.getDailyAiRequests() != null ? user.getDailyAiRequests() : 0,
-                                    tuple.getT2()
+                                    tuple.getT2(),
+                                    user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : 3,
+                                    user.getMigrationMaxFileSize() != null ? user.getMigrationMaxFileSize() : 268435456L
                             ));
                 });
     }
@@ -77,6 +79,28 @@ public class AdminService {
                 .switchIfEmpty(Mono.error(new NoSuchElementException("User dengan ID " + userId + " tidak ditemukan")))
                 .flatMap(user -> {
                     user.setAiDailyLimit(limit);
+                    return userRepository.save(user);
+                })
+                .then();
+    }
+
+    @Transactional
+    public Mono<Void> updateUserMigrationLimit(Long userId, Integer limit) {
+        return userRepository.findById(userId)
+                .switchIfEmpty(Mono.error(new NoSuchElementException("User dengan ID " + userId + " tidak ditemukan")))
+                .flatMap(user -> {
+                    user.setMigrationDailyLimit(limit);
+                    return userRepository.save(user);
+                })
+                .then();
+    }
+
+    @Transactional
+    public Mono<Void> updateUserMigrationMaxSize(Long userId, Long maxSize) {
+        return userRepository.findById(userId)
+                .switchIfEmpty(Mono.error(new NoSuchElementException("User dengan ID " + userId + " tidak ditemukan")))
+                .flatMap(user -> {
+                    user.setMigrationMaxFileSize(maxSize);
                     return userRepository.save(user);
                 })
                 .then();

@@ -62,6 +62,14 @@ public class User {
     @Builder.Default
     private Integer aiDailyLimit = 5;
 
+    @Column("migration_daily_limit")
+    @Builder.Default
+    private Integer migrationDailyLimit = 3;
+
+    @Column("migration_max_file_size")
+    @Builder.Default
+    private Long migrationMaxFileSize = 268435456L;
+
     @Column("daily_ai_requests")
     @Builder.Default
     private Integer dailyAiRequests = 0;

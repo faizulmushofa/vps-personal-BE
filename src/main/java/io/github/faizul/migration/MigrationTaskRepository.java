@@ -18,7 +18,7 @@ public interface MigrationTaskRepository extends ReactiveCrudRepository<Migratio
     
     Flux<MigrationTask> findByUserIdAndStatus(Long userId, MigrationStatus status);
     
-    @Query("SELECT COUNT(*) FROM migration_tasks WHERE user_id = :userId AND created_at >= :startOfDay")
+    @Query("SELECT COUNT(*) FROM migration_tasks WHERE user_id = :userId AND created_at >= :startOfDay AND status != 'FAILED'")
     Mono<Long> countByUserIdAndCreatedAtAfter(Long userId, Instant startOfDay);
 
     Mono<Boolean> existsByUserIdAndStatus(Long userId, MigrationStatus status);

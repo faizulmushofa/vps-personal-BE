@@ -4,6 +4,8 @@ import io.github.faizul.File.core.File;
 import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.setting.AppSettingRepository;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.User.core.User;
+import io.github.faizul.User.core.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -32,33 +34,40 @@ public class MigrationServiceImp implements MigrationService {
     private final AppSettingRepository appSettingRepository;
     private final CurrentUserContext currentUserContext;
     private final DatabaseClient databaseClient;
+    private final UserRepository userRepository;
 
     private static final long DEFAULT_MAX_SIZE = 256 * 1024 * 1024L; // 256 MB
     private static final int DEFAULT_DAILY_LIMIT = 3;
 
     @Override
     public Mono<Map<String, Object>> getMigrationConfig() {
-        Mono<Long> todayTasksCountMono = currentUserContext.getUserId()
+        return currentUserContext.getUserId()
                 .flatMap(userId -> {
-                    Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
-                    return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday);
-                })
-                .defaultIfEmpty(0L)
-                .onErrorReturn(0L);
+                    Mono<Long> todayTasksCountMono = migrationTaskRepository.countByUserIdAndCreatedAtAfter(
+                            userId, 
+                            LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant()
+                    ).defaultIfEmpty(0L).onErrorReturn(0L);
 
-        return Mono.zip(
-                appSettingRepository.findByKey("migration.max_file_size_bytes")
-                        .map(setting -> Long.parseLong(setting.getValue()))
-                        .defaultIfEmpty(DEFAULT_MAX_SIZE),
-                appSettingRepository.findByKey("migration.max_daily_limit")
-                        .map(setting -> Integer.parseInt(setting.getValue()))
-                        .defaultIfEmpty(DEFAULT_DAILY_LIMIT),
-                todayTasksCountMono
-        ).map(tuple -> Map.of(
-                "maxFileSizeBytes", tuple.getT1(),
-                "maxDailyLimit", tuple.getT2(),
-                "todayTasksCount", tuple.getT3()
-        ));
+                    Mono<User> userMono = userRepository.findById(userId);
+
+                    return Mono.zip(userMono, todayTasksCountMono)
+                            .map(tuple -> {
+                                User user = tuple.getT1();
+                                Long todayCount = tuple.getT2();
+                                return Map.<String, Object>of(
+                                        "maxFileSizeBytes", user.getMigrationMaxFileSize() != null ? user.getMigrationMaxFileSize() : DEFAULT_MAX_SIZE,
+                                        "maxDailyLimit", user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : DEFAULT_DAILY_LIMIT,
+                                        "todayTasksCount", todayCount
+                                );
+                            });
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    return Mono.just(Map.<String, Object>of(
+                            "maxFileSizeBytes", DEFAULT_MAX_SIZE,
+                            "maxDailyLimit", DEFAULT_DAILY_LIMIT,
+                            "todayTasksCount", 0L
+                    ));
+                }));
     }
 
     @Override
@@ -75,20 +84,21 @@ public class MigrationServiceImp implements MigrationService {
     @Override
     public Mono<Void> validateCommonLimits(Long userId) {
         // 1. Cek limit paralel (apakah ada migrasi sedang berjalan untuk user)
-        return migrationTaskRepository.existsByUserIdAndStatus(userId, MigrationStatus.RUNNING)
-                .flatMap(hasActive -> {
-                    if (hasActive) {
-                        return Mono.error(new IllegalStateException("Ada proses migrasi lain yang sedang berjalan. Silakan tunggu hingga selesai."));
-                    }
+        return userRepository.findById(userId)
+                .switchIfEmpty(Mono.error(new NoSuchElementException("User tidak ditemukan.")))
+                .flatMap(user -> {
+                    return migrationTaskRepository.existsByUserIdAndStatus(userId, MigrationStatus.RUNNING)
+                            .flatMap(hasActive -> {
+                                if (hasActive) {
+                                    return Mono.error(new IllegalStateException("Ada proses migrasi lain yang sedang berjalan. Silakan tunggu hingga selesai."));
+                                }
 
-                    // 2. Cek batas harian (midnight boundary)
-                    Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
-                    return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
-                            .flatMap(dailyCount -> {
-                                return appSettingRepository.findByKey("migration.max_daily_limit")
-                                        .map(setting -> Integer.parseInt(setting.getValue()))
-                                        .defaultIfEmpty(DEFAULT_DAILY_LIMIT)
-                                        .flatMap(maxLimit -> {
+                                int maxLimit = user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : DEFAULT_DAILY_LIMIT;
+
+                                // 2. Cek batas harian (midnight boundary)
+                                Instant startOfToday = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
+                                return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
+                                        .flatMap(dailyCount -> {
                                             if (dailyCount >= maxLimit) {
                                                 return Mono.error(new IllegalArgumentException("Batas harian migrasi terlampaui (Maksimal " + maxLimit + " kali migrasi per hari)."));
                                             }

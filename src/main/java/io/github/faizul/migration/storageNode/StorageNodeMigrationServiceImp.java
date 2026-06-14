@@ -121,7 +121,6 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                             .deleteSource(request.deleteSource())
                                             .status(MigrationStatus.PENDING)
                                             .progress(0.0)
-                                            .createdAt(Instant.now())
                                             .updatedAt(Instant.now())
                                             .build());
                                 }
