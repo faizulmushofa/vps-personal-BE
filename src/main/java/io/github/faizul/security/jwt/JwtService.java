@@ -69,6 +69,11 @@ public class JwtService {
                                 return Mono.error(new BadCredentialsException("Token has been revoked"));
                             }
 
+                            // OWASP A02 FIX: Check token expiry
+                            if (existing.getExpiredAt() != null && existing.getExpiredAt().isBefore(LocalDateTime.now())) {
+                                return Mono.error(new BadCredentialsException("Refresh token has expired. Please login again."));
+                            }
+
                             existing.setRevoked(true);
                             return refreshTokenRepository.save(existing)
                                     .flatMap(saved -> {

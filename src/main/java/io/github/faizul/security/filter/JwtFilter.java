@@ -42,7 +42,6 @@ public class JwtFilter implements WebFilter {
         }
 
         if (!jwtService.isValid(token)) {
-            exchange.getResponse().getHeaders().add("X-Auth-Debug", "invalid-token");
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -52,7 +51,6 @@ public class JwtFilter implements WebFilter {
         return authenticate(email)
                 .onErrorResume(e -> {
                     log.warn("JWT authentication failed: {}", e.getMessage());
-                    exchange.getResponse().getHeaders().add("X-Auth-Debug", "authentication-error");
                     exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                     return Mono.empty();
                 })

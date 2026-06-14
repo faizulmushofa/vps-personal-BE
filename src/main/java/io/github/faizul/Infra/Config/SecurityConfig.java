@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -32,6 +33,7 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final RequestDebugFilter requestDebugFilter;
+    private final Environment environment;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -57,7 +59,12 @@ public class SecurityConfig {
 
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http){
-        return http
+
+        // OWASP A05 FIX: Only allow Swagger in dev/local profiles
+        boolean isProduction = Arrays.asList(environment.getActiveProfiles()).contains("prod")
+                || Arrays.asList(environment.getActiveProfiles()).contains("production");
+
+        var authorizeSpec = http
                 .cors(corsSpec -> corsSpec.configurationSource(corsConfigurationSource()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -67,27 +74,37 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED))
                         .accessDeniedHandler(new HttpStatusServerAccessDeniedHandler(HttpStatus.FORBIDDEN))
                 )
+                .authorizeExchange( authorizeExchangeSpec -> {
+                    authorizeExchangeSpec
+                            .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico").permitAll()
+                            .pathMatchers("/api/auth/**").permitAll()
+                            .pathMatchers("/api/reports").permitAll()
+                            .pathMatchers("/api/files/share/public/**").permitAll()
+                            .pathMatchers("/api/google-drive/share/public/**").permitAll()
+                            .pathMatchers("/api/preview/public/**").permitAll()
+                            .pathMatchers("/admin/**").hasRole("ADMIN")
+                            .pathMatchers("/api/admin/**").hasRole("ADMIN");
 
-                .authorizeExchange( authorizeExchangeSpec -> authorizeExchangeSpec
-                        .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll()
-                        .pathMatchers("/api/auth/**").permitAll()
-                        .pathMatchers("/api/reports").permitAll()
-                        .pathMatchers("/api/files/share/public/**").permitAll()
-                        .pathMatchers("/api/google-drive/share/public/**").permitAll()
-                        .pathMatchers("/api/preview/public/**").permitAll()
-                        .pathMatchers("/admin/**").hasRole("ADMIN")
-                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyExchange().authenticated()
-                )
+                    // Only expose Swagger endpoints in non-production environments
+                    if (!isProduction) {
+                        authorizeExchangeSpec
+                                .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll();
+                    } else {
+                        authorizeExchangeSpec
+                                .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").denyAll();
+                    }
+
+                    authorizeExchangeSpec.anyExchange().authenticated();
+                })
                 .addFilterAfter(requestDebugFilter,
                         SecurityWebFiltersOrder.AUTHENTICATION
                 )
                 .addFilterAt(
                         jwtFilter,
                         SecurityWebFiltersOrder.AUTHENTICATION
-                )
-                .build();
+                );
+
+        return authorizeSpec.build();
     }
 
 }
-

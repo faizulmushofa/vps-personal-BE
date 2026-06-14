@@ -6,10 +6,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.stream.Collectors;
 
 import java.util.NoSuchElementException;
 
@@ -21,6 +23,24 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    // OWASP A07: Bean Validation error handler for @Valid
+    @ExceptionHandler(WebExchangeBindException.class)
+    public Mono<ResponseEntity<ErrorResponse>> handleValidationException(WebExchangeBindException ex, ServerWebExchange exchange) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+        log.warn("Validation error pada request {}: {}", exchange.getRequest().getPath().value(), message);
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message(message)
+                .path(exchange.getRequest().getPath().value())
+                .build();
+
+        return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse));
+    }
 
     @ExceptionHandler(NoSuchElementException.class)
     public Mono<ResponseEntity<ErrorResponse>> handleNoSuchElementException(NoSuchElementException ex, ServerWebExchange exchange) {

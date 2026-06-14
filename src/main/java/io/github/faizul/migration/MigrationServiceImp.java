@@ -164,7 +164,10 @@ public class MigrationServiceImp implements MigrationService {
     @Override
     public Flux<MigrationTask> getTasks(UUID batchId) {
         if (batchId != null) {
-            return migrationTaskRepository.findByBatchId(batchId);
+            // OWASP A01 FIX: Filter by user to prevent cross-user data leak
+            return currentUserContext.getUserId()
+                    .flatMapMany(userId -> migrationTaskRepository.findByBatchId(batchId)
+                            .filter(task -> task.getUserId().equals(userId)));
         }
         return currentUserContext.getUserId()
                 .flatMapMany(migrationTaskRepository::findByUserId);

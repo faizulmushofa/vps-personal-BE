@@ -6,6 +6,8 @@ import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
 import io.github.faizul.setting.AppSetting;
 import io.github.faizul.setting.AppSettingService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,7 +48,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/status")
-    public Mono<Void> toggleUserStatus(@PathVariable Long id, @RequestBody ToggleStatusRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> toggleUserStatus(@PathVariable Long id, @Valid @RequestBody ToggleStatusRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.toggleUserStatus(id, request.isActive())
                         .then(userActivityService.log(adminId, "TOGGLE_USER_STATUS", 
@@ -56,7 +58,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/ai-limit")
-    public Mono<Void> updateUserAiLimit(@PathVariable Long id, @RequestBody UpdateAiLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> updateUserAiLimit(@PathVariable Long id, @Valid @RequestBody UpdateAiLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.updateUserAiLimit(id, request.aiLimit())
                         .then(userActivityService.log(adminId, "UPDATE_USER_AI_LIMIT", 
@@ -79,7 +81,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/migration-limit")
-    public Mono<Void> updateUserMigrationLimit(@PathVariable Long id, @RequestBody UpdateMigrationLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> updateUserMigrationLimit(@PathVariable Long id, @Valid @RequestBody UpdateMigrationLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.updateUserMigrationLimit(id, request.migrationLimit())
                         .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_LIMIT", 
@@ -89,7 +91,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/migration-max-size")
-    public Mono<Void> updateUserMigrationMaxSize(@PathVariable Long id, @RequestBody UpdateMigrationMaxSizeRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> updateUserMigrationMaxSize(@PathVariable Long id, @Valid @RequestBody UpdateMigrationMaxSizeRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.updateUserMigrationMaxSize(id, request.maxFileSize())
                         .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_MAX_SIZE", 
@@ -99,8 +101,8 @@ public class AdminController {
     }
 
     // Inner request records
-    public record ToggleStatusRequest(Boolean isActive) {}
-    public record UpdateAiLimitRequest(Integer aiLimit) {}
-    public record UpdateMigrationLimitRequest(Integer migrationLimit) {}
-    public record UpdateMigrationMaxSizeRequest(Long maxFileSize) {}
+    public record ToggleStatusRequest(@NotNull(message = "Status aktif wajib diisi") Boolean isActive) {}
+    public record UpdateAiLimitRequest(@NotNull(message = "AI limit wajib diisi") Integer aiLimit) {}
+    public record UpdateMigrationLimitRequest(@NotNull(message = "Migration limit wajib diisi") Integer migrationLimit) {}
+    public record UpdateMigrationMaxSizeRequest(@NotNull(message = "Max file size wajib diisi") Long maxFileSize) {}
 }

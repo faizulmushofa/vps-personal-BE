@@ -15,8 +15,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Random;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @AllArgsConstructor
@@ -29,9 +33,44 @@ public class AuthService {
     private final OtpVerificationRepository otpVerificationRepository;
     private final NotificationService notificationService;
 
+    // OWASP A04 FIX: Use SecureRandom instead of java.util.Random
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    // OWASP A04 FIX: OTP attempt tracking
+    private static final int MAX_OTP_ATTEMPTS = 5;
+    private static final long OTP_LOCKOUT_MS = 15 * 60 * 1000L; // 15 minutes
+
+    private record OtpAttemptEntry(AtomicInteger count, long windowStart) {}
+    private static final Map<String, OtpAttemptEntry> otpAttemptMap = new ConcurrentHashMap<>();
+
+    private boolean isOtpLocked(String email) {
+        long now = Instant.now().toEpochMilli();
+        OtpAttemptEntry entry = otpAttemptMap.get(email);
+        if (entry == null) return false;
+        if (now - entry.windowStart() > OTP_LOCKOUT_MS) {
+            otpAttemptMap.remove(email);
+            return false;
+        }
+        return entry.count().get() >= MAX_OTP_ATTEMPTS;
+    }
+
+    private void recordOtpAttempt(String email) {
+        long now = Instant.now().toEpochMilli();
+        otpAttemptMap.compute(email, (key, existing) -> {
+            if (existing == null || now - existing.windowStart() > OTP_LOCKOUT_MS) {
+                return new OtpAttemptEntry(new AtomicInteger(1), now);
+            }
+            existing.count().incrementAndGet();
+            return existing;
+        });
+    }
+
+    private void clearOtpAttempts(String email) {
+        otpAttemptMap.remove(email);
+    }
+
     private String generateOtp() {
-        Random random = new Random();
-        int code = 100000 + random.nextInt(900000);
+        int code = 100000 + SECURE_RANDOM.nextInt(900000);
         return String.valueOf(code);
     }
 
@@ -64,6 +103,12 @@ public class AuthService {
 
     public Mono<RegisterResponse> verifyRegistration(VerifyOtpRequest request) {
         String emailNormalized = request.email().toLowerCase().trim();
+
+        // OWASP A04: Check OTP attempt limit
+        if (isOtpLocked(emailNormalized)) {
+            return Mono.error(new IllegalArgumentException("Terlalu banyak percobaan verifikasi OTP. Silakan coba lagi dalam 15 menit."));
+        }
+
         return otpVerificationRepository.findLatestUnverified(emailNormalized, "REGISTRATION")
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Kode OTP tidak valid atau tidak ditemukan")))
                 .flatMap(otp -> {
@@ -72,8 +117,12 @@ public class AuthService {
                     }
 
                     if (!otp.getOtpCode().equals(request.otp())) {
+                        recordOtpAttempt(emailNormalized);
                         return Mono.error(new IllegalArgumentException("Kode OTP tidak valid"));
                     }
+
+                    // OTP correct — clear attempt counter
+                    clearOtpAttempts(emailNormalized);
 
                     return userRepository.findByEmail(emailNormalized)
                             .switchIfEmpty(Mono.error(new UsernameNotFoundException("User tidak ditemukan")))
@@ -144,6 +193,12 @@ public class AuthService {
 
     public Mono<RegisterResponse> resetPassword(ResetPasswordRequest request) {
         String emailNormalized = request.email().toLowerCase().trim();
+
+        // OWASP A04: Check OTP attempt limit
+        if (isOtpLocked(emailNormalized)) {
+            return Mono.error(new IllegalArgumentException("Terlalu banyak percobaan reset password. Silakan coba lagi dalam 15 menit."));
+        }
+
         return otpVerificationRepository.findLatestUnverified(emailNormalized, "FORGOT_PASSWORD")
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Kode OTP pemulihan tidak valid atau tidak ditemukan")))
                 .flatMap(otp -> {
@@ -152,8 +207,12 @@ public class AuthService {
                     }
 
                     if (!otp.getOtpCode().equals(request.otp())) {
+                        recordOtpAttempt(emailNormalized);
                         return Mono.error(new IllegalArgumentException("Kode OTP pemulihan tidak valid"));
                     }
+
+                    // OTP correct — clear attempt counter
+                    clearOtpAttempts(emailNormalized);
 
                     return userRepository.findByEmail(emailNormalized)
                             .switchIfEmpty(Mono.error(new UsernameNotFoundException("User tidak ditemukan")))

@@ -4,6 +4,7 @@ import io.github.faizul.User.dtos.UserDto;
 import io.github.faizul.User.dtos.UpdateProfileRequest;
 import io.github.faizul.User.dtos.UpdatePasswordRequest;
 import io.github.faizul.security.filter.CurrentUserContext;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,7 @@ public class UserController {
     }
 
     @PutMapping("/me")
-    public Mono<ResponseEntity<UserDto>> updateMyProfile(@RequestBody UpdateProfileRequest request) {
+    public Mono<ResponseEntity<UserDto>> updateMyProfile(@Valid @RequestBody UpdateProfileRequest request) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> userService.updateProfile(userId, request))
                 .map(ResponseEntity::ok)
@@ -38,7 +39,7 @@ public class UserController {
     }
 
     @PutMapping("/me/password")
-    public Mono<ResponseEntity<Void>> updateMyPassword(@RequestBody UpdatePasswordRequest request) {
+    public Mono<ResponseEntity<Void>> updateMyPassword(@Valid @RequestBody UpdatePasswordRequest request) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> userService.updatePassword(userId, request))
                 .then(Mono.just(ResponseEntity.ok().build()));
