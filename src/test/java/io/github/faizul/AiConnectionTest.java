@@ -8,6 +8,7 @@ import reactor.test.StepVerifier;
 import java.time.Duration;
 
 @SpringBootTest
+@org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_INTEGRATION_TESTS", matches = "true")
 public class AiConnectionTest {
 
     @Autowired
@@ -48,15 +49,20 @@ public class AiConnectionTest {
         for (String model : models) {
             System.out.println(">>> Testing OpenRouter Model: " + model);
             try {
-                groqService.generate("Say 'Connection OK' briefly", "Test", model)
+                var res = groqService.generate("Say 'Connection OK' briefly", "Test", model)
                         .timeout(Duration.ofSeconds(20))
-                        .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim().replace("\n", " ")))
-                        .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                        .as(StepVerifier::create)
-                        .expectNextCount(1)
-                        .verifyComplete();
+                        .block();
+                if (res != null && res.content() != null) {
+                    System.out.println("    [SUCCESS] Response: " + res.content().trim().replace("\n", " "));
+                } else {
+                    System.err.println("    [FAILED] Error: Response is empty");
+                }
             } catch (Throwable t) {
-                System.err.println("    [FAILED] Exception: " + t.getMessage());
+                String msg = t.getMessage();
+                if (msg == null) {
+                    msg = t.getClass().getSimpleName();
+                }
+                System.err.println("    [FAILED] Error: " + msg);
             }
             System.out.println("-------------------------------------------------------");
         }

@@ -49,7 +49,7 @@ public class GroqService implements AiClient {
                 if (isCancellation(e)) {
                     log.warn("Groq/OpenRouter call cancelled or interrupted for model: {}", model);
                 } else {
-                    log.error("Groq/OpenRouter gagal memanggil API untuk model {}: {}", model, e.getMessage(), e);
+                    log.error("Groq/OpenRouter gagal memanggil API untuk model {}: {}", model, e.getMessage());
                 }
                 throw e;
             }

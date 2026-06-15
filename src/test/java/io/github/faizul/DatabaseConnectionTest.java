@@ -12,6 +12,7 @@ import reactor.test.StepVerifier;
     "spring.ai.openai.api-key=dummy-openrouter-key",
     "spring.ai.google.genai.api-key=dummy-gemini-key"
 })
+@org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_INTEGRATION_TESTS", matches = "true")
 public class DatabaseConnectionTest {
 
     @Autowired
