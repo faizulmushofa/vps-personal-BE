@@ -332,9 +332,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                  );
-                 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(255) DEFAULT 'FREEMIUM';
-                 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP;
-                 """;
+                  ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(255) DEFAULT 'FREEMIUM';
+                  ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP;
+                  UPDATE users SET ai_daily_limit = 50, migration_daily_limit = -1, migration_max_file_size = -1 WHERE subscription_tier = 'PREMIUM_INDIVIDUAL';
+                  UPDATE users SET ai_daily_limit = 30, migration_daily_limit = 30, migration_max_file_size = 10737418240 WHERE subscription_tier = 'PREMIUM_ACADEMIC';
+                  UPDATE users SET ai_daily_limit = 5, migration_daily_limit = 3, migration_max_file_size = 268435456 WHERE subscription_tier = 'FREEMIUM' OR subscription_tier IS NULL;
+                  """;
         log.info("Initializing database schema...");
         return Flux.fromArray(schema.split(";"))
                 .map(String::trim)

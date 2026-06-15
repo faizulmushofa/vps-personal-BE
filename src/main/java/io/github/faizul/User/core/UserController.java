@@ -74,20 +74,20 @@ public class UserController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<UserDto>> createUser(@RequestBody User user) {
         return userService.createUser(user)
                 .map(userDto -> new ResponseEntity<>(userDto, HttpStatus.CREATED));
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Flux<UserDto> getAllUsers() {
         return userService.getAllUsers();
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN') or principal.id == #id")
+    @PreAuthorize("hasRole('ADMIN') or principal.id == #id")
     public Mono<ResponseEntity<UserDto>> getUserById(@PathVariable Long id) {
         return userService.getUserById(id)
                 .map(ResponseEntity::ok)
@@ -96,7 +96,7 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<Void>> deleteUser(@PathVariable Long id) {
         return userService.deleteByID(id)
                 .then(Mono.just(new ResponseEntity<Void>(HttpStatus.NO_CONTENT)));

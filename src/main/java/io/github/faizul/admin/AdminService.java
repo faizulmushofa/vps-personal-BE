@@ -142,9 +142,9 @@ public class AdminService {
         Mono<TokenStatsTuple> todayStatsMono = databaseClient.sql(todayQuery)
                 .bind("todayStart", todayStart)
                 .map(row -> new TokenStatsTuple(
-                        ((Number) row.get("in_t")).longValue(),
-                        ((Number) row.get("out_t")).longValue(),
-                        ((Number) row.get("tot_t")).longValue()
+                        getLongValue(row, "in_t"),
+                        getLongValue(row, "out_t"),
+                        getLongValue(row, "tot_t")
                 ))
                 .one()
                 .defaultIfEmpty(new TokenStatsTuple(0L, 0L, 0L));
@@ -152,9 +152,9 @@ public class AdminService {
         Mono<TokenStatsTuple> monthStatsMono = databaseClient.sql(monthQuery)
                 .bind("monthStart", monthStart)
                 .map(row -> new TokenStatsTuple(
-                        ((Number) row.get("in_t")).longValue(),
-                        ((Number) row.get("out_t")).longValue(),
-                        ((Number) row.get("tot_t")).longValue()
+                        getLongValue(row, "in_t"),
+                        getLongValue(row, "out_t"),
+                        getLongValue(row, "tot_t")
                 ))
                 .one()
                 .defaultIfEmpty(new TokenStatsTuple(0L, 0L, 0L));
@@ -162,10 +162,10 @@ public class AdminService {
         Flux<TokenHistoryEntry> historyFlux = databaseClient.sql(historyQuery)
                 .bind("historyStart", historyStart)
                 .map(row -> new TokenHistoryEntry(
-                        row.get("log_date").toString(),
-                        ((Number) row.get("in_t")).longValue(),
-                        ((Number) row.get("out_t")).longValue(),
-                        ((Number) row.get("tot_t")).longValue()
+                        getStringValue(row, "log_date"),
+                        getLongValue(row, "in_t"),
+                        getLongValue(row, "out_t"),
+                        getLongValue(row, "tot_t")
                 ))
                 .all();
 
@@ -192,4 +192,28 @@ public class AdminService {
     }
 
     private record TokenStatsTuple(Long inputTokens, Long outputTokens, Long totalTokens) {}
+
+    private static Long getLongValue(io.r2dbc.spi.Row row, String columnName) {
+        Object val = null;
+        try {
+            val = row.get(columnName);
+        } catch (Exception e) {
+            try {
+                val = row.get(columnName.toUpperCase());
+            } catch (Exception ex) {}
+        }
+        return val != null ? ((Number) val).longValue() : 0L;
+    }
+
+    private static String getStringValue(io.r2dbc.spi.Row row, String columnName) {
+        Object val = null;
+        try {
+            val = row.get(columnName);
+        } catch (Exception e) {
+            try {
+                val = row.get(columnName.toUpperCase());
+            } catch (Exception ex) {}
+        }
+        return val != null ? val.toString() : "";
+    }
 }
