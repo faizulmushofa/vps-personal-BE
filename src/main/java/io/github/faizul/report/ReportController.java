@@ -3,6 +3,7 @@ package io.github.faizul.report;
 import io.github.faizul.notification.EmailTemplateFactory;
 import io.github.faizul.notification.NotificationService;
 import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.security.auth.IpRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
