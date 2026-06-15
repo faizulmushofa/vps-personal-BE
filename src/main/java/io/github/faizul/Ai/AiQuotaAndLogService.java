@@ -33,6 +33,9 @@ public class AiQuotaAndLogService {
                         user.setSubscriptionTier("FREEMIUM");
                         user.setStorageQuota(1073741824L);
                         user.setSubscriptionExpiresAt(null);
+                        user.setAiDailyLimit(5);
+                        user.setMigrationDailyLimit(3);
+                        user.setMigrationMaxFileSize(268435456L);
                         activeUserMono = userRepository.save(user);
                     }
                     return activeUserMono;
@@ -52,7 +55,7 @@ public class AiQuotaAndLogService {
                                 user.setLastAiRequestDate(today);
                             }
 
-                            int limit = user.getSubscriptionPlan().getLimits().aiDailyLimit();
+                            int limit = user.getAiDailyLimit() != null ? user.getAiDailyLimit() : user.getSubscriptionPlan().getLimits().aiDailyLimit();
                             if (user.getDailyAiRequests() >= limit) {
                                 log.warn("User {} telah mencapai batas request AI harian ({}/{})", userId, user.getDailyAiRequests(), limit);
                                 return Mono.error(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, 

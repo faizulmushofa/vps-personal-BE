@@ -72,6 +72,9 @@ public class SubscriptionRequestService {
                                         user.setSubscriptionTier(savedRequest.getRequestedTier());
                                         user.setStorageQuota(plan.getLimits().storageQuota());
                                         user.setSubscriptionExpiresAt(LocalDateTime.now().plusDays(30));
+                                        user.setAiDailyLimit(plan.getLimits().aiDailyLimit());
+                                        user.setMigrationDailyLimit(plan.getLimits().migrationDailyLimit());
+                                        user.setMigrationMaxFileSize(plan.getLimits().migrationMaxFileSize());
                                         return userRepository.save(user);
                                     })
                             );
@@ -101,6 +104,9 @@ public class SubscriptionRequestService {
                 .flatMap(user -> {
                     user.setSubscriptionTier(upperTier);
                     user.setStorageQuota(plan.getLimits().storageQuota());
+                    user.setAiDailyLimit(plan.getLimits().aiDailyLimit());
+                    user.setMigrationDailyLimit(plan.getLimits().migrationDailyLimit());
+                    user.setMigrationMaxFileSize(plan.getLimits().migrationMaxFileSize());
                     if (upperTier.equals("FREEMIUM")) {
                         user.setSubscriptionExpiresAt(null);
                     } else {

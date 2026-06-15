@@ -37,6 +37,10 @@ class UserServiceTest {
     @Mock private UserRoleRepository userRoleRepository;
     @Mock private RoleRepository roleRepository;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private io.github.faizul.File.core.FileRepository fileRepository;
+    @Mock private io.github.faizul.Storage.upload.UploadStorageService uploadStorageService;
+    @Mock private io.github.faizul.User.externalAccount.ExternalAccountRepository externalAccountRepository;
+    @Mock private io.github.faizul.security.jwt.EncryptionService encryptionService;
 
     @InjectMocks
     private UserService userService;
@@ -129,7 +133,9 @@ class UserServiceTest {
         @Test
         @DisplayName("should delete user when id exists")
         void deleteById_success() {
-            when(userRepository.existsById(1L)).thenReturn(Mono.just(true));
+            when(userRepository.findById(1L)).thenReturn(Mono.just(sampleUser));
+            when(fileRepository.findByUserId(1L)).thenReturn(Flux.empty());
+            when(externalAccountRepository.findAllByUserId(1L)).thenReturn(Flux.empty());
             when(userRepository.deleteById(1L)).thenReturn(Mono.empty());
 
             StepVerifier.create(userService.deleteByID(1L))
@@ -141,7 +147,7 @@ class UserServiceTest {
         @Test
         @DisplayName("should throw error when id does not exist")
         void deleteById_notFound() {
-            when(userRepository.existsById(999L)).thenReturn(Mono.just(false));
+            when(userRepository.findById(999L)).thenReturn(Mono.empty());
 
             StepVerifier.create(userService.deleteByID(999L))
                     .expectErrorMatches(throwable ->

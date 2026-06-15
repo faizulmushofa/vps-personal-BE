@@ -50,6 +50,9 @@ public class MigrationServiceImp implements MigrationService {
                                 user.setSubscriptionTier("FREEMIUM");
                                 user.setStorageQuota(1073741824L);
                                 user.setSubscriptionExpiresAt(null);
+                                user.setAiDailyLimit(5);
+                                user.setMigrationDailyLimit(3);
+                                user.setMigrationMaxFileSize(268435456L);
                                 activeUserMono = userRepository.save(user);
                             }
                             return activeUserMono;
@@ -59,8 +62,8 @@ public class MigrationServiceImp implements MigrationService {
                             return migrationTaskRepository.countByUserIdAndCreatedAtAfter(userId, startOfToday)
                                     .defaultIfEmpty(0L)
                                     .map(count -> {
-                                        long maxFileSize = user.getSubscriptionPlan().getLimits().migrationMaxFileSize();
-                                        int dailyLimit = user.getSubscriptionPlan().getLimits().migrationDailyLimit();
+                                        long maxFileSize = user.getMigrationMaxFileSize() != null ? user.getMigrationMaxFileSize() : user.getSubscriptionPlan().getLimits().migrationMaxFileSize();
+                                        int dailyLimit = user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : user.getSubscriptionPlan().getLimits().migrationDailyLimit();
                                         return Map.<String, Object>of(
                                                 "maxFileSizeBytes", maxFileSize,
                                                 "maxDailyLimit", dailyLimit, // mapped as limit key for UI
@@ -98,6 +101,9 @@ public class MigrationServiceImp implements MigrationService {
                         user.setSubscriptionTier("FREEMIUM");
                         user.setStorageQuota(1073741824L);
                         user.setSubscriptionExpiresAt(null);
+                        user.setAiDailyLimit(5);
+                        user.setMigrationDailyLimit(3);
+                        user.setMigrationMaxFileSize(268435456L);
                         activeUserMono = userRepository.save(user);
                     }
                     return activeUserMono;
@@ -119,7 +125,7 @@ public class MigrationServiceImp implements MigrationService {
                                     return Mono.error(new IllegalStateException("Ada proses migrasi lain yang sedang berjalan. Silakan tunggu hingga selesai."));
                                 }
 
-                                int dailyLimit = user.getSubscriptionPlan().getLimits().migrationDailyLimit();
+                                int dailyLimit = user.getMigrationDailyLimit() != null ? user.getMigrationDailyLimit() : user.getSubscriptionPlan().getLimits().migrationDailyLimit();
                                 if (dailyLimit == -1) {
                                     return Mono.empty(); // Unlimited
                                 }

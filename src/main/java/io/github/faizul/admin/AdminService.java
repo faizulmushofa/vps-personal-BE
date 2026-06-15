@@ -41,6 +41,9 @@ public class AdminService {
                         user.setSubscriptionTier("FREEMIUM");
                         user.setStorageQuota(1073741824L);
                         user.setSubscriptionExpiresAt(null);
+                        user.setAiDailyLimit(5);
+                        user.setMigrationDailyLimit(3);
+                        user.setMigrationMaxFileSize(268435456L);
                         checkDowngradeMono = userRepository.save(user);
                     }
 
@@ -123,7 +126,7 @@ public class AdminService {
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = LocalDateTime.of(today, LocalTime.MIN);
         LocalDateTime monthStart = LocalDateTime.of(today.withDayOfMonth(1), LocalTime.MIN);
-        LocalDateTime historyStart = LocalDateTime.of(today.minusDays(7), LocalTime.MIN);
+        LocalDateTime historyStart = LocalDateTime.of(today.minusDays(6), LocalTime.MIN);
 
         // Query Today Stats
         String todayQuery = "SELECT COALESCE(SUM(input_tokens), 0) as in_t, COALESCE(SUM(output_tokens), 0) as out_t, COALESCE(SUM(total_tokens), 0) as tot_t FROM ai_token_logs WHERE created_at >= :todayStart";
@@ -167,15 +170,25 @@ public class AdminService {
                 .all();
 
         return Mono.zip(todayStatsMono, monthStatsMono, historyFlux.collectList())
-                .map(tuple -> new AiTokenStats(
-                        tuple.getT1().inputTokens(),
-                        tuple.getT1().outputTokens(),
-                        tuple.getT1().totalTokens(),
-                        tuple.getT2().inputTokens(),
-                        tuple.getT2().outputTokens(),
-                        tuple.getT2().totalTokens(),
-                        tuple.getT3()
-                ));
+                .map(tuple -> {
+                    java.util.Map<String, TokenHistoryEntry> mergedMap = new java.util.LinkedHashMap<>();
+                    for (int i = 6; i >= 0; i--) {
+                        String dateStr = today.minusDays(i).toString();
+                        mergedMap.put(dateStr, new TokenHistoryEntry(dateStr, 0L, 0L, 0L));
+                    }
+                    for (TokenHistoryEntry dbEntry : tuple.getT3()) {
+                        mergedMap.put(dbEntry.date(), dbEntry);
+                    }
+                    return new AiTokenStats(
+                            tuple.getT1().inputTokens(),
+                            tuple.getT1().outputTokens(),
+                            tuple.getT1().totalTokens(),
+                            tuple.getT2().inputTokens(),
+                            tuple.getT2().outputTokens(),
+                            tuple.getT2().totalTokens(),
+                            new java.util.ArrayList<>(mergedMap.values())
+                    );
+                });
     }
 
     private record TokenStatsTuple(Long inputTokens, Long outputTokens, Long totalTokens) {}
