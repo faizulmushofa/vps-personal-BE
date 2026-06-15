@@ -38,17 +38,22 @@ public class AiServiceImpl implements AiService {
                                 appSettingService.getSetting("ai.summary.primary.model", AiConfig.SUMMARY_PRIMARY_MODEL),
                                 appSettingService.getSetting("ai.summary.fallback.provider", AiConfig.SUMMARY_FALLBACK_PROVIDER),
                                 appSettingService.getSetting("ai.summary.fallback.model", AiConfig.SUMMARY_FALLBACK_MODEL),
-                                appSettingService.getSetting("ai.system_prompt", AiConfig.SYSTEM_PROMPT)
+                                appSettingService.getSetting("ai.summary.fallback.provider.two", AiConfig.SUMMARY_FALLBACK_PROVIDER_TWO),
+                                appSettingService.getSetting("ai.summary.fallback.model.two", AiConfig.SUMMARY_FALLBACK_MODEL_TWO),
+                                appSettingService.getSetting("ai.summary.system_prompt", AiConfig.SUMMARY_SYSTEM_PROMPT)
                         ).flatMap(tuple -> {
                             String primaryProvider = tuple.getT1();
                             String primaryModel = tuple.getT2();
-                            String fallbackProvider = tuple.getT3();
-                            String fallbackModel = tuple.getT4();
-                            String systemPrompt = tuple.getT5();
+                            String fallback1Provider = tuple.getT3();
+                            String fallback1Model = tuple.getT4();
+                            String fallback2Provider = tuple.getT5();
+                            String fallback2Model = tuple.getT6();
+                            String systemPrompt = tuple.getT7();
 
                             return aiFallbackService.callWithFallback(
                                     primaryProvider, primaryModel,
-                                    fallbackProvider, fallbackModel,
+                                    fallback1Provider, fallback1Model,
+                                    fallback2Provider, fallback2Model,
                                     systemPrompt, request.teks()
                             )
                             .flatMap(result -> quotaAndLogService.logTokenUsage(
@@ -76,17 +81,22 @@ public class AiServiceImpl implements AiService {
                                                     appSettingService.getSetting("ai.summary.primary.model", AiConfig.SUMMARY_PRIMARY_MODEL),
                                                     appSettingService.getSetting("ai.summary.fallback.provider", AiConfig.SUMMARY_FALLBACK_PROVIDER),
                                                     appSettingService.getSetting("ai.summary.fallback.model", AiConfig.SUMMARY_FALLBACK_MODEL),
-                                                    appSettingService.getSetting("ai.system_prompt", AiConfig.SYSTEM_PROMPT)
+                                                    appSettingService.getSetting("ai.summary.fallback.provider.two", AiConfig.SUMMARY_FALLBACK_PROVIDER_TWO),
+                                                    appSettingService.getSetting("ai.summary.fallback.model.two", AiConfig.SUMMARY_FALLBACK_MODEL_TWO),
+                                                    appSettingService.getSetting("ai.summary.system_prompt", AiConfig.SUMMARY_SYSTEM_PROMPT)
                                             ).flatMap(tuple -> {
                                                 String primaryProvider = tuple.getT1();
                                                 String primaryModel = tuple.getT2();
-                                                String fallbackProvider = tuple.getT3();
-                                                String fallbackModel = tuple.getT4();
-                                                String systemPrompt = tuple.getT5();
+                                                String fallback1Provider = tuple.getT3();
+                                                String fallback1Model = tuple.getT4();
+                                                String fallback2Provider = tuple.getT5();
+                                                String fallback2Model = tuple.getT6();
+                                                String systemPrompt = tuple.getT7();
 
                                                 return aiFallbackService.callWithFallback(
                                                         primaryProvider, primaryModel,
-                                                        fallbackProvider, fallbackModel,
+                                                        fallback1Provider, fallback1Model,
+                                                        fallback2Provider, fallback2Model,
                                                         systemPrompt, prompt
                                                 )
                                                 .flatMap(result -> quotaAndLogService.logTokenUsage(

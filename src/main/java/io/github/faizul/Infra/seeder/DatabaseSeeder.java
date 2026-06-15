@@ -346,43 +346,63 @@ public class DatabaseSeeder implements CommandLineRunner {
         return Flux.just(
                 AppSetting.builder()
                         .key("ai.summary.primary.provider")
-                        .value("groq")
+                        .value(AiConfig.SUMMARY_PRIMARY_PROVIDER)
                         .description("Penyedia model utama untuk rangkuman")
                         .build(),
                 AppSetting.builder()
                         .key("ai.summary.primary.model")
-                        .value("qwen/qwen3-next-80b-a3b-instruct")
+                        .value(AiConfig.SUMMARY_PRIMARY_MODEL)
                         .description("Model utama untuk rangkuman")
                         .build(),
                 AppSetting.builder()
                         .key("ai.summary.fallback.provider")
-                        .value("gemini")
+                        .value(AiConfig.SUMMARY_FALLBACK_PROVIDER)
                         .description("Penyedia model fallback untuk rangkuman")
                         .build(),
                 AppSetting.builder()
                         .key("ai.summary.fallback.model")
-                        .value("gemini-2.5-flash")
+                        .value(AiConfig.SUMMARY_FALLBACK_MODEL)
                         .description("Model fallback untuk rangkuman")
                         .build(),
                 AppSetting.builder()
+                        .key("ai.summary.fallback.provider.two")
+                        .value(AiConfig.SUMMARY_FALLBACK_PROVIDER_TWO)
+                        .description("Penyedia model fallback 2 untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.summary.fallback.model.two")
+                        .value(AiConfig.SUMMARY_FALLBACK_MODEL_TWO)
+                        .description("Model fallback 2 untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
                         .key("ai.chat.primary.provider")
-                        .value("groq")
+                        .value(AiConfig.CHAT_PRIMARY_PROVIDER)
                         .description("Penyedia model utama untuk chat PDF")
                         .build(),
                 AppSetting.builder()
                         .key("ai.chat.primary.model")
-                        .value("meta-llama/llama-3.3-70b-instruct")
+                        .value(AiConfig.CHAT_PRIMARY_MODEL)
                         .description("Model utama untuk chat PDF")
                         .build(),
                 AppSetting.builder()
                         .key("ai.chat.fallback.provider")
-                        .value("gemini")
+                        .value(AiConfig.CHAT_FALLBACK_PROVIDER)
                         .description("Penyedia model fallback untuk chat PDF")
                         .build(),
                 AppSetting.builder()
                         .key("ai.chat.fallback.model")
-                        .value("gemini-3.1-flash-lite")
+                        .value(AiConfig.CHAT_FALLBACK_MODEL)
                         .description("Model fallback untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.fallback.provider.two")
+                        .value(AiConfig.CHAT_FALLBACK_PROVIDER_TWO)
+                        .description("Penyedia model fallback 2 untuk chat PDF")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.fallback.model.two")
+                        .value(AiConfig.CHAT_FALLBACK_MODEL_TWO)
+                        .description("Model fallback 2 untuk chat PDF")
                         .build(),
                 AppSetting.builder()
                         .key("ai.guardrail.user_daily_request_limit")
@@ -393,6 +413,16 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .key("ai.system_prompt")
                         .value("Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"")
                         .description("System prompt utama untuk AI")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.summary.system_prompt")
+                        .value(AiConfig.SUMMARY_SYSTEM_PROMPT)
+                        .description("System prompt khusus untuk rangkuman")
+                        .build(),
+                AppSetting.builder()
+                        .key("ai.chat.system_prompt")
+                        .value(AiConfig.CHAT_SYSTEM_PROMPT)
+                        .description("System prompt khusus untuk chat PDF")
                         .build(),
                 AppSetting.builder()
                         .key("migration.max_file_size_bytes")

@@ -43,7 +43,7 @@ brevo:
     name: Premium VPS Cloud Test
 
 app:
-  frontend-url: ${frontend-url}
+  frontend-url: ${frontend-url:http://localhost:5173}
   seed:
     admin-password: TestAdminPass123!@
     user-password: TestUserPass123!@

@@ -33,23 +33,29 @@ public class PdfChatServiceImpl implements PdfChatService {
                 .flatMap(userId -> quotaAndLogService.checkAndIncrementQuota(userId)
                         .flatMap(user -> pdfService.extractFile(fileId)
                                 .flatMap(text -> {
-                                    String systemPrompt = "Anda adalah asisten AI yang menjawab pertanyaan pengguna berdasarkan dokumen PDF berikut. " +
-                                            "Jawablah dengan sopan dan informatif berdasarkan isi dokumen ini:\n\n" + text;
-
                                     return Mono.zip(
                                             appSettingService.getSetting("ai.chat.primary.provider", AiConfig.CHAT_PRIMARY_PROVIDER),
                                             appSettingService.getSetting("ai.chat.primary.model", AiConfig.CHAT_PRIMARY_MODEL),
                                             appSettingService.getSetting("ai.chat.fallback.provider", AiConfig.CHAT_FALLBACK_PROVIDER),
-                                            appSettingService.getSetting("ai.chat.fallback.model", AiConfig.CHAT_FALLBACK_MODEL)
+                                            appSettingService.getSetting("ai.chat.fallback.model", AiConfig.CHAT_FALLBACK_MODEL),
+                                            appSettingService.getSetting("ai.chat.fallback.provider.two", AiConfig.CHAT_FALLBACK_PROVIDER_TWO),
+                                            appSettingService.getSetting("ai.chat.fallback.model.two", AiConfig.CHAT_FALLBACK_MODEL_TWO),
+                                            appSettingService.getSetting("ai.chat.system_prompt", AiConfig.CHAT_SYSTEM_PROMPT)
                                     ).flatMap(tuple -> {
                                         String primaryProvider = tuple.getT1();
                                         String primaryModel = tuple.getT2();
-                                        String fallbackProvider = tuple.getT3();
-                                        String fallbackModel = tuple.getT4();
+                                        String fallback1Provider = tuple.getT3();
+                                        String fallback1Model = tuple.getT4();
+                                        String fallback2Provider = tuple.getT5();
+                                        String fallback2Model = tuple.getT6();
+                                        String chatSystemPrompt = tuple.getT7();
+
+                                        String systemPrompt = chatSystemPrompt + "\n\nDokumen:\n" + text;
 
                                         return aiFallbackService.callWithFallback(
                                                 primaryProvider, primaryModel,
-                                                fallbackProvider, fallbackModel,
+                                                fallback1Provider, fallback1Model,
+                                                fallback2Provider, fallback2Model,
                                                 systemPrompt, request.teks()
                                         )
                                         .flatMap(result -> quotaAndLogService.logTokenUsage(

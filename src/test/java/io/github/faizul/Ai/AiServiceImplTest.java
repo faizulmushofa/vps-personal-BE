@@ -68,7 +68,7 @@ class AiServiceImplTest {
             AiRequest request = new AiRequest("Some text to summarize");
 
             when(aiFallbackService.callWithFallback(
-                    anyString(), anyString(), anyString(), anyString(), anyString(), eq("Some text to summarize")))
+                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), eq("Some text to summarize")))
                     .thenReturn(Mono.just(new io.github.faizul.Ai.client.AiGenerationResult("This is a summary", 10, 10)));
 
             StepVerifier.create(aiService.summary(request))
@@ -82,7 +82,7 @@ class AiServiceImplTest {
             AiRequest request = new AiRequest("Some text");
 
             when(aiFallbackService.callWithFallback(
-                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                     .thenReturn(Mono.error(new RuntimeException("AI service down")));
 
             StepVerifier.create(aiService.summary(request))
@@ -108,7 +108,7 @@ class AiServiceImplTest {
 
             verify(pdfService, never()).extractFile(any());
             verify(aiFallbackService, never()).callWithFallback(
-                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         }
 
         @Test
@@ -119,7 +119,7 @@ class AiServiceImplTest {
             when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.empty());
             when(pdfService.extractFile(fileId)).thenReturn(Mono.just("PDF text content"));
             when(aiFallbackService.callWithFallback(
-                    anyString(), anyString(), anyString(), anyString(), anyString(), contains("PDF text content")))
+                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), contains("PDF text content")))
                     .thenReturn(Mono.just(new io.github.faizul.Ai.client.AiGenerationResult("Generated summary", 10, 10)));
             when(cacheService.cacheSummary(fileId, "Generated summary"))
                     .thenReturn(Mono.just("Generated summary"));

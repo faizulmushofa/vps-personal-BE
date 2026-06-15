@@ -59,10 +59,13 @@ class PdfChatServiceImplTest {
         when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
+        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI yang menjawab pertanyaan pengguna berdasarkan dokumen PDF berikut. Jawablah dengan sopan dan informatif berdasarkan isi dokumen ini."));
 
         io.github.faizul.Ai.client.AiGenerationResult mockResult = new io.github.faizul.Ai.client.AiGenerationResult("This document is about cloud storage systems.", 10, 10);
         when(aiFallbackService.callWithFallback(
-                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 contains("cloud storage"), eq("What is this document about?")))
                 .thenReturn(Mono.just(mockResult));
         when(quotaAndLogService.logTokenUsage(eq(1L), eq("CHAT"), anyString(), anyString(), eq(mockResult)))
@@ -106,9 +109,12 @@ class PdfChatServiceImplTest {
         when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
+        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI yang menjawab..."));
 
         when(aiFallbackService.callWithFallback(
-                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Mono.error(new RuntimeException("AI timeout")));
 
         StepVerifier.create(pdfChatService.chatPdf(fileId, request))
