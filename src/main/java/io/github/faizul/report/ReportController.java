@@ -24,37 +24,7 @@ public class ReportController {
 
     private final NotificationService notificationService;
     private final CurrentUserContext currentUserContext;
-
-    // OWASP A08 FIX: Rate limit reports per IP (3 per hour)
-    private static final int MAX_REPORTS_PER_WINDOW = 3;
-    private static final long REPORT_WINDOW_MS = 60 * 60 * 1000L; // 1 hour
-
-    private record ReportRateEntry(AtomicInteger count, long windowStart) {}
-    private final Map<String, ReportRateEntry> reportRateMap = new ConcurrentHashMap<>();
-
-    private boolean isReportRateLimited(ServerWebExchange exchange) {
-        String ip = extractIp(exchange);
-        long now = Instant.now().toEpochMilli();
-
-        ReportRateEntry entry = reportRateMap.compute(ip, (key, existing) -> {
-            if (existing == null || now - existing.windowStart() > REPORT_WINDOW_MS) {
-                return new ReportRateEntry(new AtomicInteger(1), now);
-            }
-            existing.count().incrementAndGet();
-            return existing;
-        });
-
-        return entry.count().get() > MAX_REPORTS_PER_WINDOW;
-    }
-
-    private String extractIp(ServerWebExchange exchange) {
-        String forwarded = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        var remoteAddr = exchange.getRequest().getRemoteAddress();
-        return remoteAddr != null ? remoteAddr.getAddress().getHostAddress() : "unknown";
-    }
+    private final IpRateLimiter rateLimiter;
 
     /**
      * OWASP A08 FIX: Sanitize HTML in description to prevent email-based XSS/phishing
@@ -75,8 +45,8 @@ public class ReportController {
             return Mono.just(ResponseEntity.badRequest().build());
         }
 
-        // OWASP A08 FIX: Rate limit
-        if (isReportRateLimited(exchange)) {
+        // OWASP A08 FIX: Rate limit (3 per hour)
+        if (rateLimiter.isRateLimited(exchange, "report", 3, 60 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build());
         }
 

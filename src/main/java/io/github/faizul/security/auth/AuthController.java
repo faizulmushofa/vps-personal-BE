@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequestMapping("api/auth")
 public class AuthController {
     private final AuthService authService;
+    private final IpRateLimiter rateLimiter;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
     private String frontendUrl;
@@ -61,40 +62,9 @@ public class AuthController {
         }
     }
 
-    // ====== RATE LIMITER: In-memory per-IP tracker (OWASP A07) ======
-    private static final int MAX_AUTH_ATTEMPTS = 10;    // max attempts per window
-    private static final long WINDOW_MS = 15 * 60 * 1000L; // 15 minutes
-
-    private record RateEntry(AtomicInteger count, long windowStart) {}
-    private final Map<String, RateEntry> rateLimitMap = new ConcurrentHashMap<>();
-
-    private boolean isRateLimited(ServerWebExchange exchange) {
-        String ip = extractIp(exchange);
-        long now = Instant.now().toEpochMilli();
-
-        RateEntry entry = rateLimitMap.compute(ip, (key, existing) -> {
-            if (existing == null || now - existing.windowStart() > WINDOW_MS) {
-                return new RateEntry(new AtomicInteger(1), now);
-            }
-            existing.count().incrementAndGet();
-            return existing;
-        });
-
-        return entry.count().get() > MAX_AUTH_ATTEMPTS;
-    }
-
-    private String extractIp(ServerWebExchange exchange) {
-        String forwarded = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        var remoteAddr = exchange.getRequest().getRemoteAddress();
-        return remoteAddr != null ? remoteAddr.getAddress().getHostAddress() : "unknown";
-    }
-
     @PostMapping("/register")
     public Mono<ResponseEntity<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request, ServerWebExchange exchange){
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "register", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
@@ -104,7 +74,7 @@ public class AuthController {
 
     @PostMapping("/register/resend-otp")
     public Mono<ResponseEntity<RegisterResponse>> resendRegistrationOtp(@RequestParam String email, ServerWebExchange exchange) {
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "resend-otp", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
@@ -114,7 +84,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@Valid @RequestBody LoginRequest request, ServerHttpResponse response, ServerWebExchange exchange){
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "login", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new LoginResponse("Terlalu banyak percobaan login. Silakan coba lagi dalam 15 menit.", null)));
         }
@@ -160,7 +130,7 @@ public class AuthController {
 
     @PostMapping("/verify-registration")
     public Mono<ResponseEntity<RegisterResponse>> verifyRegistration(@Valid @RequestBody VerifyOtpRequest request, ServerWebExchange exchange) {
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "verify-registration", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan verifikasi. Silakan coba lagi dalam 15 menit.")));
         }
@@ -170,7 +140,7 @@ public class AuthController {
 
     @PostMapping("/forgot-password/request")
     public Mono<ResponseEntity<RegisterResponse>> requestForgotPassword(@Valid @RequestBody ForgotPasswordRequest request, ServerWebExchange exchange) {
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "forgot-password-request", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
@@ -180,7 +150,7 @@ public class AuthController {
 
     @PostMapping("/forgot-password/reset")
     public Mono<ResponseEntity<RegisterResponse>> resetPassword(@Valid @RequestBody ResetPasswordRequest request, ServerWebExchange exchange) {
-        if (isRateLimited(exchange)) {
+        if (rateLimiter.isRateLimited(exchange, "forgot-password-reset", 5, 15 * 60 * 1000L)) {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
