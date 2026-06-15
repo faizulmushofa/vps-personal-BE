@@ -39,6 +39,7 @@ class AuthServiceTest {
     @Mock private UserService userService;
     @Mock private OtpVerificationRepository otpVerificationRepository;
     @Mock private NotificationService notificationService;
+    @Mock private io.github.faizul.activity.UserActivityService userActivityService;
 
     @InjectMocks
     private AuthService authService;
@@ -55,6 +56,8 @@ class AuthServiceTest {
                 .fullName("Test User")
                 .isActive(true)
                 .build();
+
+        lenient().when(userActivityService.log(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Nested
@@ -78,7 +81,7 @@ class AuthServiceTest {
             when(notificationService.sendNotification(anyString(), anyString(), anyString()))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.register(request))
+            StepVerifier.create(authService.register(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("Register Successfully"))
                     .verifyComplete();
 
@@ -115,7 +118,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("Verifikasi email berhasil"))
                     .verifyComplete();
         }
@@ -136,7 +139,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "REGISTRATION"))
                     .thenReturn(Mono.just(expiredOtp));
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("kadaluarsa"))
                     .verify();
@@ -150,7 +153,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "REGISTRATION"))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("OTP tidak valid"))
                     .verify();
@@ -171,7 +174,7 @@ class AuthServiceTest {
             when(jwtService.generateAccessToken(activeUser)).thenReturn("access-token-abc");
             when(jwtService.generateRefreshToken(activeUser)).thenReturn(Mono.just("refresh-token-xyz"));
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .assertNext(response -> {
                         assertThat(response.accessToken()).isEqualTo("access-token-abc");
                         assertThat(response.refreshToken()).isEqualTo("refresh-token-xyz");
@@ -187,7 +190,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("wrongPassword", "hashedPassword")).thenReturn(false);
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -201,7 +204,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("correctPassword", "hashedPassword")).thenReturn(true);
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("belum aktif"))
                     .verify();
@@ -214,7 +217,7 @@ class AuthServiceTest {
 
             when(userRepository.findByEmail("unknown@example.com")).thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -235,7 +238,7 @@ class AuthServiceTest {
             when(notificationService.sendNotification(anyString(), anyString(), anyString()))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.requestForgotPassword(request))
+            StepVerifier.create(authService.requestForgotPassword(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("OTP pemulihan"))
                     .verifyComplete();
         }
@@ -247,7 +250,7 @@ class AuthServiceTest {
 
             when(userRepository.findByEmail("unknown@example.com")).thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.requestForgotPassword(request))
+            StepVerifier.create(authService.requestForgotPassword(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -279,7 +282,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-            StepVerifier.create(authService.resetPassword(request))
+            StepVerifier.create(authService.resetPassword(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("berhasil diperbarui"))
                     .verifyComplete();
         }
@@ -299,7 +302,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "FORGOT_PASSWORD"))
                     .thenReturn(Mono.just(expiredOtp));
 
-            StepVerifier.create(authService.resetPassword(request))
+            StepVerifier.create(authService.resetPassword(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("kadaluarsa"))
                     .verify();

@@ -2,6 +2,8 @@ package io.github.faizul.User.externalAccount;
 
 import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.User.dtos.ExternalAccountDto;
+import io.github.faizul.User.core.User;
+import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.User.externalAccount.ExternalProvider.ExternalProvider;
 import io.github.faizul.User.externalAccount.ExternalProvider.ExternalProviderFactory;
 import io.github.faizul.security.filter.CurrentUserContext;
@@ -29,6 +31,9 @@ class ExternalAccountServiceTest {
     @Mock private CurrentUserContext currentUserContext;
     @Mock private FileRepository fileRepository;
     @Mock private ExternalProvider externalProvider;
+    @Mock private UserRepository userRepository;
+    @Mock private io.github.faizul.security.jwt.EncryptionService encryptionService;
+    @Mock private io.github.faizul.activity.UserActivityService userActivityService;
 
     @InjectMocks
     private ExternalAccountServiceImp externalAccountService;
@@ -47,6 +52,10 @@ class ExternalAccountServiceTest {
                 .refreshToken("refresh-token-xyz")
                 .expiresAt(9999999999L)
                 .build();
+
+        lenient().when(userActivityService.log(any(), any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(encryptionService.encrypt(anyString())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(encryptionService.decrypt(anyString())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Nested
@@ -72,12 +81,23 @@ class ExternalAccountServiceTest {
         @Test
         @DisplayName("should save external account on callback")
         void handleCallback_success() {
+            User user = User.builder()
+                    .id(10L)
+                    .username("google@example.com")
+                    .email("google@example.com")
+                    .isActive(true)
+                    .subscriptionTier("FREEMIUM")
+                    .storageQuota(1073741824L)
+                    .build();
             when(currentUserContext.getUserId()).thenReturn(Mono.just(10L));
+            when(userRepository.findById(10L)).thenReturn(Mono.just(user));
+            when(fileRepository.calculateUsedStorageByUserId(10L)).thenReturn(Mono.just(0L));
+            when(externalAccountRepository.findAllByUserId(10L)).thenReturn(Flux.empty());
             when(providerFactory.getProvider("google")).thenReturn(externalProvider);
             when(externalProvider.exchangeCode("auth-code-123")).thenReturn(Mono.just(sampleAccount));
             when(externalAccountRepository.save(any(ExternalAccount.class))).thenReturn(Mono.just(sampleAccount));
 
-            StepVerifier.create(externalAccountService.handleCallback("google", "auth-code-123"))
+            StepVerifier.create(externalAccountService.handleCallback("google", "auth-code-123", null))
                     .verifyComplete();
 
             verify(externalAccountRepository).save(argThat(account -> account.getUserId().equals(10L)));
@@ -126,7 +146,7 @@ class ExternalAccountServiceTest {
             when(fileRepository.deleteByUserIdAndProvider(10L, "GOOGLE_DRIVE")).thenReturn(Mono.empty());
             when(externalAccountRepository.deleteById(1L)).thenReturn(Mono.empty());
 
-            StepVerifier.create(externalAccountService.disconnect(1L))
+            StepVerifier.create(externalAccountService.disconnect(1L, null))
                     .verifyComplete();
 
             verify(fileRepository).deleteByUserIdAndProvider(10L, "GOOGLE_DRIVE");

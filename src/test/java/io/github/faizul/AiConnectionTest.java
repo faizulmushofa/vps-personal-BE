@@ -1,6 +1,5 @@
 package io.github.faizul;
 
-import io.github.faizul.Ai.client.GeminiService;
 import io.github.faizul.Ai.client.GroqService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,69 +13,52 @@ public class AiConnectionTest {
     @Autowired
     private GroqService groqService;
 
-    @Autowired
-    private GeminiService geminiService;
-
     @Test
     public void testAllAiConnections() {
+        String[] models = {
+            "openrouter/free",
+            "openai/gpt-oss-120b:free",
+            "openai/gpt-oss-20b:free",
+            "google/gemma-3-27b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "deepseek/deepseek-r1:free",
+            "qwen/qwen3-coder:free",
+            "google/gemini-flash:free",
+            "nvidia/nemotron-3-nano:free",
+            "openrouter/owl-alpha",
+            "minimax/m2.5:free",
+            "poolside/laguna-xs.2:free",
+            "poolside/laguna-m.1:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "google/gemma-4-31b-it:free",
+            "liquid/lfm-2.5-1.2b-thinking:free",
+            "liquid/lfm-2.5-1.2b-instruct:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "nvidia/nemotron-nano-12b-v2-vl:free",
+            "nvidia/nemotron-nano-9b-v2:free",
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+            "nousresearch/hermes-3-llama-3.1-405b:free"
+        };
+
         System.out.println("\n>>> ================================================= <<<");
         System.out.println(">>> STARTING AI CONNECTION INTEGRATION TESTS          <<<");
         System.out.println(">>> ================================================= <<<\n");
 
-        // 1. Summary Primary: qwen/qwen3-next-80b-a3b-instruct
-        System.out.println(">>> 1. Testing Summary Primary (OpenRouter): qwen/qwen3-next-80b-a3b-instruct");
-        try {
-            groqService.generate("Say hello briefly", "Hello", "qwen/qwen3-next-80b-a3b-instruct")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 2. Chat PDF Primary: meta-llama/llama-3.3-70b-instruct
-        System.out.println("\n>>> 2. Testing Chat PDF Primary (OpenRouter): meta-llama/llama-3.3-70b-instruct");
-        try {
-            groqService.generate("Say hello briefly", "Hello", "meta-llama/llama-3.3-70b-instruct")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 3. Summary Fallback: gemini-2.5-flash
-        System.out.println("\n>>> 3. Testing Summary Fallback (Gemini Native): gemini-2.5-flash");
-        try {
-            geminiService.generate("Say hello briefly", "Hello", "gemini-2.5-flash")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 4. Chat PDF Fallback: gemini-3.1-flash-lite
-        System.out.println("\n>>> 4. Testing Chat PDF Fallback (Gemini Native): gemini-3.1-flash-lite");
-        try {
-            geminiService.generate("Say hello briefly", "Hello", "gemini-3.1-flash-lite")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
+        for (String model : models) {
+            System.out.println(">>> Testing OpenRouter Model: " + model);
+            try {
+                groqService.generate("Say 'Connection OK' briefly", "Test", model)
+                        .timeout(Duration.ofSeconds(20))
+                        .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.content().trim().replace("\n", " ")))
+                        .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
+                        .as(StepVerifier::create)
+                        .expectNextCount(1)
+                        .verifyComplete();
+            } catch (Throwable t) {
+                System.err.println("    [FAILED] Exception: " + t.getMessage());
+            }
+            System.out.println("-------------------------------------------------------");
         }
 
         System.out.println("\n>>> ================================================= <<<");
