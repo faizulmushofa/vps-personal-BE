@@ -9,6 +9,7 @@ import io.github.faizul.security.userrole.UserRole;
 import io.github.faizul.security.userrole.UserRoleRepository;
 import io.github.faizul.setting.AppSetting;
 import io.github.faizul.setting.AppSettingRepository;
+import io.github.faizul.infra.config.AiConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
