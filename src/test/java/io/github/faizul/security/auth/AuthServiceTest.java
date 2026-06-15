@@ -172,6 +172,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("correctPassword", "hashedPassword")).thenReturn(true);
             when(jwtService.generateAccessToken(activeUser)).thenReturn("access-token-abc");
+            when(jwtService.revokeAllUserTokens(activeUser.getId())).thenReturn(Mono.empty());
             when(jwtService.generateRefreshToken(activeUser)).thenReturn(Mono.just("refresh-token-xyz"));
 
             StepVerifier.create(authService.login(request, null))

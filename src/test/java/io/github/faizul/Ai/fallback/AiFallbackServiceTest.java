@@ -33,7 +33,7 @@ class AiFallbackServiceTest {
 
         lenient().when(primaryClient.supports("groq")).thenReturn(true);
         lenient().when(fallback1Client.supports("gemini")).thenReturn(true);
-        lenient().when(fallback2Client.supports("groq")).thenReturn(true);
+        lenient().when(fallback2Client.supports("groq-fallback")).thenReturn(true);
 
         aiFallbackService = new AiFallbackService(List.of(primaryClient, fallback1Client, fallback2Client));
     }
@@ -47,7 +47,7 @@ class AiFallbackServiceTest {
         StepVerifier.withVirtualTime(() -> aiFallbackService.callWithFallback(
                 "groq", "groq-model-primary",
                 "gemini", "gemini-model-fb1",
-                "groq", "groq-model-fb2",
+                "groq-fallback", "groq-model-fb2",
                 "system prompt", "user message"))
                 .thenAwait(Duration.ofSeconds(1))
                 .assertNext(response -> assertThat(response.content()).isEqualTo("Primary response"))
@@ -68,7 +68,7 @@ class AiFallbackServiceTest {
         StepVerifier.withVirtualTime(() -> aiFallbackService.callWithFallback(
                 "groq", "groq-model-primary",
                 "gemini", "gemini-model-fb1",
-                "groq", "groq-model-fb2",
+                "groq-fallback", "groq-model-fb2",
                 "system prompt", "user message"))
                 .thenAwait(Duration.ofSeconds(2))
                 .assertNext(response -> assertThat(response.content()).isEqualTo("Fallback 1 response"))
@@ -92,7 +92,7 @@ class AiFallbackServiceTest {
         StepVerifier.withVirtualTime(() -> aiFallbackService.callWithFallback(
                 "groq", "groq-model-primary",
                 "gemini", "gemini-model-fb1",
-                "groq", "groq-model-fb2",
+                "groq-fallback", "groq-model-fb2",
                 "system prompt", "user message"))
                 .thenAwait(Duration.ofSeconds(3))
                 .assertNext(response -> assertThat(response.content()).isEqualTo("Fallback 2 response"))
@@ -116,7 +116,7 @@ class AiFallbackServiceTest {
         StepVerifier.withVirtualTime(() -> aiFallbackService.callWithFallback(
                 "groq", "groq-model-primary",
                 "gemini", "gemini-model-fb1",
-                "groq", "groq-model-fb2",
+                "groq-fallback", "groq-model-fb2",
                 "system prompt", "user message"))
                 .thenAwait(Duration.ofSeconds(3))
                 .expectErrorMatches(t -> t.getMessage().contains("Fallback 2 down"))
@@ -129,7 +129,7 @@ class AiFallbackServiceTest {
         StepVerifier.create(aiFallbackService.callWithFallback(
                 "unknown-provider", "model",
                 "gemini", "gemini-model-fb1",
-                "groq", "groq-model-fb2",
+                "groq-fallback", "groq-model-fb2",
                 "system prompt", "user message"))
                 .expectError(IllegalArgumentException.class)
                 .verify();

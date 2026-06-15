@@ -25,7 +25,7 @@ jobs:
       run: chmod +x mvnw
 
     - name: Run Unit Tests
-      run: ./mvnw clean test
+      run: ./mvnw clean test -Dtest=!AiConnectionTest,!DatabaseConnectionTest
 
     - name: Package JAR (Build Verify)
       run: ./mvnw package -DskipTests

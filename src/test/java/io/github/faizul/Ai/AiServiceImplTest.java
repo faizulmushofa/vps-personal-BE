@@ -77,7 +77,7 @@ class AiServiceImplTest {
         }
 
         @Test
-        @DisplayName("should return fallback message when AI fails")
+        @DisplayName("should propagate error when AI fails")
         void summary_error() {
             AiRequest request = new AiRequest("Some text");
 
@@ -86,8 +86,8 @@ class AiServiceImplTest {
                     .thenReturn(Mono.error(new RuntimeException("AI service down")));
 
             StepVerifier.create(aiService.summary(request))
-                    .assertNext(response -> assertThat(response.response()).contains("Gagal menghasilkan ringkasan"))
-                    .verifyComplete();
+                    .expectErrorMatches(t -> t.getMessage().contains("AI service down"))
+                    .verify();
         }
     }
 
@@ -132,7 +132,7 @@ class AiServiceImplTest {
         }
 
         @Test
-        @DisplayName("should return error message when PDF extraction fails")
+        @DisplayName("should propagate error when PDF extraction fails")
         void summarizePdf_extractionError() {
             UUID fileId = UUID.randomUUID();
 
@@ -141,8 +141,8 @@ class AiServiceImplTest {
                     .thenReturn(Mono.error(new RuntimeException("File not found")));
 
             StepVerifier.create(aiService.summarizePdf(fileId))
-                    .assertNext(response -> assertThat(response.response()).contains("Gagal menghasilkan ringkasan PDF"))
-                    .verifyComplete();
+                    .expectErrorMatches(t -> t.getMessage().contains("File not found"))
+                    .verify();
         }
     }
 }
