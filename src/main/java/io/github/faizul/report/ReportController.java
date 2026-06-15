@@ -26,6 +26,7 @@ public class ReportController {
     private final NotificationService notificationService;
     private final CurrentUserContext currentUserContext;
     private final IpRateLimiter rateLimiter;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     /**
      * OWASP A08 FIX: Sanitize HTML in description to prevent email-based XSS/phishing
@@ -62,22 +63,26 @@ public class ReportController {
 
         final String finalDescription = sanitizedDescription;
 
-        return currentUserContext.getUser()
-                .flatMap(userDetails -> {
-                    String userEmail = sanitizeHtml(userDetails.getUsername());
-                    String subject = "Laporan Kendala Baru dari Pengguna - Horizon Drive";
-                    String htmlBody = EmailTemplateFactory.getBugReportTemplate(userEmail, finalDescription);
-                    
-                    log.info("Mengirimkan laporan bug ke developer dari user: {}", userEmail);
-                    return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody);
-                })
+        return currentUserContext.getUserId()
+                .flatMap(userId -> currentUserContext.getUser()
+                        .flatMap(userDetails -> {
+                            String userEmail = sanitizeHtml(userDetails.getUsername());
+                            String subject = "Laporan Kendala Baru dari Pengguna - Horizon Drive";
+                            String htmlBody = EmailTemplateFactory.getBugReportTemplate(userEmail, finalDescription);
+                            
+                            log.info("Mengirimkan laporan bug ke developer dari user: {}", userEmail);
+                            return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody)
+                                    .then(userActivityService.log(userId, "SUBMIT_BUG_REPORT", "Mengirimkan laporan kendala/bug ke pengembang", exchange));
+                        })
+                )
                 // Fallback jika dikirim tanpa login (anonim)
                 .onErrorResume(e -> {
                     String subject = "Laporan Kendala Baru (Anonim) - Horizon Drive";
                     String htmlBody = EmailTemplateFactory.getBugReportTemplate("Anonymous (Not Logged In)", finalDescription);
                     
                     log.info("Mengirimkan laporan bug anonim ke developer");
-                    return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody);
+                    return notificationService.sendNotification("emuyforge@gmail.com", subject, htmlBody)
+                            .then(userActivityService.log(null, "SUBMIT_BUG_REPORT", "Mengirimkan laporan kendala/bug secara anonim", exchange));
                 })
                 .then(Mono.just(ResponseEntity.ok().build()));
     }

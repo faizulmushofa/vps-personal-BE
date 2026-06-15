@@ -1,5 +1,6 @@
 package io.github.faizul.security.auth;
 
+import io.github.faizul.activity.UserActivityService;
 import io.github.faizul.notification.EmailTemplateFactory;
 import io.github.faizul.security.auth.dtos.*;
 import io.github.faizul.security.jwt.JwtService;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.security.SecureRandom;
@@ -32,6 +34,7 @@ public class AuthService {
         private final UserService userService;
         private final OtpVerificationRepository otpVerificationRepository;
         private final NotificationService notificationService;
+        private final UserActivityService userActivityService;
 
         // OWASP A04 FIX: Use SecureRandom instead of java.util.Random
         private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -77,7 +80,7 @@ public class AuthService {
                 return String.valueOf(code);
         }
 
-        public Mono<RegisterResponse> register(RegisterRequest request) {
+        public Mono<RegisterResponse> register(RegisterRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
                 return userRepository.findByEmail(emailNormalized)
                                 .flatMap(existingUser -> {
@@ -124,6 +127,7 @@ public class AuthService {
                                                                                                         return otpVerificationRepository.save(otp)
                                                                                                                         .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, htmlBody)
                                                                                                                                         .doOnError(err -> log.error("Gagal mengirim email OTP: {}", err.getMessage(), err)))
+                                                                                                                        .then(userActivityService.log(savedUser.getId(), "REGISTER_REQUEST", "Pendaftaran akun baru untuk email: " + savedUser.getEmail(), exchange))
                                                                                                                         .thenReturn(new RegisterResponse("Register Successfully. Silakan periksa email Anda untuk kode verifikasi OTP."));
                                                                                                 })));
                                                         }));
@@ -149,11 +153,12 @@ public class AuthService {
                                                         return otpVerificationRepository.save(otp)
                                                                         .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, htmlBody)
                                                                                         .doOnError(err -> log.error("Gagal mengirim email OTP: {}", err.getMessage(), err)))
+                                                                        .then(userActivityService.log(userDto.id(), "REGISTER_REQUEST", "Pendaftaran akun baru untuk email: " + userDto.email(), exchange))
                                                                         .thenReturn(new RegisterResponse("Register Successfully. Silakan periksa email Anda untuk kode verifikasi OTP."));
                                                 })));
         }
 
-        public Mono<RegisterResponse> verifyRegistration(VerifyOtpRequest request) {
+        public Mono<RegisterResponse> verifyRegistration(VerifyOtpRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
 
                 // OWASP A04: Check OTP attempt limit
@@ -187,15 +192,15 @@ public class AuthService {
                                                                 otp.setVerified(true);
 
                                                                 return userRepository.save(user)
-                                                                                .then(otpVerificationRepository
-                                                                                                .save(otp))
+                                                                                .then(otpVerificationRepository.save(otp))
+                                                                                .then(userActivityService.log(user.getId(), "REGISTER_SUCCESS", "Verifikasi email pendaftaran berhasil. Akun aktif.", exchange))
                                                                                 .thenReturn(new RegisterResponse(
                                                                                                 "Verifikasi email berhasil. Akun Anda telah aktif, silakan login."));
                                                         });
                                 });
         }
 
-        public Mono<Response> login(LoginRequest request) {
+        public Mono<Response> login(LoginRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
                 return userRepository.findByEmail(emailNormalized)
                                 .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
@@ -209,8 +214,9 @@ public class AuthService {
                                         String accessToken = jwtService.generateAccessToken(user);
 
                                         return jwtService.revokeAllUserTokens(user.getId())
-                                                        .then(jwtService.generateRefreshToken(user))
-                                                        .map(refreshToken -> new Response(accessToken, refreshToken));
+                                                         .then(jwtService.generateRefreshToken(user))
+                                                         .flatMap(refreshToken -> userActivityService.log(user.getId(), "LOGIN_SUCCESS", "Login berhasil", exchange)
+                                                                 .thenReturn(new Response(accessToken, refreshToken)));
                                 });
         }
 
@@ -218,7 +224,7 @@ public class AuthService {
                 return jwtService.revokeToken(refreshToken);
         }
 
-        public Mono<RegisterResponse> requestForgotPassword(ForgotPasswordRequest request) {
+        public Mono<RegisterResponse> requestForgotPassword(ForgotPasswordRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
                 return userRepository.findByEmail(emailNormalized)
                                 .switchIfEmpty(Mono.error(new UsernameNotFoundException("Email tidak terdaftar")))
@@ -251,12 +257,13 @@ public class AuthService {
                                                                         .doOnError(err -> log.error(
                                                                                         "Gagal mengirim email OTP lupa password: {}",
                                                                                         err.getMessage(), err)))
+                                                        .then(userActivityService.log(user.getId(), "FORGOT_PASSWORD_REQUEST", "Permintaan OTP lupa kata sandi", exchange))
                                                         .thenReturn(new RegisterResponse(
                                                                         "OTP pemulihan kata sandi telah dikirim ke email Anda."));
                                 });
         }
 
-        public Mono<RegisterResponse> resetPassword(ResetPasswordRequest request) {
+        public Mono<RegisterResponse> resetPassword(ResetPasswordRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
 
                 // OWASP A04: Check OTP attempt limit
@@ -292,15 +299,15 @@ public class AuthService {
                                                                 otp.setVerified(true);
 
                                                                 return userRepository.save(user)
-                                                                                .then(otpVerificationRepository
-                                                                                                .save(otp))
+                                                                                .then(otpVerificationRepository.save(otp))
+                                                                                .then(userActivityService.log(user.getId(), "RESET_PASSWORD_SUCCESS", "Mengatur ulang kata sandi akun berhasil", exchange))
                                                                                 .thenReturn(new RegisterResponse(
                                                                                                 "Kata sandi berhasil diperbarui. Silakan login kembali."));
                                                         });
                                 });
         }
 
-        public Mono<RegisterResponse> resendRegistrationOtp(String email) {
+        public Mono<RegisterResponse> resendRegistrationOtp(String email, ServerWebExchange exchange) {
                 String emailNormalized = email.toLowerCase().trim();
                 return userRepository.findByEmail(emailNormalized)
                                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Email tidak terdaftar")))
@@ -341,6 +348,7 @@ public class AuthService {
                                                                                 return otpVerificationRepository.save(otp)
                                                                                                 .flatMap(savedOtp -> notificationService.sendNotification(emailNormalized, emailSubject, htmlBody)
                                                                                                                 .doOnError(err -> log.error("Gagal mengirim email OTP ulang: {}", err.getMessage(), err)))
+                                                                                                .then(userActivityService.log(user.getId(), "REGISTER_RESEND_OTP", "Mengirim ulang OTP verifikasi registrasi ke: " + emailNormalized, exchange))
                                                                                                 .thenReturn(new RegisterResponse("Kode OTP baru berhasil dikirim ke email Anda."));
                                                                         }))));
                                 });

@@ -35,18 +35,21 @@ public class GoogleDriveServiceImp {
     private final GoogleDriveClient googleDriveClient;
     private final ExternalAccountRepository externalAccountRepository;
     private final Scheduler googleSyncScheduler;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     public GoogleDriveServiceImp(
             FileRepository fileRepository,
             CurrentUserContext currentUserContext,
             GoogleDriveClient googleDriveClient,
             ExternalAccountRepository externalAccountRepository,
-            @Qualifier("googleSyncScheduler") Scheduler googleSyncScheduler) {
+            @Qualifier("googleSyncScheduler") Scheduler googleSyncScheduler,
+            io.github.faizul.activity.UserActivityService userActivityService) {
         this.fileRepository = fileRepository;
         this.currentUserContext = currentUserContext;
         this.googleDriveClient = googleDriveClient;
         this.externalAccountRepository = externalAccountRepository;
         this.googleSyncScheduler = googleSyncScheduler;
+        this.userActivityService = userActivityService;
     }
 
     public Flux<FileResponse> getFiles(Long externalAccountId) {
@@ -65,7 +68,7 @@ public class GoogleDriveServiceImp {
                 ));
     }
 
-    public Mono<String> deleteFile(UUID uuid) {
+    public Mono<String> deleteFile(UUID uuid, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> fileRepository.findById(uuid)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")))
@@ -80,6 +83,7 @@ public class GoogleDriveServiceImp {
                                         return Mono.just(e.getMessage());
                                     })
                                     .flatMap(warning -> fileRepository.deleteById(uuid)
+                                            .then(userActivityService.log(userId, "DELETE_FILE_GD", "Menghapus berkas Google Drive: " + file.getOriginalFileName(), exchange))
                                             .thenReturn(warning)
                                     );
                         })
@@ -118,7 +122,7 @@ public class GoogleDriveServiceImp {
                 );
     }
 
-    public Mono<Void> syncGoogleDrive(Long externalAccountId) {
+    public Mono<Void> syncGoogleDrive(Long externalAccountId, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Akun Google Drive tidak ditemukan")))
@@ -132,7 +136,9 @@ public class GoogleDriveServiceImp {
                                                         externalAccountId.equals(file.getExternalAccountId()))
                                                 .collectList()
                                                 .map(localGoogleFiles -> calculateSyncDiff(userId, externalAccountId, googleFiles, localGoogleFiles))
-                                                .flatMap(this::applyDatabaseSyncChanges);
+                                                .flatMap(this::applyDatabaseSyncChanges)
+                                                .then(userActivityService.log(userId, "SYNC_GD", "Sinkronisasi berkas Google Drive untuk akun: " + account.getEmail(), exchange))
+                                                .then();
                                     });
                         })
                 )

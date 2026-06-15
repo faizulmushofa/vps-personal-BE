@@ -1,11 +1,9 @@
 package io.github.faizul.security.auth;
 
-import io.github.faizul.security.auth.dtos.*;
-
-import io.github.faizul.security.filter.*;
-
+import io.github.faizul.activity.UserActivityService;
 import io.github.faizul.security.auth.dtos.*;
 import io.github.faizul.security.filter.CookieFactory;
+import io.github.faizul.security.filter.CurrentUserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class AuthController {
     private final AuthService authService;
     private final IpRateLimiter rateLimiter;
+    private final CurrentUserContext currentUserContext;
+    private final UserActivityService userActivityService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
     private String frontendUrl;
@@ -68,7 +68,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
-        return authService.register(request)
+        return authService.register(request, exchange)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
@@ -78,7 +78,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
-        return authService.resendRegistrationOtp(email)
+        return authService.resendRegistrationOtp(email, exchange)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
@@ -88,7 +88,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new LoginResponse("Terlalu banyak percobaan login. Silakan coba lagi dalam 15 menit.", null)));
         }
-        return authService.login(request)
+        return authService.login(request, exchange)
                 .map(e -> {
                     response.addCookie(
                             CookieFactory.createRefreshTokenCookie(e.refreshToken())
@@ -134,7 +134,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan verifikasi. Silakan coba lagi dalam 15 menit.")));
         }
-        return authService.verifyRegistration(request)
+        return authService.verifyRegistration(request, exchange)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
@@ -144,7 +144,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
-        return authService.requestForgotPassword(request)
+        return authService.requestForgotPassword(request, exchange)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
@@ -154,7 +154,7 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new RegisterResponse("Terlalu banyak percobaan. Silakan coba lagi dalam 15 menit.")));
         }
-        return authService.resetPassword(request)
+        return authService.resetPassword(request, exchange)
                 .map(r -> new ResponseEntity<>(r, HttpStatus.OK));
     }
 
@@ -168,10 +168,19 @@ public class AuthController {
             return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
         }
         response.addCookie(CookieFactory.deleteRefreshTokenCookie());
-        if (refreshToken == null || refreshToken.isEmpty()) {
-            return Mono.just(ResponseEntity.ok().build());
-        }
-        return authService.logout(refreshToken)
-                .thenReturn(ResponseEntity.ok().build());
+        
+        Mono<Void> logAndRevoke = currentUserContext.getUserId()
+                .flatMap(userId -> {
+                    Mono<Void> revokeFlow = refreshToken != null && !refreshToken.isEmpty()
+                            ? authService.logout(refreshToken)
+                            : Mono.empty();
+                    return revokeFlow.then(userActivityService.log(userId, "LOGOUT", "Keluar dari aplikasi", exchange)).then();
+                })
+                .switchIfEmpty(Mono.defer(() -> refreshToken != null && !refreshToken.isEmpty()
+                        ? authService.logout(refreshToken)
+                        : Mono.empty()
+                ));
+        
+        return logAndRevoke.thenReturn(ResponseEntity.ok().build());
     }
 }

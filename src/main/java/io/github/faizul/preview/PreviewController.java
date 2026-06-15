@@ -1,8 +1,11 @@
 package io.github.faizul.preview;
 
+import io.github.faizul.activity.UserActivityService;
+import io.github.faizul.security.filter.CurrentUserContext;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -18,9 +21,13 @@ import java.util.UUID;
 public class PreviewController {
 
     private final PreviewService previewService;
+    private final CurrentUserContext currentUserContext;
+    private final UserActivityService userActivityService;
 
-    public PreviewController(PreviewService previewService) {
+    public PreviewController(PreviewService previewService, CurrentUserContext currentUserContext, UserActivityService userActivityService) {
         this.previewService = previewService;
+        this.currentUserContext = currentUserContext;
+        this.userActivityService = userActivityService;
     }
 
     /**
@@ -28,13 +35,16 @@ public class PreviewController {
      * Memerlukan JWT token di header Authorization.
      */
     @GetMapping("/{fileId}")
-    public Mono<ResponseEntity<Flux<byte[]>>> previewPrivateFile(@PathVariable UUID fileId) {
-        return previewService.previewPrivateFile(fileId)
-                .map(result -> ResponseEntity.ok()
-                        .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")
-                        .header("Content-Length", String.valueOf(result.size()))
-                        .contentType(MediaType.parseMediaType(result.contentType()))
-                        .body(result.dataStream()))
+    public Mono<ResponseEntity<Flux<byte[]>>> previewPrivateFile(@PathVariable UUID fileId, ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> previewService.previewPrivateFile(fileId)
+                        .flatMap(result -> userActivityService.log(userId, "PREVIEW_FILE", "Melihat pratinjau berkas pribadi ID: " + fileId, exchange)
+                                .thenReturn(ResponseEntity.ok()
+                                        .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")
+                                        .header("Content-Length", String.valueOf(result.size()))
+                                        .contentType(MediaType.parseMediaType(result.contentType()))
+                                        .body(result.dataStream())))
+                )
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
@@ -48,13 +58,15 @@ public class PreviewController {
     @GetMapping("/public/{provider}/{shareToken}")
     public Mono<ResponseEntity<Flux<byte[]>>> previewPublicFile(
             @PathVariable String provider,
-            @PathVariable String shareToken) {
+            @PathVariable String shareToken,
+            ServerWebExchange exchange) {
         return previewService.previewPublicFile(shareToken, provider)
-                .map(result -> ResponseEntity.ok()
-                        .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")
-                        .header("Content-Length", String.valueOf(result.size()))
-                        .contentType(MediaType.parseMediaType(result.contentType()))
-                        .body(result.dataStream()))
+                .flatMap(result -> userActivityService.log(null, "PREVIEW_FILE_PUBLIC", "Melihat pratinjau berkas publik dengan share token: " + shareToken, exchange)
+                        .thenReturn(ResponseEntity.ok()
+                                .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")
+                                .header("Content-Length", String.valueOf(result.size()))
+                                .contentType(MediaType.parseMediaType(result.contentType()))
+                                .body(result.dataStream())))
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }

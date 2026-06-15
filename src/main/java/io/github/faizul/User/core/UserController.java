@@ -24,11 +24,15 @@ public class UserController {
     private final UserService userService;
     private final CurrentUserContext currentUserContext;
     private final SubscriptionRequestService subscriptionRequestService;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     @PostMapping("/me/subscription-request")
-    public Mono<ResponseEntity<SubscriptionRequest>> createSubscriptionRequest(@RequestParam String tier) {
+    public Mono<ResponseEntity<SubscriptionRequest>> createSubscriptionRequest(@RequestParam String tier, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> subscriptionRequestService.createRequest(userId, tier))
+                .flatMap(userId -> subscriptionRequestService.createRequest(userId, tier)
+                        .flatMap(req -> userActivityService.log(userId, "CREATE_SUBSCRIPTION_REQUEST", "Mengajukan upgrade paket langganan ke tier: " + tier, exchange)
+                                .thenReturn(req))
+                )
                 .map(req -> ResponseEntity.status(HttpStatus.CREATED).body(req));
     }
 
@@ -49,17 +53,22 @@ public class UserController {
     }
 
     @PutMapping("/me")
-    public Mono<ResponseEntity<UserDto>> updateMyProfile(@Valid @RequestBody UpdateProfileRequest request) {
+    public Mono<ResponseEntity<UserDto>> updateMyProfile(@Valid @RequestBody UpdateProfileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> userService.updateProfile(userId, request))
+                .flatMap(userId -> userService.updateProfile(userId, request)
+                        .flatMap(userDto -> userActivityService.log(userId, "UPDATE_PROFILE", "Mengubah informasi profil pengguna", exchange)
+                                .thenReturn(userDto))
+                )
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/me/password")
-    public Mono<ResponseEntity<Void>> updateMyPassword(@Valid @RequestBody UpdatePasswordRequest request) {
+    public Mono<ResponseEntity<Void>> updateMyPassword(@Valid @RequestBody UpdatePasswordRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> userService.updatePassword(userId, request))
+                .flatMap(userId -> userService.updatePassword(userId, request)
+                        .then(userActivityService.log(userId, "UPDATE_PASSWORD", "Mengubah kata sandi akun", exchange))
+                )
                 .then(Mono.just(ResponseEntity.ok().build()));
     }
 

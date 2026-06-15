@@ -5,6 +5,7 @@ import io.github.faizul.File.dtos.UserStorageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -18,14 +19,14 @@ public class GoogleDriveController {
     private final GoogleDriveServiceImp googleDriveService;
 
     @PostMapping("/sync")
-    public Mono<ResponseEntity<Void>> syncGoogleDrive(@RequestParam Long externalAccountId) {
-        return googleDriveService.syncGoogleDrive(externalAccountId)
+    public Mono<ResponseEntity<Void>> syncGoogleDrive(@RequestParam Long externalAccountId, ServerWebExchange exchange) {
+        return googleDriveService.syncGoogleDrive(externalAccountId, exchange)
                 .thenReturn(ResponseEntity.ok().build());
     }
 
     @DeleteMapping({"/files/{id}", "/{id}"})
-    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id) {
-        return googleDriveService.deleteFile(id)
+    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id, ServerWebExchange exchange) {
+        return googleDriveService.deleteFile(id, exchange)
                 .map(warning -> {
                     if (warning != null && !warning.isEmpty()) {
                         return ResponseEntity.ok()

@@ -8,6 +8,7 @@ import io.github.faizul.User.core.User;
 import io.github.faizul.User.core.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -21,6 +22,7 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     private final FileRepository fileRepository;
     private final UserRepository userRepository;
     private final io.github.faizul.security.jwt.EncryptionService encryptionService;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     @Override
     public Mono<String> getAuthUrl(String provider) {
@@ -28,7 +30,7 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     }
 
     @Override
-    public Mono<Void> handleCallback(String provider, String code) {
+    public Mono<Void> handleCallback(String provider, String code, ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> userRepository.findById(userId)
                         .switchIfEmpty(Mono.error(new java.util.NoSuchElementException("User Not Found")))
@@ -65,7 +67,9 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
                                                  account.setUserId(userId);
                                                  account.setAccessToken(encryptionService.encrypt(account.getAccessToken()));
                                                  account.setRefreshToken(encryptionService.encrypt(account.getRefreshToken()));
-                                                 return externalAccountRepository.save(account);
+                                                 return externalAccountRepository.save(account)
+                                                         .flatMap(savedAccount -> userActivityService.log(userId, "CONNECT_EXTERNAL_ACCOUNT", "Menghubungkan akun penyimpanan awan baru: " + savedAccount.getEmail() + " (" + provider + ")", exchange)
+                                                                 .thenReturn(savedAccount));
                                              });
                                     })
                         )
@@ -85,14 +89,16 @@ public class ExternalAccountServiceImp implements ExternalAccountService {
     }
 
     @Override
-    public Mono<Void> disconnect(Long externalAccountId) {
+    public Mono<Void> disconnect(Long externalAccountId, ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(userId -> externalAccountRepository.findById(externalAccountId)
                         .flatMap(account -> {
                             String provider = account.getProvider();
                             String fileProvider = "GOOGLE".equalsIgnoreCase(provider) ? "GOOGLE_DRIVE" : provider;
                             return fileRepository.deleteByUserIdAndProvider(userId, fileProvider)
-                                    .then(externalAccountRepository.deleteById(externalAccountId));
+                                    .then(externalAccountRepository.deleteById(externalAccountId))
+                                    .then(userActivityService.log(userId, "DISCONNECT_EXTERNAL_ACCOUNT", "Memutuskan akun penyimpanan awan ID: " + externalAccountId, exchange))
+                                    .then();
                         })
                 );
     }

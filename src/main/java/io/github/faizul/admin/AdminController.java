@@ -71,11 +71,11 @@ public class AdminController {
     }
 
     @GetMapping("/activities")
-    public Flux<UserActivity> getUserActivities(
+    public Flux<io.github.faizul.activity.dtos.UserActivityResponse> getUserActivities(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return userActivityService.getAllActivities(PageRequest.of(page, size));
+        return userActivityService.getAllActivitiesWithUserDetails(PageRequest.of(page, size));
     }
 
     @GetMapping("/ai/token-stats")

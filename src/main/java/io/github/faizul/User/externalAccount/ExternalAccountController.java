@@ -22,12 +22,12 @@ public class ExternalAccountController {
 
     @PostMapping("/init")
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Void> initAccount(@RequestParam String provider, @RequestBody Map<String, String> body) {
+    public Mono<Void> initAccount(@RequestParam String provider, @RequestBody Map<String, String> body, org.springframework.web.server.ServerWebExchange exchange) {
         String token = body.get("token");
         if (token == null || token.isBlank()) {
             return Mono.error(new IllegalArgumentException("Token is required"));
         }
-        return externalUserService.handleCallback(provider, token);
+        return externalUserService.handleCallback(provider, token, exchange);
     }
 
     @GetMapping("/me")
@@ -37,7 +37,7 @@ public class ExternalAccountController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> disconnect(@PathVariable Long id) {
-        return externalUserService.disconnect(id);
+    public Mono<Void> disconnect(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+        return externalUserService.disconnect(id, exchange);
     }
 }

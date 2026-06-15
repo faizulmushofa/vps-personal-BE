@@ -71,9 +71,10 @@ public class StorageNodeShareController {
     @GetMapping("/public/download/{shareToken}")
     public Mono<ResponseEntity<Flux<byte[]>>> downloadPublicFile(
             @PathVariable String shareToken,
-            @RequestParam(value = "download", required = false, defaultValue = "false") Boolean download) {
+            @RequestParam(value = "download", required = false, defaultValue = "false") Boolean download,
+            org.springframework.web.server.ServerWebExchange exchange) {
         return shareService.getPublicFileInfo(shareToken)
-                .map(file -> {
+                .flatMap(file -> {
                     String disposition = Boolean.TRUE.equals(download)
                             ? "attachment; filename=\"" + file.originalFileName() + "\""
                             : "inline; filename=\"" + file.originalFileName() + "\"";
@@ -82,11 +83,12 @@ public class StorageNodeShareController {
                             .map(org.springframework.http.MediaType::toString)
                             .orElse("application/octet-stream");
 
-                    return ResponseEntity.ok()
-                            .header("Content-Disposition", disposition)
-                            .header("Content-Length", String.valueOf(file.size()))
-                            .contentType(MediaType.parseMediaType(contentType))
-                            .body(shareService.downloadPublicFile(shareToken));
+                    return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC", "Mengunduh berkas publik: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
+                            .thenReturn(ResponseEntity.ok()
+                                    .header("Content-Disposition", disposition)
+                                    .header("Content-Length", String.valueOf(file.size()))
+                                    .contentType(MediaType.parseMediaType(contentType))
+                                    .body(shareService.downloadPublicFile(shareToken)));
                 })
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }

@@ -43,6 +43,10 @@ public class UserActivityService {
         return userActivityRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
+    public Flux<io.github.faizul.activity.dtos.UserActivityResponse> getAllActivitiesWithUserDetails(Pageable pageable) {
+        return userActivityRepository.findAllWithUserDetails(pageable);
+    }
+
     public Mono<Long> countActivities() {
         return userActivityRepository.count();
     }
