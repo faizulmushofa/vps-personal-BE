@@ -193,7 +193,7 @@ public class AdminService {
 
     private record TokenStatsTuple(Long inputTokens, Long outputTokens, Long totalTokens) {}
 
-    private static Long getLongValue(io.r2dbc.spi.Row row, String columnName) {
+    private static Long getLongValue(io.r2dbc.spi.Readable row, String columnName) {
         Object val = null;
         try {
             val = row.get(columnName);
@@ -205,7 +205,7 @@ public class AdminService {
         return val != null ? ((Number) val).longValue() : 0L;
     }
 
-    private static String getStringValue(io.r2dbc.spi.Row row, String columnName) {
+    private static String getStringValue(io.r2dbc.spi.Readable row, String columnName) {
         Object val = null;
         try {
             val = row.get(columnName);
