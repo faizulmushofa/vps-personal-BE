@@ -23,6 +23,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service("googleDriveShareService")
@@ -87,7 +89,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                     return fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
                                             .switchIfEmpty(Mono.error(new AccessDeniedException("Hanya pemilik berkas atau penerima berkas yang diperbolehkan untuk memperbarui masa aktif berkas ini")))
                                             .flatMap(existing -> {
-                                                final Instant finalExpiresAt;
+                                                final LocalDateTime finalExpiresAt;
                                                 if ((request.expiresInDays() != null && request.expiresInDays() > 0) ||
                                                         (request.expiresInHours() != null && request.expiresInHours() > 0)) {
                                                     long totalHours = 0;
@@ -97,7 +99,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     if (request.expiresInHours() != null) {
                                                         totalHours += request.expiresInHours();
                                                     }
-                                                    finalExpiresAt = Instant.now().plus(java.time.Duration.ofHours(totalHours));
+                                                    finalExpiresAt = LocalDateTime.now(java.time.ZoneOffset.UTC).plusHours(totalHours);
                                                 } else {
                                                     finalExpiresAt = null;
                                                 }
@@ -109,7 +111,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                                 false,
                                                                 null,
                                                                 null,
-                                                                saved.getExpiresAt()
+                                                                saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                                         ));
                                             });
                                 }
@@ -118,7 +120,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                 final UUID fileUUID = file.getId();
 
                                 // Hitung expiresAt
-                                final Instant finalExpiresAt;
+                                final LocalDateTime finalExpiresAt;
                                 if ((request.expiresInDays() != null && request.expiresInDays() > 0) ||
                                         (request.expiresInHours() != null && request.expiresInHours() > 0)) {
                                     long totalHours = 0;
@@ -128,7 +130,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                     if (request.expiresInHours() != null) {
                                         totalHours += request.expiresInHours();
                                     }
-                                    finalExpiresAt = Instant.now().plus(java.time.Duration.ofHours(totalHours));
+                                    finalExpiresAt = LocalDateTime.now(java.time.ZoneOffset.UTC).plusHours(totalHours);
                                 } else {
                                     finalExpiresAt = null;
                                 }
@@ -137,7 +139,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                         .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
                                         .flatMap(user -> {
                                             Mono<User> activeUserMono = Mono.just(user);
-                                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC))) {
                                                 user.setSubscriptionTier("FREEMIUM");
                                                 user.setStorageQuota(1073741824L);
                                                 user.setSubscriptionExpiresAt(null);
@@ -196,7 +198,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                                             true,
                                                                             saved.getShareToken(),
                                                                             frontendUrl + "/shared/public/google/" + saved.getShareToken(),
-                                                                            saved.getExpiresAt()
+                                                                            saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                                                     ));
                                                         } else {
                                                             if (request.email() == null || request.email().isBlank()) {
@@ -243,7 +245,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                                                         false,
                                                                                         null,
                                                                                         null,
-                                                                                        saved.getExpiresAt()
+                                                                                        saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                                                                 ));
                                                                     });
                                                         }
@@ -295,7 +297,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                 .flatMapMany(userId -> fileSharedRepository.findByUserId(userId)
                         .flatMap(shared -> {
                             // Saring yang sudah kadaluarsa
-                            if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                            if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                                 return Mono.empty();
                             }
                             return fileRepository.findById(shared.getFileId())
@@ -309,7 +311,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     file.getProvider(),
                                                     file.getExternalAccountId(),
                                                     owner.getEmail(),
-                                                    shared.getExpiresAt()
+                                                    shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                             ))
                                             .defaultIfEmpty(new FileResponse(
                                                     file.getId().toString(),
@@ -319,7 +321,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     file.getProvider(),
                                                     file.getExternalAccountId(),
                                                     "Unknown Owner",
-                                                    shared.getExpiresAt()
+                                                    shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                             ))
                                     );
                         })
@@ -339,7 +341,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                         return Mono.just(true);
                     }
                     return fileSharedRepository.findByFileIdAndUserId(fileUUID, userId)
-                            .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                            .map(shared -> shared.getExpiresAt() == null || LocalDateTime.now(java.time.ZoneOffset.UTC).isBefore(shared.getExpiresAt()))
                             .defaultIfEmpty(false);
                 });
     }
@@ -349,7 +351,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
         return fileSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Tautan pembagian tidak ditemukan")))
                 .flatMap(shared -> {
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Mono.error(new AccessDeniedException("Tautan pembagian telah kadaluarsa"));
                     }
                     return fileRepository.findById(shared.getFileId())
@@ -383,7 +385,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
         return fileSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Tautan pembagian tidak ditemukan")))
                 .flatMapMany(shared -> {
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Flux.error(new AccessDeniedException("Tautan pembagian telah kadaluarsa"));
                     }
                     return fileRepository.findById(shared.getFileId())
@@ -411,7 +413,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                 true,
                                                 shared.getShareToken(),
                                                 frontendUrl + "/shared/public/google/" + shared.getShareToken(),
-                                                shared.getExpiresAt(),
+                                                shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
                                                 null
                                         ));
                                     } else {
@@ -426,7 +428,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                         false,
                                                         null,
                                                         null,
-                                                        shared.getExpiresAt(),
+                                                        shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
                                                         targetUser.getEmail()
                                                 ))
                                                 .defaultIfEmpty(new io.github.faizul.File.dtos.SharedByMeResponse(
@@ -439,7 +441,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                         false,
                                                         null,
                                                         null,
-                                                        shared.getExpiresAt(),
+                                                        shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
                                                         "Unknown User"
                                                 ));
                                     }

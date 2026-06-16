@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -81,38 +83,38 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                         String targetStorage = parts[0];
                         Long extAccId = parts.length > 1 && !parts[1].isEmpty() ? Long.parseLong(parts[1]) : null;
 
-                        FolderShared folderShared = FolderShared.builder()
-                                .folderId(request.folderId())
-                                .folderType(request.folderType())
-                                .userId(userId)
-                                .expiresAt(request.expiresAt())
-                                .shareToken(shareToken)
-                                .permission(request.permission())
-                                .allowAnonymous(request.allowAnonymous() != null ? request.allowAnonymous() : true)
-                                .targetStorage(targetStorage)
-                                .externalAccountId(extAccId)
-                                .build();
-
-                        return folderSharedRepository.save(folderShared)
-                                .flatMap(saved -> userActivityService.log(
-                                        userId,
-                                        "SHARE_FOLDER_CREATE",
-                                        "Membagikan folder " + request.folderId() + " dengan permission " + request.permission(),
-                                        exchange
-                                ).then(resolveFolderName(saved.getFolderId(), saved.getFolderType(), userId, extAccId)
-                                        .map(folderName -> new SharedFolderResponse(
-                                                saved.getId(),
-                                                saved.getFolderId(),
-                                                saved.getFolderType(),
-                                                saved.getShareToken(),
-                                                saved.getPermission(),
-                                                saved.getAllowAnonymous(),
-                                                saved.getExpiresAt(),
-                                                saved.getCreatedAt(),
-                                                folderName
-                                        ))));
-                    });
-                });
+                          FolderShared folderShared = FolderShared.builder()
+                                 .folderId(request.folderId())
+                                 .folderType(request.folderType())
+                                 .userId(userId)
+                                 .expiresAt(request.expiresAt() != null ? LocalDateTime.ofInstant(request.expiresAt(), java.time.ZoneOffset.UTC) : null)
+                                 .shareToken(shareToken)
+                                 .permission(request.permission())
+                                 .allowAnonymous(request.allowAnonymous() != null ? request.allowAnonymous() : true)
+                                 .targetStorage(targetStorage)
+                                 .externalAccountId(extAccId)
+                                 .build();
+ 
+                          return folderSharedRepository.save(folderShared)
+                                  .flatMap(saved -> userActivityService.log(
+                                          userId,
+                                          "SHARE_FOLDER_CREATE",
+                                          "Membagikan folder " + request.folderId() + " dengan permission " + request.permission(),
+                                          exchange
+                                  ).then(resolveFolderName(saved.getFolderId(), saved.getFolderType(), userId, extAccId)
+                                          .map(folderName -> new SharedFolderResponse(
+                                                  saved.getId(),
+                                                  saved.getFolderId(),
+                                                  saved.getFolderType(),
+                                                  saved.getShareToken(),
+                                                  saved.getPermission(),
+                                                  saved.getAllowAnonymous(),
+                                                  saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
+                                                  saved.getCreatedAt(),
+                                                  folderName
+                                          ))));
+                     });
+                 });
     }
 
     @Override
@@ -124,25 +126,25 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                             if (!shared.getUserId().equals(userId)) {
                                 return Mono.error(new AccessDeniedException("Anda tidak memiliki akses ke link share ini."));
                             }
-                            shared.setExpiresAt(request.expiresAt());
-                            return folderSharedRepository.save(shared)
-                                    .flatMap(saved -> userActivityService.log(
-                                            userId,
-                                            "SHARE_FOLDER_EXPIRY_UPDATE",
-                                            "Memperbarui kedaluwarsa share link folder " + saved.getFolderId(),
-                                            exchange
-                                    ).then(resolveFolderName(saved.getFolderId(), saved.getFolderType(), userId, saved.getExternalAccountId())
-                                            .map(folderName -> new SharedFolderResponse(
-                                                    saved.getId(),
-                                                    saved.getFolderId(),
-                                                    saved.getFolderType(),
-                                                    saved.getShareToken(),
-                                                    saved.getPermission(),
-                                                    saved.getAllowAnonymous(),
-                                                    saved.getExpiresAt(),
-                                                    saved.getCreatedAt(),
-                                                    folderName
-                                            ))));
+                             shared.setExpiresAt(request.expiresAt() != null ? LocalDateTime.ofInstant(request.expiresAt(), java.time.ZoneOffset.UTC) : null);
+                             return folderSharedRepository.save(shared)
+                                     .flatMap(saved -> userActivityService.log(
+                                             userId,
+                                             "SHARE_FOLDER_EXPIRY_UPDATE",
+                                             "Memperbarui kedaluwarsa share link folder " + saved.getFolderId(),
+                                             exchange
+                                     ).then(resolveFolderName(saved.getFolderId(), saved.getFolderType(), userId, saved.getExternalAccountId())
+                                             .map(folderName -> new SharedFolderResponse(
+                                                     saved.getId(),
+                                                     saved.getFolderId(),
+                                                     saved.getFolderType(),
+                                                     saved.getShareToken(),
+                                                     saved.getPermission(),
+                                                     saved.getAllowAnonymous(),
+                                                     saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
+                                                     saved.getCreatedAt(),
+                                                     folderName
+                                             ))));
                         }));
     }
 
@@ -171,7 +173,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                                     saved.getShareToken(),
                                                     saved.getPermission(),
                                                     saved.getAllowAnonymous(),
-                                                    saved.getExpiresAt(),
+                                                    saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
                                                     saved.getCreatedAt(),
                                                     folderName
                                             ))));
@@ -210,7 +212,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                 saved.getShareToken(),
                                 saved.getPermission(),
                                 saved.getAllowAnonymous(),
-                                saved.getExpiresAt(),
+                                saved.getExpiresAt() != null ? saved.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null,
                                 saved.getCreatedAt(),
                                 folderName
                         )));
@@ -222,7 +224,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan atau tidak valid.")))
                 .flatMap(shared -> {
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Mono.error(new IllegalArgumentException("Tautan berbagi folder telah kedaluwarsa."));
                     }
 
@@ -301,7 +303,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan.")))
                 .flatMap(shared -> {
                     // 1. Cek expiry
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Mono.error(new IllegalArgumentException("Tautan berbagi folder telah kedaluwarsa."));
                     }
 
@@ -336,7 +338,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan.")))
                 .flatMap(shared -> {
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Mono.error(new IllegalArgumentException("Tautan berbagi folder telah kedaluwarsa."));
                     }
                     if (!"EDIT".equalsIgnoreCase(shared.getPermission())) {
@@ -656,7 +658,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan.")))
                 .flatMap(shared -> {
-                    if (shared.getExpiresAt() != null && Instant.now().isAfter(shared.getExpiresAt())) {
+                    if (shared.getExpiresAt() != null && LocalDateTime.now(java.time.ZoneOffset.UTC).isAfter(shared.getExpiresAt())) {
                         return Mono.error(new IllegalArgumentException("Tautan berbagi folder telah kedaluwarsa."));
                     }
 

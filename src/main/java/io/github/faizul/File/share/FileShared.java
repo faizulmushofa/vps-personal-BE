@@ -10,6 +10,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -29,7 +30,7 @@ public class FileShared {
     private Long userId; // Nullable for public share
 
     @Column("expires_at")
-    private Instant expiresAt; // Nullable
+    private LocalDateTime expiresAt; // Nullable
 
     @Column("share_token")
     private String shareToken; // Nullable

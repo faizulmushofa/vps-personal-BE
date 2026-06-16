@@ -21,6 +21,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
@@ -46,7 +48,7 @@ public class FileServiceImp implements FileService {
                                                                 return Mono.just(file);
                                                         }
                                                         return fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
-                                                                        .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                                                                        .map(shared -> shared.getExpiresAt() == null || LocalDateTime.now(ZoneOffset.UTC).isBefore(shared.getExpiresAt()))
                                                                         .defaultIfEmpty(false)
                                                                         .flatMap(hasAccess -> {
                                                                                 if (Boolean.TRUE.equals(hasAccess)) {

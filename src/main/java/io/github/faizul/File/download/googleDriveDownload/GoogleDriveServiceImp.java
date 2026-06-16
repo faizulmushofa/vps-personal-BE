@@ -19,6 +19,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -43,7 +44,7 @@ public class GoogleDriveServiceImp implements DownloadService {
                         .flatMap(file -> {
                             Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                                 Mono.just(true) : fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
-                                    .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                                    .map(shared -> shared.getExpiresAt() == null || LocalDateTime.now(java.time.ZoneOffset.UTC).isBefore(shared.getExpiresAt()))
                                     .defaultIfEmpty(false);
                             
                             return accessCheck.flatMap(hasAccess -> {
@@ -80,7 +81,7 @@ public class GoogleDriveServiceImp implements DownloadService {
                 .flatMap(file -> {
                     Mono<Boolean> accessCheck = file.getUserId().equals(userId) ? 
                         Mono.just(true) : fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
-                            .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
+                            .map(shared -> shared.getExpiresAt() == null || LocalDateTime.now(java.time.ZoneOffset.UTC).isBefore(shared.getExpiresAt()))
                             .defaultIfEmpty(false);
                     
                     return accessCheck.flatMap(hasAccess -> {
