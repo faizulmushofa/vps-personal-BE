@@ -42,6 +42,9 @@ public class GoogleDriveClient {
     }
 
     public Mono<String> getValidAccessToken(Long externalAccountId) {
+        if (externalAccountId == null) {
+            return Mono.error(new GoogleDriveNotConnectedException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu."));
+        }
         return externalAccountRepository.findById(externalAccountId)
                 .switchIfEmpty(Mono.error(new GoogleDriveNotConnectedException("Akun Google Drive belum dihubungkan. Silakan hubungkan akun Google Anda terlebih dahulu.")))
                 .flatMap(account -> {
@@ -346,6 +349,9 @@ public class GoogleDriveClient {
     }
 
     public Mono<String> getFileName(Long externalAccountId, String fileId) {
+        if (externalAccountId == null) {
+            return Mono.just("Google Drive Folder (Tidak Terhubung)");
+        }
         return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.get()
                         .uri("https://www.googleapis.com/drive/v3/files/" + fileId + "?fields=name")
@@ -354,8 +360,8 @@ public class GoogleDriveClient {
                         .bodyToMono(java.util.Map.class)
                         .map(res -> (String) res.get("name"))
                         .defaultIfEmpty("Google Drive Folder")
-                        .onErrorReturn("Google Drive Folder")
-                );
+                )
+                .onErrorReturn("Google Drive Folder (Tidak Terhubung)");
     }
 
     public Mono<java.util.Map<String, Object>> getFileMetadata(Long externalAccountId, String googleFileId) {

@@ -625,11 +625,25 @@ public class FolderSharedServiceImpl implements FolderSharedService {
 
     private Mono<String> resolveFolderName(String folderId, String folderType, Long userId, Long externalAccountId) {
         if ("LOCAL".equalsIgnoreCase(folderType)) {
-            return folderRepository.findByIdAndUserId(UUID.fromString(folderId), userId)
-                    .map(Folder::getName)
-                    .defaultIfEmpty("Folder VPS");
+            try {
+                if (folderId == null) {
+                    return Mono.just("Folder VPS");
+                }
+                UUID uuid = UUID.fromString(folderId);
+                return folderRepository.findByIdAndUserId(uuid, userId)
+                        .map(Folder::getName)
+                        .defaultIfEmpty("Folder VPS")
+                        .onErrorReturn("Folder VPS");
+            } catch (Exception e) {
+                log.warn("Invalid UUID or error for local folder share: {}", folderId);
+                return Mono.just("Folder VPS");
+            }
         } else {
+            if (externalAccountId == null) {
+                return Mono.just("Folder Google Drive (Tidak Terhubung)");
+            }
             return googleDriveClient.getFileName(externalAccountId, folderId)
+                    .onErrorReturn("Folder Google Drive (Tidak Terhubung)")
                     .defaultIfEmpty("Folder Google Drive");
         }
     }
