@@ -56,8 +56,8 @@ public class FolderSharedController {
     }
 
     @GetMapping
-    public Mono<ResponseEntity<Flux<SharedFolderResponse>>> getSharedFoldersByMe() {
-        return Mono.just(ResponseEntity.ok(folderSharedService.getSharedFoldersByMe()));
+    public Flux<SharedFolderResponse> getSharedFoldersByMe() {
+        return folderSharedService.getSharedFoldersByMe();
     }
 
     @GetMapping("/public/{shareToken}/contents")
