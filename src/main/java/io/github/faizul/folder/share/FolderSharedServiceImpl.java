@@ -239,7 +239,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                     if (!isOk) {
                                         return Mono.error(new AccessDeniedException("Akses ke subfolder ini ditolak."));
                                     }
-                                    return resolveFolderName(shared.getFolderType(), targetFolderId, shared.getExternalAccountId(), shared.getUserId())
+                                    return resolveFolderName(targetFolderId, shared.getFolderType(), shared.getUserId(), shared.getExternalAccountId())
                                             .flatMap(folderName -> Mono.zip(
                                                     folderRepository.findByUserIdAndParentId(shared.getUserId(), parentUUID)
                                                             .map(f -> new FolderResponse(f.getId().toString(), f.getName(), f.getParentId() != null ? f.getParentId().toString() : null, f.getUserId(), f.getCreatedAt()))
@@ -260,7 +260,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                             ).map(tuple -> new FolderContentResponse(tuple.getT1(), tuple.getT2(), shared.getPermission(), shared.getAllowAnonymous(), folderName)));
                                 });
                     } else if ("GOOGLE_DRIVE".equalsIgnoreCase(shared.getFolderType())) {
-                        return resolveFolderName(shared.getFolderType(), targetFolderId, shared.getExternalAccountId(), shared.getUserId())
+                        return resolveFolderName(targetFolderId, shared.getFolderType(), shared.getUserId(), shared.getExternalAccountId())
                                 .flatMap(folderName -> googleDriveClient.listFilesAndFolders(shared.getExternalAccountId(), targetFolderId)
                                         .map(list -> {
                                             List<FolderResponse> folders = new ArrayList<>();
