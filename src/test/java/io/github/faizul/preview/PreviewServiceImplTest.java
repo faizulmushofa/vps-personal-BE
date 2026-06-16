@@ -1,6 +1,7 @@
 package io.github.faizul.preview;
 
 import io.github.faizul.File.core.FileService;
+import io.github.faizul.File.core.FileRepository;
 import io.github.faizul.File.download.DownloadService;
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.share.ShareService;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 class PreviewServiceImplTest {
 
     @Mock private FileService fileService;
+    @Mock private FileRepository fileRepository;
     @Mock private DownloadService storageNodeDownloadService;
     @Mock private DownloadService googleDriveDownloadService;
     @Mock private ShareService storageNodeShareService;
@@ -44,6 +46,7 @@ class PreviewServiceImplTest {
     void setUp() {
         previewService = new PreviewServiceImpl(
                 fileService,
+                fileRepository,
                 storageNodeDownloadService,
                 googleDriveDownloadService,
                 storageNodeShareService,

@@ -304,7 +304,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                     .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()))
                                     .flatMap(file -> userRepository.findById(file.getUserId())
                                             .map(owner -> new FileResponse(
-                                                    file.getId().toString(),
+                                                    file.getStorageName(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -314,7 +314,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     shared.getExpiresAt() != null ? shared.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null
                                             ))
                                             .defaultIfEmpty(new FileResponse(
-                                                    file.getId().toString(),
+                                                    file.getStorageName(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -359,7 +359,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                             .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                             .flatMap(file -> userRepository.findById(file.getUserId())
                                     .map(owner -> new FileResponse(
-                                            file.getId(),
+                                            file.getStorageName(),
                                             file.getOriginalFileName(),
                                             file.getSize(),
                                             file.getCreatedAt(),
@@ -368,7 +368,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                             owner.getEmail()
                                     ))
                                     .defaultIfEmpty(new FileResponse(
-                                            file.getId(),
+                                            file.getStorageName(),
                                             file.getOriginalFileName(),
                                             file.getSize(),
                                             file.getCreatedAt(),

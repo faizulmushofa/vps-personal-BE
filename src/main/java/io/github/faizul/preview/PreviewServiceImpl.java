@@ -1,6 +1,8 @@
 package io.github.faizul.preview;
 
 import io.github.faizul.File.core.FileService;
+import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.core.File;
 import io.github.faizul.File.download.DownloadService;
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.share.ShareService;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class PreviewServiceImpl implements PreviewService {
 
     private final FileService fileService;
+    private final FileRepository fileRepository;
     private final DownloadService storageNodeDownloadService;
     private final DownloadService googleDriveDownloadService;
     private final ShareService storageNodeShareService;
@@ -35,6 +38,7 @@ public class PreviewServiceImpl implements PreviewService {
 
     public PreviewServiceImpl(
             FileService fileService,
+            FileRepository fileRepository,
             @Qualifier("storageNodeDownloadService") DownloadService storageNodeDownloadService,
             @Qualifier("googleDriveDownloadService") DownloadService googleDriveDownloadService,
             @Qualifier("storageNodeShareService") ShareService storageNodeShareService,
@@ -44,6 +48,7 @@ public class PreviewServiceImpl implements PreviewService {
             GoogleDriveClient googleDriveClient,
             ExternalAccountRepository externalAccountRepository) {
         this.fileService = fileService;
+        this.fileRepository = fileRepository;
         this.storageNodeDownloadService = storageNodeDownloadService;
         this.googleDriveDownloadService = googleDriveDownloadService;
         this.storageNodeShareService = storageNodeShareService;
@@ -80,6 +85,36 @@ public class PreviewServiceImpl implements PreviewService {
                     });
         } else {
             // Must be Google Drive
+            if (isUuid && "GOOGLE_DRIVE".equalsIgnoreCase(provider)) {
+                final UUID finalUuid = uuid;
+                return fileRepository.findById(finalUuid)
+                        .flatMap(file -> {
+                            if (externalAccountId == null) {
+                                return Mono.error(new IllegalArgumentException("externalAccountId is required for external providers"));
+                            }
+                            return externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
+                                    .switchIfEmpty(Mono.error(new SecurityException("Akses ditolak: Akun eksternal tidak valid")))
+                                    .flatMap(account -> googleDriveClient.getFileMetadata(externalAccountId, file.getStorageName())
+                                            .map(metadata -> {
+                                                String name = (String) metadata.get("name");
+                                                Object sizeObj = metadata.get("size");
+                                                long size = 0;
+                                                if (sizeObj instanceof Number) {
+                                                    size = ((Number) sizeObj).longValue();
+                                                } else if (sizeObj instanceof String) {
+                                                    size = Long.parseLong((String) sizeObj);
+                                                }
+                                                String mimeType = (String) metadata.get("mimeType");
+                                                if (mimeType == null) {
+                                                    mimeType = resolveContentType(name);
+                                                }
+                                                Flux<byte[]> stream = googleDriveClient.downloadFile(externalAccountId, file.getStorageName());
+                                                return new PreviewResult(name, size, mimeType, stream);
+                                            })
+                                    );
+                        });
+            }
+
             if (externalAccountId == null) {
                 return Mono.error(new IllegalArgumentException("externalAccountId is required for external providers"));
             }
