@@ -224,7 +224,8 @@ public class MigrationServiceImp implements MigrationService {
             return Mono.error(new IllegalArgumentException("File " + file.getOriginalFileName() + " sudah berada di penyimpanan target yang sama."));
         }
 
-        if (file.getSize() > finalMaxFileSizeBytes) {
+        long fileSize = file.getSize() != null ? file.getSize() : 0L;
+        if (fileSize > finalMaxFileSizeBytes) {
             return Mono.error(new IllegalArgumentException("Berkas " + file.getOriginalFileName() + " melebihi batas ukuran migrasi paket Anda (" + (finalMaxFileSizeBytes / 1024 / 1024) + " MB)."));
         }
 

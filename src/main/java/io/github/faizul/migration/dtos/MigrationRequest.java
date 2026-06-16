@@ -8,6 +8,9 @@ public record MigrationRequest(
     String targetProvider,
     Long targetExternalAccountId,
     Long sourceExternalAccountId,
-    boolean deleteSource
-) {}
-
+    Boolean deleteSource
+) {
+    public Boolean deleteSource() {
+        return deleteSource != null && deleteSource;
+    }
+}

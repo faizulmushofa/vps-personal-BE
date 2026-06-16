@@ -105,6 +105,29 @@ public class DatabaseConnectionTest {
                 .block();
         System.out.println(">>> ================================================= <<<\n");
     }
+
+    @Test
+    public void testMigrationTasks() {
+        System.out.println("\n>>> ================================================= <<<");
+        System.out.println(">>> MEMBACA ISI TABEL MIGRATION_TASKS...               <<<");
+        databaseClient.sql("SELECT id, file_id, file_name, status, error_message, source_provider, target_provider, created_at FROM migration_tasks ORDER BY created_at DESC LIMIT 10")
+                .map((row, metadata) -> {
+                    System.out.println("TASK ROW -> id: " + row.get("id") + 
+                                       ", file_id: " + row.get("file_id") + 
+                                       ", name: " + row.get("file_name") + 
+                                       ", status: " + row.get("status") + 
+                                       ", error: " + row.get("error_message") +
+                                       ", source: " + row.get("source_provider") +
+                                       ", target: " + row.get("target_provider") +
+                                       ", created: " + row.get("created_at"));
+                    return row.get("id", java.util.UUID.class);
+                })
+                .all()
+                .collectList()
+                .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL MIGRATION_TASKS: " + err.getMessage()))
+                .block();
+        System.out.println(">>> ================================================= <<<\n");
+    }
 }
 
 

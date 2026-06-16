@@ -94,7 +94,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                         request.sourceExternalAccountId()
                                 ).flatMap(validFiles -> {
                                     // Validate target quota limit on Storage Node
-                                    long totalBytesToMigrate = validFiles.stream().mapToLong(File::getSize).sum();
+                                    long totalBytesToMigrate = validFiles.stream().mapToLong(f -> f.getSize() != null ? f.getSize() : 0L).sum();
                                     return fileRepository.calculateUsedStorageByUserId(userId)
                                             .flatMap(usedBytes -> {
                                                 return databaseClient.sql("SELECT storage_quota FROM users WHERE id = :id")
@@ -119,7 +119,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                             .batchId(batchId)
                                             .userId(userId)
                                             .fileId(file.getId())
-                                            .fileName(file.getOriginalFileName())
+                                            .fileName(truncateFileName(file.getOriginalFileName()))
                                             .sourceProvider(file.getProvider())
                                             .targetProvider(request.targetProvider())
                                             .targetExternalAccountId(request.targetExternalAccountId())
@@ -158,7 +158,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                                 .batchId(batchId)
                                                                 .userId(userId)
                                                                 .fileId(placeholderId)
-                                                                .fileName("[Folder] " + folderName)
+                                                                .fileName(truncateFileName("[Folder] " + folderName))
                                                                 .sourceProvider("GOOGLE_DRIVE")
                                                                 .targetProvider("STORAGE_NODE")
                                                                 .targetExternalAccountId(request.targetExternalAccountId())
@@ -251,7 +251,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
         String googleFileId = file.getStorageName();
         UUID fileId = file.getId();
         Long userId = file.getUserId();
-        long fileSize = file.getSize();
+        long fileSize = file.getSize() != null ? file.getSize() : 0L;
 
         long chunkSize = 5 * 1024 * 1024L; // 5 MB chunk size
         int totalChunks = (int) Math.ceil((double) fileSize / chunkSize);
@@ -378,7 +378,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                             .batchId(batchId)
                                                             .userId(userId)
                                                             .fileId(UUID.randomUUID())
-                                                            .fileName("[Folder] " + itemName)
+                                                            .fileName(truncateFileName("[Folder] " + itemName))
                                                             .sourceProvider("GOOGLE_DRIVE")
                                                             .targetProvider("STORAGE_NODE")
                                                             .targetExternalAccountId(externalAccountId)
@@ -405,7 +405,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                     File file = File.builder()
                                                             .id(fileId)
                                                             .userId(userId)
-                                                            .originalFileName(itemName)
+                                                            .originalFileName(truncateFileName(itemName))
                                                             .storageName(itemId)
                                                             .size(size)
                                                             .provider("GOOGLE_DRIVE")
@@ -419,7 +419,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                             .batchId(batchId)
                                                             .userId(userId)
                                                             .fileId(fileId)
-                                                            .fileName(itemName)
+                                                            .fileName(truncateFileName(itemName))
                                                             .sourceProvider("GOOGLE_DRIVE")
                                                             .targetProvider("STORAGE_NODE")
                                                             .deleteSource(deleteSource)
@@ -435,16 +435,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                             if (!migrationTasks.isEmpty()) {
                                                 processFiles = fileRepository.saveAll(filesToMigrate)
                                                         .then(migrationTaskRepository.saveAll(migrationTasks).collectList())
-                                                        .flatMap(savedTasks -> {
-                                                            runMigrationTasksInBackground(savedTasks, filesToMigrate)
-                                                                    .delaySubscription(java.time.Duration.ofMillis(500))
-                                                                    .subscribeOn(migrationScheduler)
-                                                                    .subscribe(
-                                                                            success -> log.info("Folder files GDrive to local migration completed successfully for GDrive folder {}", gDriveFolderId),
-                                                                            error -> log.error("Folder files GDrive to local migration failed for GDrive folder " + gDriveFolderId, error)
-                                                                    );
-                                                            return Mono.empty();
-                                                        });
+                                                        .flatMap(savedTasks -> runMigrationTasksInBackground(savedTasks, filesToMigrate));
                                             }
 
                                             Mono<Void> processSubfolders = Flux.merge(tasks).then();
@@ -458,5 +449,10 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                         });
                             });
                 });
+    }
+
+    private String truncateFileName(String name) {
+        if (name == null) return "";
+        return name.substring(0, Math.min(name.length(), 255));
     }
 }
