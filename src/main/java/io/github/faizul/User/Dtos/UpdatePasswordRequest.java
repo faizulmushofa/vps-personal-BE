@@ -11,8 +11,8 @@ public record UpdatePasswordRequest(
     @NotBlank(message = "Password baru wajib diisi")
     @Size(min = 8, max = 128, message = "Password harus minimal 8 karakter")
     @Pattern(
-            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&#^()\\-_=+])[A-Za-z\\d@$!%*?&#^()\\-_=+]{8,}$",
-            message = "Password harus mengandung huruf besar, huruf kecil, angka, dan karakter spesial"
+            regexp = "^(?=.*[a-zA-Z])(?=.*\\d).{8,}$",
+            message = "Password harus minimal 8 karakter dan mengandung kombinasi huruf dan angka"
     )
     String newPassword
 ) {}
