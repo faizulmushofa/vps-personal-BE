@@ -65,11 +65,11 @@ public class GoogleDriveClient {
         }
         return webClient.post()
                 .uri("https://oauth2.googleapis.com/token")
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .bodyValue("refresh_token=" + account.getRefreshToken() +
-                        "&client_id=" + clientId +
-                        "&client_secret=" + clientSecret +
-                        "&grant_type=refresh_token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("refresh_token", account.getRefreshToken())
+                        .with("client_id", clientId)
+                        .with("client_secret", clientSecret)
+                        .with("grant_type", "refresh_token"))
                 .retrieve()
                 .bodyToMono(Map.class)
                 .flatMap(response -> {
