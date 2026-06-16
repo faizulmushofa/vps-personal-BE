@@ -4,6 +4,8 @@ import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.dtos.ShareFileRequest;
 import io.github.faizul.File.dtos.ShareFileResponse;
 import io.github.faizul.File.share.ShareService;
+import io.github.faizul.folder.share.FolderSharedService;
+import io.github.faizul.Storage.download.DownloadStorageService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,16 +23,22 @@ public class StorageNodeShareController {
     private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
     private final io.github.faizul.activity.UserActivityService userActivityService;
     private final io.github.faizul.File.core.FileRepository fileRepository;
+    private final FolderSharedService folderSharedService;
+    private final DownloadStorageService downloadStorageService;
 
     public StorageNodeShareController(
             @Qualifier("storageNodeShareService") ShareService shareService,
             io.github.faizul.security.filter.CurrentUserContext currentUserContext,
             io.github.faizul.activity.UserActivityService userActivityService,
-            io.github.faizul.File.core.FileRepository fileRepository) {
+            io.github.faizul.File.core.FileRepository fileRepository,
+            FolderSharedService folderSharedService,
+            DownloadStorageService downloadStorageService) {
         this.shareService = shareService;
         this.currentUserContext = currentUserContext;
         this.userActivityService = userActivityService;
         this.fileRepository = fileRepository;
+        this.folderSharedService = folderSharedService;
+        this.downloadStorageService = downloadStorageService;
     }
 
     @PostMapping("/{fileId}")
@@ -86,24 +94,52 @@ public class StorageNodeShareController {
     public Mono<ResponseEntity<Flux<byte[]>>> downloadPublicFile(
             @PathVariable String shareToken,
             @RequestParam(value = "download", required = false, defaultValue = "false") Boolean download,
+            @RequestParam(value = "fileId", required = false) String fileId,
             org.springframework.web.server.ServerWebExchange exchange) {
-        return shareService.getPublicFileInfo(shareToken)
-                .flatMap(file -> {
-                    String disposition = Boolean.TRUE.equals(download)
-                            ? "attachment; filename=\"" + file.originalFileName() + "\""
-                            : "inline; filename=\"" + file.originalFileName() + "\"";
+        
+        if (fileId == null || fileId.trim().isEmpty()) {
+            return shareService.getPublicFileInfo(shareToken)
+                    .flatMap(file -> {
+                        String disposition = Boolean.TRUE.equals(download)
+                                ? "attachment; filename=\"" + file.originalFileName() + "\""
+                                : "inline; filename=\"" + file.originalFileName() + "\"";
 
-                    String contentType = org.springframework.http.MediaTypeFactory.getMediaType(file.originalFileName())
-                            .map(org.springframework.http.MediaType::toString)
-                            .orElse("application/octet-stream");
+                        String contentType = org.springframework.http.MediaTypeFactory.getMediaType(file.originalFileName())
+                                .map(org.springframework.http.MediaType::toString)
+                                .orElse("application/octet-stream");
 
-                    return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC", "Mengunduh berkas publik: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
-                            .thenReturn(ResponseEntity.ok()
-                                    .header("Content-Disposition", disposition)
-                                    .header("Content-Length", String.valueOf(file.size()))
-                                    .contentType(MediaType.parseMediaType(contentType))
-                                    .body(shareService.downloadPublicFile(shareToken)));
-                })
+                        return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC", "Mengunduh berkas publik: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
+                                .thenReturn(ResponseEntity.ok()
+                                        .header("Content-Disposition", disposition)
+                                        .header("Content-Length", String.valueOf(file.size()))
+                                        .contentType(MediaType.parseMediaType(contentType))
+                                        .body(shareService.downloadPublicFile(shareToken)));
+                    })
+                    .defaultIfEmpty(ResponseEntity.notFound().build());
+        }
+
+        // Downloading file from a shared folder
+        return folderSharedService.getSharedFileMetadataPublic(shareToken, fileId)
+                .flatMap(file -> folderSharedService.getSharedFolderOwnerId(shareToken)
+                        .flatMap(ownerId -> {
+                            String disposition = Boolean.TRUE.equals(download)
+                                    ? "attachment; filename=\"" + file.originalFileName() + "\""
+                                    : "inline; filename=\"" + file.originalFileName() + "\"";
+
+                            String contentType = org.springframework.http.MediaTypeFactory.getMediaType(file.originalFileName())
+                                    .map(org.springframework.http.MediaType::toString)
+                                    .orElse("application/octet-stream");
+
+                            Flux<byte[]> dataStream = downloadStorageService.downloadFile(ownerId, UUID.fromString(fileId))
+                                    .map(chunk -> chunk.data());
+
+                            return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC", "Mengunduh berkas publik dari folder bersama: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
+                                    .thenReturn(ResponseEntity.ok()
+                                            .header("Content-Disposition", disposition)
+                                            .header("Content-Length", String.valueOf(file.size()))
+                                            .contentType(MediaType.parseMediaType(contentType))
+                                            .body(dataStream));
+                        }))
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 

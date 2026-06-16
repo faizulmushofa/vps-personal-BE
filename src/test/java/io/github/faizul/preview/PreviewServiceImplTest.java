@@ -4,6 +4,10 @@ import io.github.faizul.File.core.FileService;
 import io.github.faizul.File.download.DownloadService;
 import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.share.ShareService;
+import io.github.faizul.folder.share.FolderSharedService;
+import io.github.faizul.Storage.download.DownloadStorageService;
+import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
+import io.github.faizul.User.externalAccount.ExternalAccountRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,6 +33,10 @@ class PreviewServiceImplTest {
     @Mock private DownloadService googleDriveDownloadService;
     @Mock private ShareService storageNodeShareService;
     @Mock private ShareService googleDriveShareService;
+    @Mock private FolderSharedService folderSharedService;
+    @Mock private DownloadStorageService downloadStorageService;
+    @Mock private GoogleDriveClient googleDriveClient;
+    @Mock private ExternalAccountRepository externalAccountRepository;
 
     private PreviewServiceImpl previewService;
 
@@ -39,7 +47,11 @@ class PreviewServiceImplTest {
                 storageNodeDownloadService,
                 googleDriveDownloadService,
                 storageNodeShareService,
-                googleDriveShareService
+                googleDriveShareService,
+                folderSharedService,
+                downloadStorageService,
+                googleDriveClient,
+                externalAccountRepository
         );
     }
 
@@ -59,7 +71,7 @@ class PreviewServiceImplTest {
             when(storageNodeDownloadService.streamFile(fileId))
                     .thenReturn(Flux.just(new byte[]{1, 2, 3}));
 
-            StepVerifier.create(previewService.previewPrivateFile(fileId))
+            StepVerifier.create(previewService.previewPrivateFile(1L, fileId.toString(), "local", null))
                     .assertNext(result -> {
                         assertThat(result.fileName()).isEqualTo("document.pdf");
                         assertThat(result.size()).isEqualTo(1024L);
@@ -80,7 +92,7 @@ class PreviewServiceImplTest {
             when(googleDriveDownloadService.streamFile(fileId))
                     .thenReturn(Flux.just(new byte[]{1, 2, 3}));
 
-            StepVerifier.create(previewService.previewPrivateFile(fileId))
+            StepVerifier.create(previewService.previewPrivateFile(1L, fileId.toString(), "local", null))
                     .assertNext(result -> {
                         assertThat(result.fileName()).isEqualTo("image.png");
                         assertThat(result.contentType()).isEqualTo("image/png");
@@ -94,7 +106,7 @@ class PreviewServiceImplTest {
             UUID fileId = UUID.randomUUID();
             when(fileService.findByUUID(fileId)).thenReturn(Mono.empty());
 
-            StepVerifier.create(previewService.previewPrivateFile(fileId))
+            StepVerifier.create(previewService.previewPrivateFile(1L, fileId.toString(), "local", null))
                     .verifyComplete();
         }
     }
@@ -115,7 +127,7 @@ class PreviewServiceImplTest {
             when(storageNodeShareService.downloadPublicFile("share-token-123"))
                     .thenReturn(Flux.just(new byte[]{1, 2, 3}));
 
-            StepVerifier.create(previewService.previewPublicFile("share-token-123", "local"))
+            StepVerifier.create(previewService.previewPublicFile("share-token-123", "local", null))
                     .assertNext(result -> {
                         assertThat(result.fileName()).isEqualTo("report.pdf");
                         assertThat(result.contentType()).isEqualTo("application/pdf");
@@ -135,7 +147,7 @@ class PreviewServiceImplTest {
             when(googleDriveShareService.downloadPublicFile("share-token-456"))
                     .thenReturn(Flux.just(new byte[]{1, 2, 3}));
 
-            StepVerifier.create(previewService.previewPublicFile("share-token-456", "google"))
+            StepVerifier.create(previewService.previewPublicFile("share-token-456", "google", null))
                     .assertNext(result -> {
                         assertThat(result.fileName()).isEqualTo("video.mp4");
                         assertThat(result.contentType()).isEqualTo("video/mp4");

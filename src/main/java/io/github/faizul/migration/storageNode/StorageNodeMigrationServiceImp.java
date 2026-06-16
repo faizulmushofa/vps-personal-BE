@@ -145,20 +145,52 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                             });
                                 }
 
+                                Mono<Void> processFolders = Mono.empty();
                                 if (request.folderIds() != null && !request.folderIds().isEmpty()) {
-                                    Flux.fromIterable(request.folderIds())
-                                            .flatMap(gDriveFolderId -> {
-                                                return migrateFolderFromGoogleDriveRecursive(userId, batchId, gDriveFolderId, null, request.targetExternalAccountId(), request.deleteSource());
-                                            })
-                                            .then()
-                                            .subscribeOn(migrationScheduler)
-                                            .subscribe(
-                                                    success -> log.info("Batch GDrive to Storage Node folder migration {} completed successfully", batchId),
-                                                    error -> log.error("Batch GDrive to Storage Node folder migration " + batchId + " failed", error)
-                                            );
+                                    processFolders = Flux.fromIterable(request.folderIds())
+                                            .flatMap(gDriveFolderId -> googleDriveClient.getFileName(request.targetExternalAccountId() != null ? request.targetExternalAccountId() : 0L, gDriveFolderId)
+                                                    .defaultIfEmpty("Google Drive Folder")
+                                                    .flatMap(folderName -> {
+                                                        UUID placeholderId = UUID.randomUUID();
+                                                        MigrationTask folderTask = MigrationTask.builder()
+                                                                .id(UUID.randomUUID())
+                                                                .batchId(batchId)
+                                                                .userId(userId)
+                                                                .fileId(placeholderId)
+                                                                .fileName("[Folder] " + folderName)
+                                                                .sourceProvider("GOOGLE_DRIVE")
+                                                                .targetProvider("STORAGE_NODE")
+                                                                .targetExternalAccountId(request.targetExternalAccountId())
+                                                                .deleteSource(request.deleteSource())
+                                                                .status(MigrationStatus.PENDING)
+                                                                .progress(0.0)
+                                                                .updatedAt(Instant.now())
+                                                                .build();
+                                                        return migrationTaskRepository.save(folderTask)
+                                                                .flatMap(savedTask -> {
+                                                                    Flux.just(savedTask)
+                                                                            .concatMap(task -> migrationService.updateTaskStatus(task.getId(), MigrationStatus.RUNNING, 0.0, null)
+                                                                                    .then(migrateFolderFromGoogleDriveRecursive(userId, batchId, gDriveFolderId, null, request.targetExternalAccountId(), request.deleteSource(), task.getId()))
+                                                                                    .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null))
+                                                                                    .onErrorResume(err -> {
+                                                                                        log.error("Folder GDrive migration failed for task: " + task.getId(), err);
+                                                                                        return migrationService.updateTaskStatus(task.getId(), MigrationStatus.FAILED, 0.0, err.getMessage());
+                                                                                    })
+                                                                            )
+                                                                            .then()
+                                                                            .subscribeOn(migrationScheduler)
+                                                                            .subscribe(
+                                                                                    success -> log.info("Batch GDrive to Storage Node folder migration {} completed successfully", batchId),
+                                                                                    error -> log.error("Batch GDrive to Storage Node folder migration " + batchId + " failed", error)
+                                                                            );
+                                                                    return Mono.empty();
+                                                                });
+                                                    })
+                                            )
+                                            .then();
                                 }
 
-                                return processFiles.thenReturn(batchId);
+                                return Mono.when(processFiles, processFolders).thenReturn(batchId);
                             });
                 });
     }
@@ -285,7 +317,6 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                 .size(fileSize)
                                 .provider("STORAGE_NODE")
                                 .folderId(folderUuid)
-                                .createdAt(Instant.now())
                                 .build();
                         return fileRepository.save(copyFile);
                     }
@@ -311,7 +342,8 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
             String gDriveFolderId,
             UUID parentLocalFolderId,
             Long externalAccountId,
-            boolean deleteSource) {
+            boolean deleteSource,
+            UUID folderTaskId) {
 
         return googleDriveClient.getFileName(externalAccountId, gDriveFolderId)
                 .flatMap(folderName -> {
@@ -320,7 +352,6 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                             .name(folderName)
                             .parentId(parentLocalFolderId)
                             .userId(userId)
-                            .createdAt(Instant.now())
                             .build();
 
                     return folderRepository.save(newLocalFolder)
@@ -340,14 +371,34 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                 Long size = item.get("size") != null ? Long.parseLong(item.get("size").toString()) : 0L;
 
                                                 if ("application/vnd.google-apps.folder".equals(mimeType)) {
-                                                    tasks.add(migrateFolderFromGoogleDriveRecursive(
-                                                            userId,
-                                                            batchId,
-                                                            itemId,
-                                                            newLocalFolderId,
-                                                            externalAccountId,
-                                                            deleteSource
-                                                    ));
+                                                    UUID subFolderTaskId = UUID.randomUUID();
+                                                    MigrationTask subTask = MigrationTask.builder()
+                                                            .id(subFolderTaskId)
+                                                            .batchId(batchId)
+                                                            .userId(userId)
+                                                            .fileId(UUID.randomUUID())
+                                                            .fileName("[Folder] " + itemName)
+                                                            .sourceProvider("GOOGLE_DRIVE")
+                                                            .targetProvider("STORAGE_NODE")
+                                                            .targetExternalAccountId(externalAccountId)
+                                                            .deleteSource(deleteSource)
+                                                            .status(MigrationStatus.RUNNING)
+                                                            .progress(0.0)
+                                                            .updatedAt(Instant.now())
+                                                            .build();
+                                                    tasks.add(migrationTaskRepository.save(subTask)
+                                                            .then(migrateFolderFromGoogleDriveRecursive(
+                                                                    userId,
+                                                                    batchId,
+                                                                    itemId,
+                                                                    newLocalFolderId,
+                                                                    externalAccountId,
+                                                                    deleteSource,
+                                                                    subFolderTaskId
+                                                            ))
+                                                            .then(migrationService.updateTaskStatus(subFolderTaskId, MigrationStatus.SUCCESS, 100.0, null))
+                                                            .onErrorResume(err -> migrationService.updateTaskStatus(subFolderTaskId, MigrationStatus.FAILED, 0.0, err.getMessage()))
+                                                    );
                                                 } else {
                                                     UUID fileId = UUID.randomUUID();
                                                     File file = File.builder()
@@ -358,7 +409,6 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                             .size(size)
                                                             .provider("GOOGLE_DRIVE")
                                                             .externalAccountId(externalAccountId)
-                                                            .createdAt(Instant.now())
                                                             .build();
 
                                                     filesToMigrate.add(file);

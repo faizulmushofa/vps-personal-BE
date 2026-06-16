@@ -14,12 +14,12 @@ public interface PreviewService {
      * Preview file pribadi milik user yang terautentikasi.
      * Akses dikontrol oleh DownloadService/FileService yang di-inject.
      */
-    Mono<PreviewResult> previewPrivateFile(UUID fileId);
+    Mono<PreviewResult> previewPrivateFile(Long userId, String fileId, String provider, Long externalAccountId);
 
     /**
      * Preview file dari public share token (anonim, tanpa JWT).
      * @param shareToken Token unik dari tautan publik
      * @param provider "local" untuk StorageNode, "google" untuk Google Drive
      */
-    Mono<PreviewResult> previewPublicFile(String shareToken, String provider);
+    Mono<PreviewResult> previewPublicFile(String shareToken, String provider, String fileId);
 }

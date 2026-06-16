@@ -19,4 +19,7 @@ public interface FolderSharedService {
     Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, String folderId, ServerWebExchange exchange);
     Mono<FileResponse> uploadToSharedFolderPublic(String shareToken, String folderId, String fileName, long size, FilePart filePart, ServerWebExchange exchange);
     Mono<Void> deleteFromSharedFolderPublic(String shareToken, String fileId, ServerWebExchange exchange);
+    Mono<FileResponse> getSharedFileMetadataPublic(String shareToken, String fileId);
+    Mono<Boolean> isDescendant(UUID currentFolderId, UUID rootFolderId, Long userId);
+    Mono<Long> getSharedFolderOwnerId(String shareToken);
 }

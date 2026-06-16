@@ -4,6 +4,8 @@ import io.github.faizul.File.dtos.FileResponse;
 import io.github.faizul.File.dtos.ShareFileRequest;
 import io.github.faizul.File.dtos.ShareFileResponse;
 import io.github.faizul.File.share.ShareService;
+import io.github.faizul.folder.share.FolderSharedService;
+import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,16 +23,22 @@ public class GoogleDriveShareController {
     private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
     private final io.github.faizul.activity.UserActivityService userActivityService;
     private final io.github.faizul.File.core.FileRepository fileRepository;
+    private final FolderSharedService folderSharedService;
+    private final GoogleDriveClient googleDriveClient;
 
     public GoogleDriveShareController(
             @Qualifier("googleDriveShareService") ShareService shareService,
             io.github.faizul.security.filter.CurrentUserContext currentUserContext,
             io.github.faizul.activity.UserActivityService userActivityService,
-            io.github.faizul.File.core.FileRepository fileRepository) {
+            io.github.faizul.File.core.FileRepository fileRepository,
+            FolderSharedService folderSharedService,
+            GoogleDriveClient googleDriveClient) {
         this.shareService = shareService;
         this.currentUserContext = currentUserContext;
         this.userActivityService = userActivityService;
         this.fileRepository = fileRepository;
+        this.folderSharedService = folderSharedService;
+        this.googleDriveClient = googleDriveClient;
     }
 
     @PostMapping("/{fileId}")
@@ -97,8 +105,32 @@ public class GoogleDriveShareController {
     public Mono<ResponseEntity<Flux<byte[]>>> downloadPublicFile(
             @PathVariable String shareToken,
             @RequestParam(value = "download", required = false, defaultValue = "false") Boolean download,
+            @RequestParam(value = "fileId", required = false) String fileId,
             org.springframework.web.server.ServerWebExchange exchange) {
-        return shareService.getPublicFileInfo(shareToken)
+        
+        if (fileId == null || fileId.trim().isEmpty()) {
+            return shareService.getPublicFileInfo(shareToken)
+                    .flatMap(file -> {
+                        String disposition = Boolean.TRUE.equals(download)
+                                ? "attachment; filename=\"" + file.originalFileName() + "\""
+                                : "inline; filename=\"" + file.originalFileName() + "\"";
+
+                        String contentType = org.springframework.http.MediaTypeFactory.getMediaType(file.originalFileName())
+                                .map(org.springframework.http.MediaType::toString)
+                                .orElse("application/octet-stream");
+
+                        return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC_GD", "Mengunduh berkas publik Google Drive: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
+                                .thenReturn(ResponseEntity.ok()
+                                        .header("Content-Disposition", disposition)
+                                        .header("Content-Length", String.valueOf(file.size()))
+                                        .contentType(MediaType.parseMediaType(contentType))
+                                        .body(shareService.downloadPublicFile(shareToken)));
+                    })
+                    .defaultIfEmpty(ResponseEntity.notFound().build());
+        }
+
+        // Downloading file from a shared folder
+        return folderSharedService.getSharedFileMetadataPublic(shareToken, fileId)
                 .flatMap(file -> {
                     String disposition = Boolean.TRUE.equals(download)
                             ? "attachment; filename=\"" + file.originalFileName() + "\""
@@ -108,12 +140,14 @@ public class GoogleDriveShareController {
                             .map(org.springframework.http.MediaType::toString)
                             .orElse("application/octet-stream");
 
-                    return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC_GD", "Mengunduh berkas publik Google Drive: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
+                    Flux<byte[]> dataStream = googleDriveClient.downloadFile(file.externalAccountId(), fileId);
+
+                    return userActivityService.log(null, "DOWNLOAD_SHARED_PUBLIC_GD", "Mengunduh berkas publik Google Drive dari folder bersama: " + file.originalFileName() + " dengan token: " + shareToken, exchange)
                             .thenReturn(ResponseEntity.ok()
                                     .header("Content-Disposition", disposition)
                                     .header("Content-Length", String.valueOf(file.size()))
                                     .contentType(MediaType.parseMediaType(contentType))
-                                    .body(shareService.downloadPublicFile(shareToken)));
+                                    .body(dataStream));
                 })
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }

@@ -69,7 +69,6 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                                 .size(size)
                                                                 .provider("GOOGLE_DRIVE")
                                                                 .externalAccountId(acc.getId())
-                                                                .createdAt(Instant.now())
                                                                 .build();
                                                         return fileRepository.save(newFile);
                                                     })

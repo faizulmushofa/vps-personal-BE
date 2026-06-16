@@ -82,6 +82,7 @@ public class SecurityConfig {
                             .pathMatchers("/api/files/share/public/**").permitAll()
                             .pathMatchers("/api/google-drive/share/public/**").permitAll()
                             .pathMatchers("/api/preview/public/**").permitAll()
+                            .pathMatchers("/api/shared-folders/public/**").permitAll()
                             .pathMatchers("/admin/**").hasRole("ADMIN")
                             .pathMatchers("/api/admin/**").hasRole("ADMIN");
 

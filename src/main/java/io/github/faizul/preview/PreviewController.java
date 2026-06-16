@@ -35,9 +35,13 @@ public class PreviewController {
      * Memerlukan JWT token di header Authorization.
      */
     @GetMapping("/{fileId}")
-    public Mono<ResponseEntity<Flux<byte[]>>> previewPrivateFile(@PathVariable UUID fileId, ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Flux<byte[]>>> previewPrivateFile(
+            @PathVariable String fileId,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) Long externalAccountId,
+            ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> previewService.previewPrivateFile(fileId)
+                .flatMap(userId -> previewService.previewPrivateFile(userId, fileId, provider, externalAccountId)
                         .flatMap(result -> userActivityService.log(userId, "PREVIEW_FILE", "Melihat pratinjau berkas pribadi ID: " + fileId, exchange)
                                 .thenReturn(ResponseEntity.ok()
                                         .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")
@@ -59,8 +63,9 @@ public class PreviewController {
     public Mono<ResponseEntity<Flux<byte[]>>> previewPublicFile(
             @PathVariable String provider,
             @PathVariable String shareToken,
+            @RequestParam(required = false) String fileId,
             ServerWebExchange exchange) {
-        return previewService.previewPublicFile(shareToken, provider)
+        return previewService.previewPublicFile(shareToken, provider, fileId)
                 .flatMap(result -> userActivityService.log(null, "PREVIEW_FILE_PUBLIC", "Melihat pratinjau berkas publik dengan share token: " + shareToken, exchange)
                         .thenReturn(ResponseEntity.ok()
                                 .header("Content-Disposition", "inline; filename=\"" + result.fileName() + "\"")

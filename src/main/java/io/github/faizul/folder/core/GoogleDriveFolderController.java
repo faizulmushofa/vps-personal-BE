@@ -75,4 +75,19 @@ public class GoogleDriveFolderController {
                                 exchange
                         ).then(Mono.just(ResponseEntity.ok().<Void>build()))));
     }
+
+    @DeleteMapping("/{folderId}")
+    public Mono<ResponseEntity<Void>> deleteFolder(
+            @PathVariable String folderId,
+            @RequestParam Long externalAccountId,
+            ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> googleDriveClient.deleteFile(externalAccountId, folderId)
+                        .then(userActivityService.log(
+                                userId,
+                                "DELETE_FOLDER_GD",
+                                "Menghapus folder Google Drive ID: " + folderId,
+                                exchange
+                        ).then(Mono.just(ResponseEntity.noContent().build()))));
+    }
 }
