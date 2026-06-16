@@ -15,7 +15,7 @@ public interface MigrationService {
     
     // Shared validation & status update utilities
     Mono<Void> validateCommonLimits(Long userId);
-    Mono<List<File>> validateAndGetSourceFiles(List<UUID> fileIds, Long userId, Long maxFileSizeBytes, String targetProvider, Long targetExternalAccountId);
+    Mono<List<File>> validateAndGetSourceFiles(List<String> fileIds, Long userId, Long maxFileSizeBytes, String targetProvider, Long targetExternalAccountId, Long sourceExternalAccountId);
     Mono<Void> updateTaskProgress(UUID taskId, double progress);
     Mono<Void> updateTaskStatus(UUID taskId, MigrationStatus status, double progress, String errorMessage);
     Mono<Void> cancelTask(UUID taskId);

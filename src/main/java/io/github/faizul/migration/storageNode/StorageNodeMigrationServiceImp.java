@@ -84,13 +84,14 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                             .then(migrationService.getMigrationConfig())
                             .flatMap(configMap -> {
                                 Long maxFileSizeBytes = (Long) configMap.get("maxFileSizeBytes");
-                                List<UUID> fileIds = request.fileIds() != null ? request.fileIds() : List.of();
+                                List<String> fileIds = request.fileIds() != null ? request.fileIds() : List.of();
                                 return migrationService.validateAndGetSourceFiles(
                                         fileIds,
                                         userId,
                                         maxFileSizeBytes,
                                         request.targetProvider(),
-                                        request.targetExternalAccountId()
+                                        request.targetExternalAccountId(),
+                                        request.sourceExternalAccountId()
                                 ).flatMap(validFiles -> {
                                     // Validate target quota limit on Storage Node
                                     long totalBytesToMigrate = validFiles.stream().mapToLong(File::getSize).sum();
@@ -148,7 +149,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                 Mono<Void> processFolders = Mono.empty();
                                 if (request.folderIds() != null && !request.folderIds().isEmpty()) {
                                     processFolders = Flux.fromIterable(request.folderIds())
-                                            .flatMap(gDriveFolderId -> googleDriveClient.getFileName(request.targetExternalAccountId() != null ? request.targetExternalAccountId() : 0L, gDriveFolderId)
+                                            .flatMap(gDriveFolderId -> googleDriveClient.getFileName(request.sourceExternalAccountId() != null ? request.sourceExternalAccountId() : 0L, gDriveFolderId)
                                                     .defaultIfEmpty("Google Drive Folder")
                                                     .flatMap(folderName -> {
                                                         UUID placeholderId = UUID.randomUUID();
@@ -170,7 +171,7 @@ public class StorageNodeMigrationServiceImp implements StorageNodeMigrationServi
                                                                 .flatMap(savedTask -> {
                                                                     Flux.just(savedTask)
                                                                             .concatMap(task -> migrationService.updateTaskStatus(task.getId(), MigrationStatus.RUNNING, 0.0, null)
-                                                                                    .then(migrateFolderFromGoogleDriveRecursive(userId, batchId, gDriveFolderId, null, request.targetExternalAccountId(), request.deleteSource(), task.getId()))
+                                                                                    .then(migrateFolderFromGoogleDriveRecursive(userId, batchId, gDriveFolderId, null, request.sourceExternalAccountId(), request.deleteSource(), task.getId()))
                                                                                     .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null))
                                                                                     .onErrorResume(err -> {
                                                                                         log.error("Folder GDrive migration failed for task: " + task.getId(), err);

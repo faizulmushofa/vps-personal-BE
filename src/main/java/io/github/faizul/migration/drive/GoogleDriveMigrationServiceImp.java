@@ -85,13 +85,14 @@ public class GoogleDriveMigrationServiceImp implements GoogleDriveMigrationServi
                             .then(migrationService.getMigrationConfig())
                             .flatMap(configMap -> {
                                 Long maxFileSizeBytes = (Long) configMap.get("maxFileSizeBytes");
-                                List<UUID> fileIds = request.fileIds() != null ? request.fileIds() : List.of();
+                                List<String> fileIds = request.fileIds() != null ? request.fileIds() : List.of();
                                 return migrationService.validateAndGetSourceFiles(
                                         fileIds,
                                         userId,
                                         maxFileSizeBytes,
                                         request.targetProvider(),
-                                        request.targetExternalAccountId()
+                                        request.targetExternalAccountId(),
+                                        request.sourceExternalAccountId()
                                 ).flatMap(validFiles -> {
                                     List<MigrationTask> tasks = new ArrayList<>();
                                     for (File file : validFiles) {

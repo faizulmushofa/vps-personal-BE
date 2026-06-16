@@ -2,6 +2,7 @@ package io.github.faizul.migration;
 
 import io.github.faizul.File.core.File;
 import io.github.faizul.File.core.FileRepository;
+import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
 import io.github.faizul.setting.AppSettingRepository;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.User.core.User;
@@ -35,6 +36,7 @@ public class MigrationServiceImp implements MigrationService {
     private final CurrentUserContext currentUserContext;
     private final DatabaseClient databaseClient;
     private final UserRepository userRepository;
+    private final GoogleDriveClient googleDriveClient;
 
     private static final long DEFAULT_MAX_SIZE = 256 * 1024 * 1024L; // 256 MB
     private static final int DEFAULT_DAILY_LIMIT = 3;
@@ -145,36 +147,88 @@ public class MigrationServiceImp implements MigrationService {
 
     @Override
     public Mono<List<File>> validateAndGetSourceFiles(
-            List<UUID> fileIds, 
+            List<String> fileIds, 
             Long userId, 
             Long maxFileSizeBytes, 
             String targetProvider, 
-            Long targetExternalAccountId) {
+            Long targetExternalAccountId,
+            Long sourceExternalAccountId) {
         long finalMaxFileSizeBytes = maxFileSizeBytes == -1L ? Long.MAX_VALUE : maxFileSizeBytes;
         return Flux.fromIterable(fileIds)
-                .flatMap(fileId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan: " + fileId)))
-                        .flatMap(file -> {
-                            // Validasi kepemilikan
-                            if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses ke berkas ini."));
-                            }
+                .flatMap(fileIdStr -> {
+                    UUID parsedUuid = null;
+                    try {
+                        parsedUuid = UUID.fromString(fileIdStr);
+                    } catch (IllegalArgumentException e) {
+                        // Not a UUID string
+                    }
 
-                            // Validasi self-migration
-                            boolean isSameProvider = file.getProvider().equalsIgnoreCase(targetProvider);
-                            boolean isSameAccount = Objects.equals(file.getExternalAccountId(), targetExternalAccountId);
-                            if (isSameProvider && isSameAccount) {
-                                return Mono.error(new IllegalArgumentException("File " + file.getOriginalFileName() + " sudah berada di penyimpanan target yang sama."));
-                            }
-
-                            // Validasi file size
-                            if (file.getSize() > finalMaxFileSizeBytes) {
-                                return Mono.error(new IllegalArgumentException("Berkas " + file.getOriginalFileName() + " melebihi batas ukuran migrasi paket Anda (" + (finalMaxFileSizeBytes / 1024 / 1024) + " MB)."));
-                            }
-
-                            return Mono.just(file);
-                        }))
+                    if (parsedUuid != null) {
+                        return fileRepository.findById(parsedUuid)
+                                .flatMap(file -> validateFile(file, userId, targetProvider, targetExternalAccountId, finalMaxFileSizeBytes))
+                                .switchIfEmpty(Mono.defer(() -> findAndValidateByStorageName(fileIdStr, userId, targetProvider, targetExternalAccountId, finalMaxFileSizeBytes, sourceExternalAccountId)));
+                    } else {
+                        return findAndValidateByStorageName(fileIdStr, userId, targetProvider, targetExternalAccountId, finalMaxFileSizeBytes, sourceExternalAccountId);
+                    }
+                })
                 .collectList();
+    }
+
+    private Mono<File> findAndValidateByStorageName(
+            String storageName,
+            Long userId,
+            String targetProvider,
+            Long targetExternalAccountId,
+            long finalMaxFileSizeBytes,
+            Long sourceExternalAccountId) {
+        return fileRepository.findByStorageNameAndProvider(storageName, "GOOGLE_DRIVE")
+                .flatMap(file -> validateFile(file, userId, targetProvider, targetExternalAccountId, finalMaxFileSizeBytes))
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (sourceExternalAccountId != null) {
+                        return googleDriveClient.getFileMetadata(sourceExternalAccountId, storageName)
+                                .flatMap(metadata -> {
+                                    String name = (String) metadata.get("name");
+                                    long size = 0L;
+                                    if (metadata.get("size") != null) {
+                                        size = Long.parseLong(metadata.get("size").toString());
+                                    }
+                                    File newFile = File.builder()
+                                            .id(UUID.randomUUID())
+                                            .userId(userId)
+                                            .originalFileName(name)
+                                            .storageName(storageName)
+                                            .size(size)
+                                            .provider("GOOGLE_DRIVE")
+                                            .externalAccountId(sourceExternalAccountId)
+                                            .build();
+                                    return fileRepository.save(newFile);
+                                })
+                                .flatMap(file -> validateFile(file, userId, targetProvider, targetExternalAccountId, finalMaxFileSizeBytes))
+                                .onErrorResume(err -> {
+                                    log.error("Failed to fetch Google Drive file metadata for ID: " + storageName, err);
+                                    return Mono.error(new NoSuchElementException("Berkas tidak ditemukan: " + storageName));
+                                });
+                    }
+                    return Mono.error(new NoSuchElementException("Berkas tidak ditemukan: " + storageName));
+                }));
+    }
+
+    private Mono<File> validateFile(File file, Long userId, String targetProvider, Long targetExternalAccountId, long finalMaxFileSizeBytes) {
+        if (!file.getUserId().equals(userId)) {
+            return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses ke berkas ini."));
+        }
+
+        boolean isSameProvider = file.getProvider().equalsIgnoreCase(targetProvider);
+        boolean isSameAccount = Objects.equals(file.getExternalAccountId(), targetExternalAccountId);
+        if (isSameProvider && isSameAccount) {
+            return Mono.error(new IllegalArgumentException("File " + file.getOriginalFileName() + " sudah berada di penyimpanan target yang sama."));
+        }
+
+        if (file.getSize() > finalMaxFileSizeBytes) {
+            return Mono.error(new IllegalArgumentException("Berkas " + file.getOriginalFileName() + " melebihi batas ukuran migrasi paket Anda (" + (finalMaxFileSizeBytes / 1024 / 1024) + " MB)."));
+        }
+
+        return Mono.just(file);
     }
 
     @Override
