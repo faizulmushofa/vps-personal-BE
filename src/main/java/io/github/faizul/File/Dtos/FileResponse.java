@@ -13,9 +13,14 @@ public record FileResponse(
         Instant createdAt,
         String provider,
         Long externalAccountId,
-        String ownerEmail
+        String ownerEmail,
+        Instant expiresAt
 ){
+    public FileResponse(String id, String originalFileName, Long size, Instant createdAt, String provider, Long externalAccountId, String ownerEmail) {
+        this(id, originalFileName, size, createdAt, provider, externalAccountId, ownerEmail, null);
+    }
+
     public FileResponse(UUID id, String originalFileName, Long size, Instant createdAt, String provider, Long externalAccountId, String ownerEmail) {
-        this(id != null ? id.toString() : null, originalFileName, size, createdAt, provider, externalAccountId, ownerEmail);
+        this(id != null ? id.toString() : null, originalFileName, size, createdAt, provider, externalAccountId, ownerEmail, null);
     }
 }

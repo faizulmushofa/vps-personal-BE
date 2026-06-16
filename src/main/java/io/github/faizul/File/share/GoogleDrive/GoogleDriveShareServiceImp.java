@@ -83,9 +83,38 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                 if (!"GOOGLE_DRIVE".equals(file.getProvider())) {
                                     return Mono.error(new IllegalArgumentException("Hanya berkas dari provider GOOGLE_DRIVE yang dapat dibatalkan pembagiannya melalui layanan ini"));
                                 }
-                                if (!file.getUserId().equals(userId)) {
-                                    return Mono.error(new AccessDeniedException("Hanya pemilik berkas yang diperbolehkan untuk membagikan berkas ini"));
+                                boolean isOwner = file.getUserId().equals(userId);
+                                if (!isOwner) {
+                                    return fileSharedRepository.findByFileIdAndUserId(file.getId(), userId)
+                                            .switchIfEmpty(Mono.error(new AccessDeniedException("Hanya pemilik berkas atau penerima berkas yang diperbolehkan untuk memperbarui masa aktif berkas ini")))
+                                            .flatMap(existing -> {
+                                                final Instant finalExpiresAt;
+                                                if ((request.expiresInDays() != null && request.expiresInDays() > 0) ||
+                                                        (request.expiresInHours() != null && request.expiresInHours() > 0)) {
+                                                    long totalHours = 0;
+                                                    if (request.expiresInDays() != null) {
+                                                        totalHours += request.expiresInDays() * 24L;
+                                                    }
+                                                    if (request.expiresInHours() != null) {
+                                                        totalHours += request.expiresInHours();
+                                                    }
+                                                    finalExpiresAt = Instant.now().plus(java.time.Duration.ofHours(totalHours));
+                                                } else {
+                                                    finalExpiresAt = null;
+                                                }
+                                                existing.setExpiresAt(finalExpiresAt);
+                                                return fileSharedRepository.save(existing)
+                                                        .map(saved -> new ShareFileResponse(
+                                                                saved.getId(),
+                                                                null,
+                                                                false,
+                                                                null,
+                                                                null,
+                                                                saved.getExpiresAt()
+                                                        ));
+                                            });
                                 }
+
 
                                 final UUID fileUUID = file.getId();
 
@@ -280,7 +309,8 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     file.getCreatedAt(),
                                                     file.getProvider(),
                                                     file.getExternalAccountId(),
-                                                    owner.getEmail()
+                                                    owner.getEmail(),
+                                                    shared.getExpiresAt()
                                             ))
                                             .defaultIfEmpty(new FileResponse(
                                                     file.getId().toString(),
@@ -289,7 +319,8 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     file.getCreatedAt(),
                                                     file.getProvider(),
                                                     file.getExternalAccountId(),
-                                                    "Unknown Owner"
+                                                    "Unknown Owner",
+                                                    shared.getExpiresAt()
                                             ))
                                     );
                         })
