@@ -3,6 +3,7 @@ package io.github.faizul.User.externalAccount.ExternalProvider;
 import io.github.faizul.User.externalAccount.ExternalAccount;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import java.util.Map;
@@ -41,12 +42,12 @@ public class GoogleProvider implements ExternalProvider {
     public Mono<ExternalAccount> exchangeCode(String code) {
         return webClient.post()
                 .uri("https://oauth2.googleapis.com/token")
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .bodyValue("code=" + code +
-                        "&client_id=" + clientId +
-                        "&client_secret=" + clientSecret +
-                        "&redirect_uri=postmessage" +
-                        "&grant_type=authorization_code")
+                .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("code", code)
+                        .with("client_id", clientId)
+                        .with("client_secret", clientSecret)
+                        .with("redirect_uri", "postmessage")
+                        .with("grant_type", "authorization_code"))
                 .retrieve()
                 .bodyToMono(Map.class)
                 .flatMap(tokenResponse -> {
