@@ -11,6 +11,9 @@ import java.util.UUID;
 public interface FileRepository extends ReactiveCrudRepository<File, UUID> {
     Mono<File> findById(UUID id);
     Flux<File> findByUserId(Long userId);
+    Flux<File> findByFolderId(UUID folderId);
+    Flux<File> findByUserIdAndFolderIdAndProvider(Long userId, UUID folderId, String provider);
+    Flux<File> findByUserIdAndFolderIdIsNullAndProvider(Long userId, String provider);
 
     @Query("SELECT COALESCE(SUM(size), 0) FROM files WHERE user_id = :userId AND (provider = 'STORAGE_NODE' OR provider IS NULL)")
     Mono<Long> calculateUsedStorageByUserId(Long userId);

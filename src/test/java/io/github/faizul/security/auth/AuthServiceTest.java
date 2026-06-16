@@ -40,6 +40,8 @@ class AuthServiceTest {
     @Mock private OtpVerificationRepository otpVerificationRepository;
     @Mock private NotificationService notificationService;
     @Mock private io.github.faizul.activity.UserActivityService userActivityService;
+    @Mock private io.github.faizul.User.externalAccount.ExternalAccountRepository externalAccountRepository;
+    @Mock private io.github.faizul.File.core.googleDrive.GoogleDriveServiceImp googleDriveService;
 
     @InjectMocks
     private AuthService authService;
@@ -58,6 +60,7 @@ class AuthServiceTest {
                 .build();
 
         lenient().when(userActivityService.log(any(), any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(externalAccountRepository.findAllByUserId(anyLong())).thenReturn(reactor.core.publisher.Flux.empty());
     }
 
     @Nested

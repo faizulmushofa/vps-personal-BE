@@ -56,6 +56,9 @@ public class MigrationTask implements Persistable<UUID> {
     @Column("error_message")
     private String errorMessage;
 
+    @Column("target_folder_id")
+    private String targetFolderId;
+
     @CreatedDate
     @Column("created_at")
     private Instant createdAt;

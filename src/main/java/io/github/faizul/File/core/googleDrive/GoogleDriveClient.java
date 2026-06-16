@@ -83,8 +83,17 @@ public class GoogleDriveClient {
     }
 
     public Mono<String> uploadFile(Long externalAccountId, Path filePath, String fileName, String mimeType) {
+        return uploadFile(externalAccountId, filePath, fileName, mimeType, null);
+    }
+
+    public Mono<String> uploadFile(Long externalAccountId, Path filePath, String fileName, String mimeType, String parentFolderId) {
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
-        builder.part("metadata", Map.of("name", fileName), MediaType.APPLICATION_JSON);
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("name", fileName);
+        if (parentFolderId != null && !parentFolderId.isBlank()) {
+            metadata.put("parents", java.util.List.of(parentFolderId));
+        }
+        builder.part("metadata", metadata, MediaType.APPLICATION_JSON);
         builder.part("media", new FileSystemResource(filePath), MediaType.parseMediaType(mimeType));
 
         return getValidAccessToken(externalAccountId)
@@ -195,6 +204,15 @@ public class GoogleDriveClient {
     }
 
     public Mono<String> initiateResumableUpload(Long externalAccountId, String fileName, String mimeType, long totalSize) {
+        return initiateResumableUpload(externalAccountId, fileName, mimeType, totalSize, null);
+    }
+
+    public Mono<String> initiateResumableUpload(Long externalAccountId, String fileName, String mimeType, long totalSize, String parentFolderId) {
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("name", fileName);
+        if (parentFolderId != null && !parentFolderId.isBlank()) {
+            metadata.put("parents", java.util.List.of(parentFolderId));
+        }
         return getValidAccessToken(externalAccountId)
                 .flatMap(token -> webClient.post()
                         .uri("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
@@ -202,7 +220,7 @@ public class GoogleDriveClient {
                         .header("X-Upload-Content-Type", mimeType != null ? mimeType : "application/octet-stream")
                         .header("X-Upload-Content-Length", String.valueOf(totalSize))
                         .header("Content-Type", "application/json; charset=UTF-8")
-                        .bodyValue(Map.of("name", fileName))
+                        .bodyValue(metadata)
                         .exchangeToMono(response -> {
                             if (response.statusCode().isError()) {
                                 return response.bodyToMono(String.class)
@@ -251,5 +269,92 @@ public class GoogleDriveClient {
                                         .map(body -> (String) body.get("id"));
                             });
                 });
+    }
+
+    public Mono<String> createFolder(Long externalAccountId, String name, String parentFolderId) {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("name", name);
+        body.put("mimeType", "application/vnd.google-apps.folder");
+        if (parentFolderId != null && !parentFolderId.isBlank()) {
+            body.put("parents", java.util.List.of(parentFolderId));
+        } else {
+            body.put("parents", java.util.List.of("root"));
+        }
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> webClient.post()
+                        .uri("https://www.googleapis.com/drive/v3/files")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "application/json")
+                        .bodyValue(body)
+                        .retrieve()
+                        .bodyToMono(java.util.Map.class)
+                        .map(res -> (String) res.get("id"))
+                );
+    }
+
+    public Mono<java.util.List<java.util.Map<String, Object>>> listFilesAndFolders(Long externalAccountId, String parentFolderId) {
+        String parent = parentFolderId != null && !parentFolderId.isBlank() ? parentFolderId : "root";
+        String q = "'" + parent + "' in parents and trashed = false";
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> webClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .scheme("https")
+                                .host("www.googleapis.com")
+                                .path("/drive/v3/files")
+                                .queryParam("q", q)
+                                .queryParam("fields", "files(id,name,size,mimeType,createdTime,parents)")
+                                .build())
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .bodyToMono(java.util.Map.class)
+                        .map(res -> {
+                            java.util.List<java.util.Map<String, Object>> files = (java.util.List<java.util.Map<String, Object>>) res.get("files");
+                            return files != null ? files : java.util.List.of();
+                        })
+                );
+    }
+
+    public Mono<Void> moveFile(Long externalAccountId, String fileId, String targetFolderId) {
+        String newParent = targetFolderId != null && !targetFolderId.isBlank() ? targetFolderId : "root";
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> {
+                    // 1. Dapatkan parent lama dari file
+                    return webClient.get()
+                            .uri("https://www.googleapis.com/drive/v3/files/" + fileId + "?fields=parents")
+                            .header("Authorization", "Bearer " + token)
+                            .retrieve()
+                            .bodyToMono(java.util.Map.class)
+                            .flatMap(res -> {
+                                java.util.List<String> parents = (java.util.List<String>) res.get("parents");
+                                String oldParents = parents != null ? String.join(",", parents) : "";
+                                
+                                // 2. Jalankan update parent
+                                return webClient.patch()
+                                        .uri(uriBuilder -> uriBuilder
+                                                .scheme("https")
+                                                .host("www.googleapis.com")
+                                                .path("/drive/v3/files/" + fileId)
+                                                .queryParam("addParents", newParent)
+                                                .queryParam("removeParents", oldParents)
+                                                .build())
+                                        .header("Authorization", "Bearer " + token)
+                                        .retrieve()
+                                        .toBodilessEntity()
+                                        .then();
+                            });
+                });
+    }
+
+    public Mono<String> getFileName(Long externalAccountId, String fileId) {
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> webClient.get()
+                        .uri("https://www.googleapis.com/drive/v3/files/" + fileId + "?fields=name")
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .bodyToMono(java.util.Map.class)
+                        .map(res -> (String) res.get("name"))
+                        .defaultIfEmpty("Google Drive Folder")
+                        .onErrorReturn("Google Drive Folder")
+                );
     }
 }

@@ -35,6 +35,8 @@ public class AuthService {
         private final OtpVerificationRepository otpVerificationRepository;
         private final NotificationService notificationService;
         private final UserActivityService userActivityService;
+        private final io.github.faizul.User.externalAccount.ExternalAccountRepository externalAccountRepository;
+        private final io.github.faizul.File.core.googleDrive.GoogleDriveServiceImp googleDriveService;
 
         // OWASP A04 FIX: Use SecureRandom instead of java.util.Random
         private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -203,21 +205,39 @@ public class AuthService {
         public Mono<Response> login(LoginRequest request, ServerWebExchange exchange) {
                 String emailNormalized = request.email().toLowerCase().trim();
                 return userRepository.findByEmail(emailNormalized)
-                                .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
-                                .filter(user -> passwordEncoder.matches(request.password(), user.getPassword()))
-                                .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
-                                .flatMap(user -> {
-                                        if (!Boolean.TRUE.equals(user.getIsActive())) {
-                                                return Mono.error(new IllegalArgumentException(
-                                                                "Akun Anda belum aktif. Silakan lakukan verifikasi email terlebih dahulu."));
-                                        }
-                                        String accessToken = jwtService.generateAccessToken(user);
+                               .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
+                               .filter(user -> passwordEncoder.matches(request.password(), user.getPassword()))
+                               .switchIfEmpty(Mono.error(new UsernameNotFoundException("Invalid email or password")))
+                               .flatMap(user -> {
+                                       if (!Boolean.TRUE.equals(user.getIsActive())) {
+                                               return Mono.error(new IllegalArgumentException(
+                                                               "Akun Anda belum aktif. Silakan lakukan verifikasi email terlebih dahulu."));
+                                       }
+                                       String accessToken = jwtService.generateAccessToken(user);
 
-                                        return jwtService.revokeAllUserTokens(user.getId())
-                                                         .then(jwtService.generateRefreshToken(user))
-                                                         .flatMap(refreshToken -> userActivityService.log(user.getId(), "LOGIN_SUCCESS", "Login berhasil", exchange)
-                                                                 .thenReturn(new Response(accessToken, refreshToken)));
-                                });
+                                       return jwtService.revokeAllUserTokens(user.getId())
+                                                        .then(jwtService.generateRefreshToken(user))
+                                                        .flatMap(refreshToken -> {
+                                                                triggerGoogleDriveSync(user.getId(), exchange);
+                                                                return userActivityService.log(user.getId(), "LOGIN_SUCCESS", "Login berhasil", exchange)
+                                                                        .thenReturn(new Response(accessToken, refreshToken));
+                                                        });
+                               });
+        }
+
+        private void triggerGoogleDriveSync(Long userId, ServerWebExchange exchange) {
+                externalAccountRepository.findAllByUserId(userId)
+                        .filter(acc -> "GOOGLE_DRIVE".equalsIgnoreCase(acc.getProvider()))
+                        .flatMap(acc -> {
+                            log.info("Memulai auto-sync Google Drive saat login untuk akun: {}", acc.getEmail());
+                            return userActivityService.log(userId, "AUTO_SYNC_GD", "Auto-sync Google Drive berjalan otomatis saat login untuk akun: " + acc.getEmail(), exchange)
+                                    .then(googleDriveService.syncGoogleDrive(acc.getId(), exchange))
+                                    .onErrorResume(err -> {
+                                        log.error("Gagal auto-sync Google Drive pada login: {}", err.getMessage());
+                                        return Mono.empty();
+                                    });
+                        })
+                        .subscribe();
         }
 
         public Mono<Void> logout(String refreshToken) {

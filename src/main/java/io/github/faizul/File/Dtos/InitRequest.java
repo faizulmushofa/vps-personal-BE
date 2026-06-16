@@ -1,12 +1,13 @@
 package io.github.faizul.File.dtos;
 
-import io.github.faizul.File.dtos.*;
-import io.github.faizul.File.core.*;
+import java.util.UUID;
 
 public record InitRequest(
         String fileName,
         Long totalSize,
         String provider,
-        Long externalAccountId
+        Long externalAccountId,
+        String folderId
 ) {
 }
+

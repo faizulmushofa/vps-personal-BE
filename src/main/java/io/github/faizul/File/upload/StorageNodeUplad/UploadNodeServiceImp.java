@@ -91,6 +91,7 @@ public class UploadNodeServiceImp implements UploadService {
                                         .storageName(storageName)
                                         .size(request.totalSize())
                                         .provider("STORAGE_NODE")
+                                        .folderId(request.folderId() != null && !request.folderId().isBlank() ? UUID.fromString(request.folderId()) : null)
                                         .build();
 
                                 UploadSession session = UploadSession.builder()

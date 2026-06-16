@@ -58,6 +58,15 @@ public class UploadGoogleDriveServiceImp implements UploadService {
         return currentUserContext.getUserId()
                 .flatMap(userId -> {
                     String tempPath = storageConfig.tempDir(userId, fileId).toString();
+                    try {
+                        java.nio.file.Files.createDirectories(Paths.get(tempPath));
+                        if (request.folderId() != null && !request.folderId().isBlank()) {
+                            java.nio.file.Files.writeString(Paths.get(tempPath, "parentFolderId.txt"), request.folderId());
+                        }
+                    } catch (java.io.IOException e) {
+                        return Mono.error(e);
+                    }
+
                     File file = File.builder()
                             .id(fileId)
                             .userId(userId)
@@ -197,7 +206,19 @@ public class UploadGoogleDriveServiceImp implements UploadService {
 
     private Mono<Void> uploadToGoogleDriveAndSave(Long userId, File file, Path combinedFilePath) {
         String mimeType = detectMimeType(combinedFilePath);
-        return googleDriveClient.uploadFile(file.getExternalAccountId(), combinedFilePath, file.getOriginalFileName(), mimeType)
+        
+        String parentFolderId = null;
+        Path parentFile = storageConfig.tempDir(userId, file.getId()).resolve("parentFolderId.txt");
+        if (java.nio.file.Files.exists(parentFile)) {
+            try {
+                parentFolderId = java.nio.file.Files.readString(parentFile).trim();
+            } catch (Exception e) {
+                log.warn("Failed to read parentFolderId.txt: {}", e.getMessage());
+            }
+        }
+        
+        final String finalParent = parentFolderId;
+        return googleDriveClient.uploadFile(file.getExternalAccountId(), combinedFilePath, file.getOriginalFileName(), mimeType, finalParent)
                 .flatMap(googleFileId -> {
                     file.setStorageName(googleFileId);
                     return fileRepository.save(file);

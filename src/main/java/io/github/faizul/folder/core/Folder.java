@@ -1,4 +1,4 @@
-package io.github.faizul.File.core;
+package io.github.faizul.folder.core;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,32 +12,21 @@ import org.springframework.data.relational.core.mapping.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("files")
-public class File implements Persistable<UUID> {
+@Table("folders")
+public class Folder implements Persistable<UUID> {
 
     @Id
     private UUID id;
 
-    private String originalFileName;
+    private String name;
 
-    private String storageName;
-
-    private Long size;
-
-    //private Boolean active;
+    private UUID parentId;
 
     private Long userId;
-
-    private String provider;
-
-    private Long externalAccountId;
-
-    private UUID folderId;
 
     @CreatedDate
     private Instant createdAt;
