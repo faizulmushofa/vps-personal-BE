@@ -11,11 +11,11 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 public interface ShareService {
-    Mono<ShareFileResponse> shareFile(UUID fileId, ShareFileRequest request);
-    Mono<Void> unshareFile(UUID fileId, Long targetUserId);
+    Mono<ShareFileResponse> shareFile(String fileId, ShareFileRequest request);
+    Mono<Void> unshareFile(String fileId, Long targetUserId);
     Mono<Void> unshareFile(Long shareId);
     Flux<FileResponse> getSharedWithMe();
-    Mono<Boolean> hasReadAccess(UUID fileId, Long userId);
+    Mono<Boolean> hasReadAccess(String fileId, Long userId);
     Mono<FileResponse> getPublicFileInfo(String shareToken);
     Flux<byte[]> downloadPublicFile(String shareToken);
     Flux<SharedByMeResponse> getSharedByMe();

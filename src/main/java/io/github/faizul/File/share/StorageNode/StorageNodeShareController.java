@@ -34,26 +34,40 @@ public class StorageNodeShareController {
     }
 
     @PostMapping("/{fileId}")
-    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable String fileId, @RequestBody ShareFileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
-                        .flatMap(file -> shareService.shareFile(fileId, request)
-                                .flatMap(response -> userActivityService.log(userId, "SHARE_FILE", "Membagikan berkas: " + file.getOriginalFileName(), exchange)
-                                        .thenReturn(response)
-                                )
-                        )
-                )
+                .flatMap(userId -> {
+                    UUID fileUuid;
+                    try {
+                        fileUuid = UUID.fromString(fileId);
+                    } catch (IllegalArgumentException e) {
+                        return Mono.error(new IllegalArgumentException("Format fileId tidak valid"));
+                    }
+                    return fileRepository.findById(fileUuid)
+                            .flatMap(file -> shareService.shareFile(fileId, request)
+                                    .flatMap(response -> userActivityService.log(userId, "SHARE_FILE", "Membagikan berkas: " + file.getOriginalFileName(), exchange)
+                                            .thenReturn(response)
+                                    )
+                            );
+                })
                 .map(ResponseEntity::ok);
     }
 
     @DeleteMapping("/{fileId}/{userId}")
-    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable UUID fileId, @PathVariable Long userId, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable String fileId, @PathVariable Long userId, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(adminId -> fileRepository.findById(fileId)
-                        .flatMap(file -> shareService.unshareFile(fileId, userId)
-                                .then(userActivityService.log(adminId, "UNSHARE_FILE", "Membatalkan share berkas " + file.getOriginalFileName() + " untuk user ID: " + userId, exchange))
-                        )
-                )
+                .flatMap(adminId -> {
+                    UUID fileUuid;
+                    try {
+                        fileUuid = UUID.fromString(fileId);
+                    } catch (IllegalArgumentException e) {
+                        return Mono.error(new IllegalArgumentException("Format fileId tidak valid"));
+                    }
+                    return fileRepository.findById(fileUuid)
+                            .flatMap(file -> shareService.unshareFile(fileId, userId)
+                                    .then(userActivityService.log(adminId, "UNSHARE_FILE", "Membatalkan share berkas " + file.getOriginalFileName() + " untuk user ID: " + userId, exchange))
+                            );
+                })
                 .thenReturn(ResponseEntity.noContent().build());
     }
 

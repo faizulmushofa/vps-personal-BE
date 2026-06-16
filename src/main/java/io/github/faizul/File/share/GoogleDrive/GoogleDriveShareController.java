@@ -34,25 +34,50 @@ public class GoogleDriveShareController {
     }
 
     @PostMapping("/{fileId}")
-    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable UUID fileId, @RequestBody ShareFileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<ResponseEntity<ShareFileResponse>> shareFile(@PathVariable String fileId, @RequestBody ShareFileRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
-                        .flatMap(file -> shareService.shareFile(fileId, request)
-                                .flatMap(response -> userActivityService.log(userId, "SHARE_FILE_GD", "Membagikan berkas Google Drive: " + file.getOriginalFileName(), exchange)
-                                        .thenReturn(response)
-                                )
-                        )
+                .flatMap(userId -> shareService.shareFile(fileId, request)
+                        .flatMap(response -> {
+                            Mono<String> getFileNameMono;
+                            try {
+                                UUID uuid = UUID.fromString(fileId);
+                                getFileNameMono = fileRepository.findById(uuid)
+                                        .map(file -> file.getOriginalFileName())
+                                        .defaultIfEmpty("Berkas Google Drive");
+                            } catch (IllegalArgumentException e) {
+                                getFileNameMono = fileRepository.findByStorageNameAndProvider(fileId, "GOOGLE_DRIVE")
+                                        .map(file -> file.getOriginalFileName())
+                                        .defaultIfEmpty("Berkas Google Drive");
+                            }
+                            
+                            return getFileNameMono
+                                    .flatMap(fileName -> userActivityService.log(userId, "SHARE_FILE_GD", "Membagikan berkas Google Drive: " + fileName, exchange))
+                                    .thenReturn(response);
+                        })
                 )
                 .map(ResponseEntity::ok);
     }
 
     @DeleteMapping("/{fileId}/{userId}")
-    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable UUID fileId, @PathVariable Long userId, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Void>> unshareFile(@PathVariable String fileId, @PathVariable Long userId, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(adminId -> fileRepository.findById(fileId)
-                        .flatMap(file -> shareService.unshareFile(fileId, userId)
-                                .then(userActivityService.log(adminId, "UNSHARE_FILE_GD", "Membatalkan share berkas Google Drive " + file.getOriginalFileName() + " untuk user ID: " + userId, exchange))
-                        )
+                .flatMap(adminId -> shareService.unshareFile(fileId, userId)
+                        .then(Mono.defer(() -> {
+                            Mono<String> getFileNameMono;
+                            try {
+                                UUID uuid = UUID.fromString(fileId);
+                                getFileNameMono = fileRepository.findById(uuid)
+                                        .map(file -> file.getOriginalFileName())
+                                        .defaultIfEmpty("Berkas Google Drive");
+                            } catch (IllegalArgumentException e) {
+                                getFileNameMono = fileRepository.findByStorageNameAndProvider(fileId, "GOOGLE_DRIVE")
+                                        .map(file -> file.getOriginalFileName())
+                                        .defaultIfEmpty("Berkas Google Drive");
+                            }
+                            return getFileNameMono.flatMap(fileName -> 
+                                userActivityService.log(adminId, "UNSHARE_FILE_GD", "Membatalkan share berkas Google Drive " + fileName + " untuk user ID: " + userId, exchange)
+                            );
+                        }))
                 )
                 .thenReturn(ResponseEntity.noContent().build());
     }

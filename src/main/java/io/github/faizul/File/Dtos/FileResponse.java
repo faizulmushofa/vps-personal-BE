@@ -7,11 +7,15 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record FileResponse(
-        UUID id,
+        String id,
         String originalFileName,
         Long size,
         Instant createdAt,
         String provider,
         Long externalAccountId,
         String ownerEmail
-){}
+){
+    public FileResponse(UUID id, String originalFileName, Long size, Instant createdAt, String provider, Long externalAccountId, String ownerEmail) {
+        this(id != null ? id.toString() : null, originalFileName, size, createdAt, provider, externalAccountId, ownerEmail);
+    }
+}

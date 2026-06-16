@@ -16,7 +16,7 @@ public interface FolderSharedService {
     Mono<SharedFolderResponse> updateAccess(String shareToken, UpdateShareAccessRequest request, ServerWebExchange exchange);
     Mono<Void> revokeShare(String shareToken, ServerWebExchange exchange);
     Flux<SharedFolderResponse> getSharedFoldersByMe();
-    Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, ServerWebExchange exchange);
-    Mono<FileResponse> uploadToSharedFolderPublic(String shareToken, String fileName, long size, FilePart filePart, ServerWebExchange exchange);
-    Mono<Void> deleteFromSharedFolderPublic(String shareToken, UUID fileId, ServerWebExchange exchange);
+    Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, String folderId, ServerWebExchange exchange);
+    Mono<FileResponse> uploadToSharedFolderPublic(String shareToken, String folderId, String fileName, long size, FilePart filePart, ServerWebExchange exchange);
+    Mono<Void> deleteFromSharedFolderPublic(String shareToken, String fileId, ServerWebExchange exchange);
 }

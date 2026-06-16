@@ -67,7 +67,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                     Mono<String> getTargetStorageAndAccount = Mono.defer(() -> {
                         if ("GOOGLE_DRIVE".equalsIgnoreCase(request.folderType())) {
                             return externalAccountRepository.findAllByUserId(userId)
-                                    .filter(acc -> "GOOGLE_DRIVE".equalsIgnoreCase(acc.getProvider()))
+                                    .filter(acc -> "GOOGLE".equalsIgnoreCase(acc.getProvider()) || "GOOGLE_DRIVE".equalsIgnoreCase(acc.getProvider()))
                                     .next()
                                     .map(acc -> "GOOGLE_DRIVE:" + acc.getId())
                                     .switchIfEmpty(Mono.error(new IllegalArgumentException("Akun Google Drive tidak terhubung.")));
@@ -218,7 +218,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
 
     @Override
     @Transactional(readOnly = true)
-    public Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, ServerWebExchange exchange) {
+    public Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, String folderId, ServerWebExchange exchange) {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan atau tidak valid.")))
                 .flatMap(shared -> {
@@ -226,28 +226,38 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                         return Mono.error(new IllegalArgumentException("Tautan berbagi folder telah kedaluwarsa."));
                     }
 
+                    String targetFolderId = (folderId == null || folderId.trim().isEmpty()) ? shared.getFolderId() : folderId;
+
                     if ("LOCAL".equalsIgnoreCase(shared.getFolderType())) {
-                        UUID parentUUID = UUID.fromString(shared.getFolderId());
-                        return Mono.zip(
-                                folderRepository.findByUserIdAndParentId(shared.getUserId(), parentUUID)
-                                        .map(f -> new FolderResponse(f.getId(), f.getName(), f.getParentId(), f.getUserId(), f.getCreatedAt()))
-                                        .collectList()
-                                        .defaultIfEmpty(new ArrayList<>()),
-                                fileRepository.findByUserIdAndFolderIdAndProvider(shared.getUserId(), parentUUID, "STORAGE_NODE")
-                                        .map(file -> new FileResponse(
-                                                file.getId(),
-                                                file.getOriginalFileName(),
-                                                file.getSize(),
-                                                file.getCreatedAt(),
-                                                file.getProvider(),
-                                                file.getExternalAccountId(),
-                                                null
-                                        ))
-                                        .collectList()
-                                        .defaultIfEmpty(new ArrayList<>())
-                        ).map(tuple -> new FolderContentResponse(tuple.getT1(), tuple.getT2(), shared.getPermission(), shared.getAllowAnonymous()));
+                        UUID parentUUID = UUID.fromString(targetFolderId);
+                        UUID rootUUID = UUID.fromString(shared.getFolderId());
+
+                        return isDescendant(parentUUID, rootUUID, shared.getUserId())
+                                .flatMap(isOk -> {
+                                    if (!isOk) {
+                                        return Mono.error(new AccessDeniedException("Akses ke subfolder ini ditolak."));
+                                    }
+                                    return Mono.zip(
+                                            folderRepository.findByUserIdAndParentId(shared.getUserId(), parentUUID)
+                                                    .map(f -> new FolderResponse(f.getId().toString(), f.getName(), f.getParentId() != null ? f.getParentId().toString() : null, f.getUserId(), f.getCreatedAt()))
+                                                    .collectList()
+                                                    .defaultIfEmpty(new ArrayList<>()),
+                                            fileRepository.findByUserIdAndFolderIdAndProvider(shared.getUserId(), parentUUID, "STORAGE_NODE")
+                                                    .map(file -> new FileResponse(
+                                                            file.getId().toString(),
+                                                            file.getOriginalFileName(),
+                                                            file.getSize(),
+                                                            file.getCreatedAt(),
+                                                            file.getProvider(),
+                                                            file.getExternalAccountId(),
+                                                            null
+                                                    ))
+                                                    .collectList()
+                                                    .defaultIfEmpty(new ArrayList<>())
+                                    ).map(tuple -> new FolderContentResponse(tuple.getT1(), tuple.getT2(), shared.getPermission(), shared.getAllowAnonymous()));
+                                });
                     } else if ("GOOGLE_DRIVE".equalsIgnoreCase(shared.getFolderType())) {
-                        return googleDriveClient.listFilesAndFolders(shared.getExternalAccountId(), shared.getFolderId())
+                        return googleDriveClient.listFilesAndFolders(shared.getExternalAccountId(), targetFolderId)
                                 .map(list -> {
                                     List<FolderResponse> folders = new ArrayList<>();
                                     List<FileResponse> files = new ArrayList<>();
@@ -263,9 +273,9 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                         }
 
                                         if ("application/vnd.google-apps.folder".equals(mimeType)) {
-                                            folders.add(new FolderResponse(null, name, UUID.fromString(shared.getFolderId().substring(0, Math.min(36, shared.getFolderId().length()))), shared.getUserId(), createdTime));
+                                            folders.add(new FolderResponse(id, name, targetFolderId, shared.getUserId(), createdTime));
                                         } else {
-                                            files.add(new FileResponse(null, name, size, createdTime, "GOOGLE_DRIVE", shared.getExternalAccountId(), null));
+                                            files.add(new FileResponse(id, name, size, createdTime, "GOOGLE_DRIVE", shared.getExternalAccountId(), null));
                                         }
                                     }
                                     return new FolderContentResponse(folders, files, shared.getPermission(), shared.getAllowAnonymous());
@@ -279,6 +289,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
     @Override
     public Mono<FileResponse> uploadToSharedFolderPublic(
             String shareToken, 
+            String folderId,
             String fileName, 
             long size, 
             FilePart filePart, 
@@ -297,6 +308,8 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                         return Mono.error(new AccessDeniedException("Anda tidak memiliki izin mengunggah ke folder ini."));
                     }
 
+                    String targetFolderId = (folderId == null || folderId.trim().isEmpty()) ? shared.getFolderId() : folderId;
+
                     // 3. Cek rate limit
                     return checkRateLimit(exchange)
                             .then(currentUserContext.getUserId()
@@ -310,14 +323,14 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                         return Mono.just(isLoggedIn);
                                     })
                                     .flatMap(isLoggedIn -> validateStorageQuota(shared, size)
-                                            .then(processPublicUpload(shared, fileName, size, filePart, isLoggedIn, exchange))
+                                            .then(processPublicUpload(shared, targetFolderId, fileName, size, filePart, isLoggedIn, exchange))
                                     )
                             );
                 });
     }
 
     @Override
-    public Mono<Void> deleteFromSharedFolderPublic(String shareToken, UUID fileId, ServerWebExchange exchange) {
+    public Mono<Void> deleteFromSharedFolderPublic(String shareToken, String fileId, ServerWebExchange exchange) {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan.")))
                 .flatMap(shared -> {
@@ -336,24 +349,35 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                     return Mono.error(new AccessDeniedException("Penghapusan anonim dinonaktifkan. Anda wajib login terlebih dahulu."));
                                 }
                                 
-                                // Mulai proses hapus permanen
-                                return fileRepository.findById(fileId)
-                                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan.")))
-                                        .flatMap(file -> {
-                                            // Pastikan file tersebut berada di folder yang di-share
-                                            if ("LOCAL".equalsIgnoreCase(shared.getFolderType())) {
-                                                if (file.getFolderId() == null || !file.getFolderId().toString().equals(shared.getFolderId())) {
+                                if ("LOCAL".equalsIgnoreCase(shared.getFolderType())) {
+                                    UUID fileUUID = UUID.fromString(fileId);
+                                    return fileRepository.findById(fileUUID)
+                                            .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan.")))
+                                            .flatMap(file -> {
+                                                UUID rootUUID = UUID.fromString(shared.getFolderId());
+                                                if (file.getFolderId() == null) {
                                                     return Mono.error(new IllegalArgumentException("Berkas tidak berada di dalam folder bersama ini."));
                                                 }
-                                                
-                                                return uploadStorageClient.deleteFile(shared.getUserId(), file.getId().toString())
-                                                        .onErrorResume(e -> Mono.empty())
-                                                        .then(fileRepository.delete(file))
-                                                        .then(logPublicActivity(isLoggedIn, "ANONYMOUS_DELETE", "Menghapus berkas '" + file.getOriginalFileName() + "' secara anonim pada folder bersama.", exchange));
-                                            } else {
-                                                return Mono.error(new IllegalArgumentException("Penghapusan file Google Drive via shared link belum didukung secara publik."));
-                                            }
-                                        }).then();
+                                                return isDescendant(file.getFolderId(), rootUUID, shared.getUserId())
+                                                        .flatMap(isOk -> {
+                                                            if (!isOk) {
+                                                                return Mono.error(new IllegalArgumentException("Berkas tidak berada di dalam folder bersama ini."));
+                                                            }
+                                                            return uploadStorageClient.deleteFile(shared.getUserId(), file.getId().toString())
+                                                                    .onErrorResume(e -> Mono.empty())
+                                                                    .then(fileRepository.delete(file))
+                                                                    .then(logPublicActivity(isLoggedIn, "ANONYMOUS_DELETE", "Menghapus berkas '" + file.getOriginalFileName() + "' secara anonim pada folder bersama.", exchange));
+                                                        });
+                                            }).then();
+                                } else {
+                                    // Google Drive physical file deletion
+                                    return googleDriveClient.deleteFile(shared.getExternalAccountId(), fileId)
+                                            .then(fileRepository.findByStorageNameAndProvider(fileId, "GOOGLE_DRIVE")
+                                                    .flatMap(fileRepository::delete)
+                                                    .onErrorResume(e -> Mono.empty())
+                                            )
+                                            .then(logPublicActivity(isLoggedIn, "ANONYMOUS_DELETE", "Menghapus berkas GDrive secara anonim pada folder bersama.", exchange));
+                                }
                             });
                 });
     }
@@ -363,13 +387,13 @@ public class FolderSharedServiceImpl implements FolderSharedService {
             return userRepository.findById(shared.getUserId())
                     .switchIfEmpty(Mono.error(new NoSuchElementException("Pemilik folder tidak ditemukan.")))
                     .flatMap(user -> fileRepository.calculateUsedStorageByUserId(shared.getUserId())
-                            .flatMap(usedBytes -> {
-                                long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
-                                if (usedBytes + fileSize > quota) {
-                                    return Mono.error(new IllegalArgumentException("Kapasitas penyimpanan pemilik folder telah habis / tidak mencukupi."));
-                                }
-                                return Mono.empty();
-                            }));
+                             .flatMap(usedBytes -> {
+                                 long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                 if (usedBytes + fileSize > quota) {
+                                     return Mono.error(new IllegalArgumentException("Kapasitas penyimpanan pemilik folder telah habis / tidak mencukupi."));
+                                 }
+                                 return Mono.empty();
+                             }));
         } else {
             return googleDriveClient.getAboutSpace(shared.getExternalAccountId())
                     .flatMap(quotaMap -> {
@@ -391,6 +415,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
 
     private Mono<FileResponse> processPublicUpload(
             FolderShared shared, 
+            String targetFolderId,
             String fileName, 
             long size, 
             FilePart filePart, 
@@ -408,35 +433,44 @@ public class FolderSharedServiceImpl implements FolderSharedService {
         String storageName = UUID.randomUUID() + extension;
 
         if ("LOCAL".equalsIgnoreCase(shared.getTargetStorage())) {
-            // Local VPS storage upload
-            return writeChunks(filePart, tempDir)
-                    .flatMap(totalChunks -> uploadStorageClient.sendBatch(shared.getUserId(), fileId, 0, totalChunks - 1)
-                            .then(uploadStorageClient.sendFinalSignal(shared.getUserId(), fileId, totalChunks))
-                            .then(Mono.defer(() -> {
-                                File file = File.builder()
-                                        .id(fileId)
-                                        .userId(shared.getUserId())
-                                        .originalFileName(fileName)
-                                        .storageName(storageName)
-                                        .size(size)
-                                        .provider("STORAGE_NODE")
-                                        .folderId(UUID.fromString(shared.getFolderId()))
-                                        .createdAt(Instant.now())
-                                        .build();
+            UUID parentUUID = UUID.fromString(targetFolderId);
+            UUID rootUUID = UUID.fromString(shared.getFolderId());
 
-                                return fileRepository.save(file)
-                                        .flatMap(saved -> logPublicActivity(isLoggedIn, "ANONYMOUS_UPLOAD", "Mengunggah berkas '" + fileName + "' ke folder bersama secara anonim.", exchange)
-                                                .thenReturn(new FileResponse(
-                                                        saved.getId(),
-                                                        saved.getOriginalFileName(),
-                                                        saved.getSize(),
-                                                        saved.getCreatedAt(),
-                                                        saved.getProvider(),
-                                                        saved.getExternalAccountId(),
-                                                        null
-                                                )));
-                            }))
-                    )
+            return isDescendant(parentUUID, rootUUID, shared.getUserId())
+                    .flatMap(isOk -> {
+                        if (!isOk) {
+                            return Mono.error(new AccessDeniedException("Akses ke folder tujuan ditolak."));
+                        }
+                        // Local VPS storage upload
+                        return writeChunks(filePart, tempDir)
+                                .flatMap(totalChunks -> uploadStorageClient.sendBatch(shared.getUserId(), fileId, 0, totalChunks - 1)
+                                        .then(uploadStorageClient.sendFinalSignal(shared.getUserId(), fileId, totalChunks))
+                                        .then(Mono.defer(() -> {
+                                            File file = File.builder()
+                                                    .id(fileId)
+                                                    .userId(shared.getUserId())
+                                                    .originalFileName(fileName)
+                                                    .storageName(storageName)
+                                                    .size(size)
+                                                    .provider("STORAGE_NODE")
+                                                    .folderId(parentUUID)
+                                                    .createdAt(Instant.now())
+                                                    .build();
+
+                                            return fileRepository.save(file)
+                                                    .flatMap(saved -> logPublicActivity(isLoggedIn, "ANONYMOUS_UPLOAD", "Mengunggah berkas '" + fileName + "' ke folder bersama secara anonim.", exchange)
+                                                            .thenReturn(new FileResponse(
+                                                                    saved.getId().toString(),
+                                                                    saved.getOriginalFileName(),
+                                                                    saved.getSize(),
+                                                                    saved.getCreatedAt(),
+                                                                    saved.getProvider(),
+                                                                    saved.getExternalAccountId(),
+                                                                    null
+                                                            )));
+                                        }))
+                                );
+                    })
                     .doFinally(signal -> {
                         try {
                             org.springframework.util.FileSystemUtils.deleteRecursively(tempDir);
@@ -450,7 +484,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
             return writeDirectFile(filePart, tempFile)
                     .flatMap(path -> {
                         String mimeType = detectMimeType(path);
-                        return googleDriveClient.uploadFile(shared.getExternalAccountId(), path, fileName, mimeType, shared.getFolderId())
+                        return googleDriveClient.uploadFile(shared.getExternalAccountId(), path, fileName, mimeType, targetFolderId)
                                 .flatMap(googleFileId -> {
                                     File file = File.builder()
                                             .id(fileId)
@@ -466,7 +500,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
                                     return fileRepository.save(file)
                                             .flatMap(saved -> logPublicActivity(isLoggedIn, "ANONYMOUS_UPLOAD", "Mengunggah berkas '" + fileName + "' ke Google Drive folder bersama secara anonim.", exchange)
                                                     .thenReturn(new FileResponse(
-                                                            saved.getId(),
+                                                            googleFileId,
                                                             saved.getOriginalFileName(),
                                                             saved.getSize(),
                                                             saved.getCreatedAt(),
@@ -590,5 +624,22 @@ public class FolderSharedServiceImpl implements FolderSharedService {
             return googleDriveClient.getFileName(externalAccountId, folderId)
                     .defaultIfEmpty("Folder Google Drive");
         }
+    }
+
+    private Mono<Boolean> isDescendant(UUID currentFolderId, UUID rootFolderId, Long userId) {
+        if (currentFolderId.equals(rootFolderId)) {
+            return Mono.just(true);
+        }
+        return folderRepository.findByIdAndUserId(currentFolderId, userId)
+                .flatMap(folder -> {
+                    if (folder.getParentId() == null) {
+                        return Mono.just(false);
+                    }
+                    if (folder.getParentId().equals(rootFolderId)) {
+                        return Mono.just(true);
+                    }
+                    return isDescendant(folder.getParentId(), rootFolderId, userId);
+                })
+                .defaultIfEmpty(false);
     }
 }

@@ -12,6 +12,7 @@ import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.User.core.UserRepository;
 import io.github.faizul.User.core.User;
 import io.github.faizul.File.core.googleDrive.GoogleDriveClient;
+import io.github.faizul.User.externalAccount.ExternalAccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -34,162 +35,201 @@ public class GoogleDriveShareServiceImp implements ShareService {
     private final CurrentUserContext currentUserContext;
     private final UserRepository userRepository;
     private final GoogleDriveClient googleDriveClient;
+    private final ExternalAccountRepository externalAccountRepository;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
 
     @Override
-    public Mono<ShareFileResponse> shareFile(UUID fileId, ShareFileRequest request) {
+    public Mono<ShareFileResponse> shareFile(String fileId, ShareFileRequest request) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
-                        .flatMap(file -> {
-                            if (!"GOOGLE_DRIVE".equals(file.getProvider())) {
-                                return Mono.error(new IllegalArgumentException("Hanya berkas dari provider GOOGLE_DRIVE yang dapat dibatalkan pembagiannya melalui layanan ini"));
-                            }
-                            if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new AccessDeniedException("Hanya pemilik berkas yang diperbolehkan untuk membagikan berkas ini"));
-                            }
+                .flatMap(userId -> {
+                    Mono<io.github.faizul.File.core.File> fileMono;
+                    try {
+                        UUID uuid = UUID.fromString(fileId);
+                        fileMono = fileRepository.findById(uuid);
+                    } catch (IllegalArgumentException e) {
+                        // Jika bukan UUID, cari berdasarkan storageName (id google drive aslinya) dan provider = GOOGLE_DRIVE
+                        fileMono = fileRepository.findByStorageNameAndProvider(fileId, "GOOGLE_DRIVE")
+                                .switchIfEmpty(Mono.defer(() -> {
+                                    // Jika tidak ada di DB lokal, cari dari API Google Drive dan daftarkan
+                                    return externalAccountRepository.findAllByUserId(userId)
+                                            .filter(acc -> "GOOGLE".equalsIgnoreCase(acc.getProvider()) || "GOOGLE_DRIVE".equalsIgnoreCase(acc.getProvider()))
+                                            .next()
+                                            .flatMap(acc -> googleDriveClient.getFileMetadata(acc.getId(), fileId)
+                                                    .flatMap(meta -> {
+                                                        String name = (String) meta.get("name");
+                                                        Long size = meta.get("size") != null ? Long.parseLong(meta.get("size").toString()) : 0L;
+                                                        
+                                                        io.github.faizul.File.core.File newFile = io.github.faizul.File.core.File.builder()
+                                                                .id(UUID.randomUUID())
+                                                                .userId(userId)
+                                                                .originalFileName(name)
+                                                                .storageName(fileId) // ID GDrive
+                                                                .size(size)
+                                                                .provider("GOOGLE_DRIVE")
+                                                                .externalAccountId(acc.getId())
+                                                                .createdAt(Instant.now())
+                                                                .build();
+                                                        return fileRepository.save(newFile);
+                                                    })
+                                            );
+                                }));
+                    }
 
-                            // Hitung expiresAt
-                            final Instant finalExpiresAt;
-                            if ((request.expiresInDays() != null && request.expiresInDays() > 0) ||
-                                    (request.expiresInHours() != null && request.expiresInHours() > 0)) {
-                                long totalHours = 0;
-                                if (request.expiresInDays() != null) {
-                                    totalHours += request.expiresInDays() * 24L;
+                    return fileMono
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas Google Drive tidak ditemukan")))
+                            .flatMap(file -> {
+                                if (!"GOOGLE_DRIVE".equals(file.getProvider())) {
+                                    return Mono.error(new IllegalArgumentException("Hanya berkas dari provider GOOGLE_DRIVE yang dapat dibatalkan pembagiannya melalui layanan ini"));
                                 }
-                                if (request.expiresInHours() != null) {
-                                    totalHours += request.expiresInHours();
+                                if (!file.getUserId().equals(userId)) {
+                                    return Mono.error(new AccessDeniedException("Hanya pemilik berkas yang diperbolehkan untuk membagikan berkas ini"));
                                 }
-                                finalExpiresAt = Instant.now().plus(java.time.Duration.ofHours(totalHours));
-                            } else {
-                                finalExpiresAt = null;
-                            }
 
-                            return userRepository.findById(userId)
-                                    .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
-                                    .flatMap(user -> {
-                                        Mono<User> activeUserMono = Mono.just(user);
-                                        if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
-                                            user.setSubscriptionTier("FREEMIUM");
-                                            user.setStorageQuota(1073741824L);
-                                            user.setSubscriptionExpiresAt(null);
-                                            activeUserMono = userRepository.save(user);
-                                        }
-                                        return activeUserMono;
-                                    })
-                                    .flatMap(user -> {
-                                        return fileRepository.calculateUsedStorageByUserId(userId)
-                                                .defaultIfEmpty(0L)
-                                                .flatMap(usedStorage -> {
-                                                    long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
-                                                    if (usedStorage > quota) {
-                                                        return Mono.error(new IllegalArgumentException(
-                                                                "Kapasitas penyimpanan Anda penuh. Fitur berbagi dinonaktifkan."));
-                                                    }
+                                final UUID fileUUID = file.getId();
 
-                                                    if (Boolean.TRUE.equals(request.isPublic())) {
-                                                        return fileSharedRepository.findByFileId(fileId)
-                                                                .filter(FileShared::getIsPublic)
-                                                                .next()
-                                                                .flatMap(existing -> {
-                                                                    existing.setExpiresAt(finalExpiresAt);
-                                                                    if (existing.getShareToken() == null) {
-                                                                        existing.setShareToken(UUID.randomUUID().toString());
-                                                                    }
-                                                                    return fileSharedRepository.save(existing);
-                                                                })
-                                                                .switchIfEmpty(Mono.defer(() -> {
-                                                                    int limit = user.getSubscriptionPlan().getLimits().publicShareLimit();
-                                                                    Mono<Void> limitCheck = Mono.empty();
-                                                                    if (limit != -1) {
-                                                                        limitCheck = fileSharedRepository.countActivePublicSharesByOwnerId(userId)
-                                                                                .flatMap(count -> {
-                                                                                    if (count >= limit) {
-                                                                                        return Mono.error(new IllegalArgumentException("Batas link share publik aktif untuk paket Anda (" + limit + ") telah tercapai."));
-                                                                                    }
-                                                                                    return Mono.empty();
-                                                                                });
-                                                                    }
-                                                                    return limitCheck.then(Mono.defer(() -> {
-                                                                        String shareToken = UUID.randomUUID().toString();
-                                                                        FileShared shared = FileShared.builder()
-                                                                                .fileId(fileId)
-                                                                                .userId(null)
-                                                                                .isPublic(true)
-                                                                                .shareToken(shareToken)
-                                                                                .expiresAt(finalExpiresAt)
-                                                                                .build();
-                                                                        return fileSharedRepository.save(shared);
-                                                                    }));
-                                                                }))
-                                                                .map(saved -> new ShareFileResponse(
-                                                                        saved.getId(),
-                                                                        null,
-                                                                        true,
-                                                                        saved.getShareToken(),
-                                                                        frontendUrl + "/shared/public/google/" + saved.getShareToken(),
-                                                                        saved.getExpiresAt()
-                                                                ));
-                                                    } else {
-                                                        if (request.email() == null || request.email().isBlank()) {
-                                                            return Mono.error(new IllegalArgumentException("Email target diperlukan untuk pembagian privat"));
+                                // Hitung expiresAt
+                                final Instant finalExpiresAt;
+                                if ((request.expiresInDays() != null && request.expiresInDays() > 0) ||
+                                        (request.expiresInHours() != null && request.expiresInHours() > 0)) {
+                                    long totalHours = 0;
+                                    if (request.expiresInDays() != null) {
+                                        totalHours += request.expiresInDays() * 24L;
+                                    }
+                                    if (request.expiresInHours() != null) {
+                                        totalHours += request.expiresInHours();
+                                    }
+                                    finalExpiresAt = Instant.now().plus(java.time.Duration.ofHours(totalHours));
+                                } else {
+                                    finalExpiresAt = null;
+                                }
+
+                                return userRepository.findById(userId)
+                                        .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
+                                        .flatMap(user -> {
+                                            Mono<User> activeUserMono = Mono.just(user);
+                                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                                user.setSubscriptionTier("FREEMIUM");
+                                                user.setStorageQuota(1073741824L);
+                                                user.setSubscriptionExpiresAt(null);
+                                                activeUserMono = userRepository.save(user);
+                                            }
+                                            return activeUserMono;
+                                        })
+                                        .flatMap(user -> {
+                                            return fileRepository.calculateUsedStorageByUserId(userId)
+                                                    .defaultIfEmpty(0L)
+                                                    .flatMap(usedStorage -> {
+                                                        long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                                        if (usedStorage > quota) {
+                                                            return Mono.error(new IllegalArgumentException(
+                                                                    "Kapasitas penyimpanan Anda penuh. Fitur berbagi dinonaktifkan."));
                                                         }
-                                                        return userRepository.findByEmail(request.email())
-                                                                .switchIfEmpty(Mono.error(new NoSuchElementException("Pengguna dengan alamat email tersebut tidak ditemukan")))
-                                                                .flatMap(targetUser -> {
-                                                                    if (userId.equals(targetUser.getId())) {
-                                                                        return Mono.error(new IllegalArgumentException("Anda tidak dapat membagikan berkas dengan diri Anda sendiri"));
-                                                                    }
-                                                                    return fileSharedRepository.findByFileIdAndUserId(fileId, targetUser.getId())
-                                                                            .flatMap(existing -> {
-                                                                                existing.setExpiresAt(finalExpiresAt);
-                                                                                existing.setIsPublic(false);
-                                                                                existing.setShareToken(null);
-                                                                                return fileSharedRepository.save(existing);
-                                                                            })
-                                                                            .switchIfEmpty(Mono.defer(() -> {
-                                                                                int limit = user.getSubscriptionPlan().getLimits().privateShareLimit();
-                                                                                Mono<Void> limitCheck = Mono.empty();
-                                                                                if (limit != -1) {
-                                                                                    limitCheck = fileSharedRepository.countActivePrivateSharesByOwnerId(userId)
-                                                                                            .flatMap(count -> {
-                                                                                                if (count >= limit) {
-                                                                                                    return Mono.error(new IllegalArgumentException("Batas share privat aktif untuk paket Anda (" + limit + ") telah tercapai."));
-                                                                                                }
-                                                                                                return Mono.empty();
-                                                                                            });
-                                                                                }
-                                                                                return limitCheck.then(Mono.defer(() -> {
-                                                                                    FileShared shared = FileShared.builder()
-                                                                                            .fileId(fileId)
-                                                                                            .userId(targetUser.getId())
-                                                                                            .isPublic(false)
-                                                                                            .expiresAt(finalExpiresAt)
-                                                                                            .build();
-                                                                                    return fileSharedRepository.save(shared);
-                                                                                }));
-                                                                            }))
-                                                                            .map(saved -> new ShareFileResponse(
-                                                                                    saved.getId(),
-                                                                                    targetUser.getEmail(),
-                                                                                    false,
-                                                                                    null,
-                                                                                    null,
-                                                                                    saved.getExpiresAt()
-                                                                            ));
-                                                                });
-                                                    }
-                                                });
-                                    });
-                        }));
+
+                                                        if (Boolean.TRUE.equals(request.isPublic())) {
+                                                            return fileSharedRepository.findByFileId(fileUUID)
+                                                                    .filter(FileShared::getIsPublic)
+                                                                    .next()
+                                                                    .flatMap(existing -> {
+                                                                        existing.setExpiresAt(finalExpiresAt);
+                                                                        if (existing.getShareToken() == null) {
+                                                                            existing.setShareToken(UUID.randomUUID().toString());
+                                                                        }
+                                                                        return fileSharedRepository.save(existing);
+                                                                    })
+                                                                    .switchIfEmpty(Mono.defer(() -> {
+                                                                        int limit = user.getSubscriptionPlan().getLimits().publicShareLimit();
+                                                                        Mono<Void> limitCheck = Mono.empty();
+                                                                        if (limit != -1) {
+                                                                            limitCheck = fileSharedRepository.countActivePublicSharesByOwnerId(userId)
+                                                                                    .flatMap(count -> {
+                                                                                        if (count >= limit) {
+                                                                                            return Mono.error(new IllegalArgumentException("Batas link share publik aktif untuk paket Anda (" + limit + ") telah tercapai."));
+                                                                                        }
+                                                                                        return Mono.empty();
+                                                                                    });
+                                                                        }
+                                                                        return limitCheck.then(Mono.defer(() -> {
+                                                                            String shareToken = UUID.randomUUID().toString();
+                                                                            FileShared shared = FileShared.builder()
+                                                                                    .fileId(fileUUID)
+                                                                                    .userId(null)
+                                                                                    .isPublic(true)
+                                                                                    .shareToken(shareToken)
+                                                                                    .expiresAt(finalExpiresAt)
+                                                                                    .build();
+                                                                            return fileSharedRepository.save(shared);
+                                                                        }));
+                                                                    }))
+                                                                    .map(saved -> new ShareFileResponse(
+                                                                            saved.getId(),
+                                                                            null,
+                                                                            true,
+                                                                            saved.getShareToken(),
+                                                                            frontendUrl + "/shared/public/google/" + saved.getShareToken(),
+                                                                            saved.getExpiresAt()
+                                                                    ));
+                                                        } else {
+                                                            if (request.email() == null || request.email().isBlank()) {
+                                                                                            return Mono.error(new IllegalArgumentException("Email target diperlukan untuk pembagian privat"));
+                                                            }
+                                                            return userRepository.findByEmail(request.email())
+                                                                    .switchIfEmpty(Mono.error(new NoSuchElementException("Pengguna dengan alamat email tersebut tidak ditemukan")))
+                                                                    .flatMap(targetUser -> {
+                                                                        if (userId.equals(targetUser.getId())) {
+                                                                            return Mono.error(new IllegalArgumentException("Anda tidak dapat membagikan berkas dengan diri Anda sendiri"));
+                                                                        }
+                                                                        return fileSharedRepository.findByFileIdAndUserId(fileUUID, targetUser.getId())
+                                                                                .flatMap(existing -> {
+                                                                                    existing.setExpiresAt(finalExpiresAt);
+                                                                                    existing.setIsPublic(false);
+                                                                                    existing.setShareToken(null);
+                                                                                    return fileSharedRepository.save(existing);
+                                                                                })
+                                                                                .switchIfEmpty(Mono.defer(() -> {
+                                                                                    int limit = user.getSubscriptionPlan().getLimits().privateShareLimit();
+                                                                                    Mono<Void> limitCheck = Mono.empty();
+                                                                                    if (limit != -1) {
+                                                                                        limitCheck = fileSharedRepository.countActivePrivateSharesByOwnerId(userId)
+                                                                                                .flatMap(count -> {
+                                                                                                    if (count >= limit) {
+                                                                                                        return Mono.error(new IllegalArgumentException("Batas share privat aktif untuk paket Anda (" + limit + ") telah tercapai."));
+                                                                                                    }
+                                                                                                    return Mono.empty();
+                                                                                                });
+                                                                                    }
+                                                                                    return limitCheck.then(Mono.defer(() -> {
+                                                                                        FileShared shared = FileShared.builder()
+                                                                                                .fileId(fileUUID)
+                                                                                                .userId(targetUser.getId())
+                                                                                                .isPublic(false)
+                                                                                                .expiresAt(finalExpiresAt)
+                                                                                                .build();
+                                                                                        return fileSharedRepository.save(shared);
+                                                                                    }));
+                                                                                }))
+                                                                                .map(saved -> new ShareFileResponse(
+                                                                                        saved.getId(),
+                                                                                        targetUser.getEmail(),
+                                                                                        false,
+                                                                                        null,
+                                                                                        null,
+                                                                                        saved.getExpiresAt()
+                                                                                ));
+                                                                    });
+                                                        }
+                                                    });
+                                        });
+                            });
+                });
     }
 
     @Override
-    public Mono<Void> unshareFile(UUID fileId, Long targetUserId) {
+    public Mono<Void> unshareFile(String fileId, Long targetUserId) {
+        UUID fileUUID = UUID.fromString(fileId);
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
+                .flatMap(userId -> fileRepository.findById(fileUUID)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             if (!"GOOGLE_DRIVE".equals(file.getProvider())) {
@@ -198,7 +238,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                             if (!file.getUserId().equals(userId) && !targetUserId.equals(userId)) {
                                 return Mono.error(new AccessDeniedException("Anda tidak memiliki wewenang untuk membatalkan pembagian berkas ini"));
                             }
-                            return fileSharedRepository.deleteByFileIdAndUserId(fileId, targetUserId);
+                            return fileSharedRepository.deleteByFileIdAndUserId(fileUUID, targetUserId);
                         }));
     }
 
@@ -234,7 +274,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                     .filter(file -> "GOOGLE_DRIVE".equals(file.getProvider()))
                                     .flatMap(file -> userRepository.findById(file.getUserId())
                                             .map(owner -> new FileResponse(
-                                                    file.getId(),
+                                                    file.getId().toString(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -243,7 +283,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                                                     owner.getEmail()
                                             ))
                                             .defaultIfEmpty(new FileResponse(
-                                                    file.getId(),
+                                                    file.getId().toString(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -257,8 +297,9 @@ public class GoogleDriveShareServiceImp implements ShareService {
     }
 
     @Override
-    public Mono<Boolean> hasReadAccess(UUID fileId, Long userId) {
-        return fileRepository.findById(fileId)
+    public Mono<Boolean> hasReadAccess(String fileId, Long userId) {
+        UUID fileUUID = UUID.fromString(fileId);
+        return fileRepository.findById(fileUUID)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
                     if (!"GOOGLE_DRIVE".equals(file.getProvider())) {
@@ -267,7 +308,7 @@ public class GoogleDriveShareServiceImp implements ShareService {
                     if (file.getUserId().equals(userId)) {
                         return Mono.just(true);
                     }
-                    return fileSharedRepository.findByFileIdAndUserId(fileId, userId)
+                    return fileSharedRepository.findByFileIdAndUserId(fileUUID, userId)
                             .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
                             .defaultIfEmpty(false);
                 });

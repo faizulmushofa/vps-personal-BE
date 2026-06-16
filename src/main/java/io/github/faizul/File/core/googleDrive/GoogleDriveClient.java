@@ -357,4 +357,16 @@ public class GoogleDriveClient {
                         .onErrorReturn("Google Drive Folder")
                 );
     }
+
+    public Mono<java.util.Map<String, Object>> getFileMetadata(Long externalAccountId, String googleFileId) {
+        return getValidAccessToken(externalAccountId)
+                .flatMap(token -> webClient.get()
+                        .uri("https://www.googleapis.com/drive/v3/files/" + googleFileId + "?fields=id,name,size,mimeType,createdTime")
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .bodyToMono(java.util.Map.class)
+                        .map(res -> (java.util.Map<String, Object>) res)
+                );
+    }
 }
+

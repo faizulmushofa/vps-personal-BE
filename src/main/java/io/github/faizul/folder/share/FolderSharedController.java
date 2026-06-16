@@ -63,8 +63,9 @@ public class FolderSharedController {
     @GetMapping("/public/{shareToken}/contents")
     public Mono<ResponseEntity<FolderContentResponse>> getSharedFolderContentsPublic(
             @PathVariable String shareToken,
+            @RequestParam(required = false) String folderId,
             ServerWebExchange exchange) {
-        return folderSharedService.getSharedFolderContentsPublic(shareToken, exchange)
+        return folderSharedService.getSharedFolderContentsPublic(shareToken, folderId, exchange)
                 .map(ResponseEntity::ok);
     }
 
@@ -73,17 +74,18 @@ public class FolderSharedController {
             @PathVariable String shareToken,
             @RequestPart("file") FilePart filePart,
             @RequestPart("size") String sizeStr,
+            @RequestParam(required = false) String folderId,
             ServerWebExchange exchange) {
         long size = Long.parseLong(sizeStr);
         String fileName = filePart.filename();
-        return folderSharedService.uploadToSharedFolderPublic(shareToken, fileName, size, filePart, exchange)
+        return folderSharedService.uploadToSharedFolderPublic(shareToken, folderId, fileName, size, filePart, exchange)
                 .map(ResponseEntity::ok);
     }
 
     @DeleteMapping("/public/{shareToken}/files/{fileId}")
     public Mono<ResponseEntity<Void>> deleteFromSharedFolderPublic(
             @PathVariable String shareToken,
-            @PathVariable UUID fileId,
+            @PathVariable String fileId,
             ServerWebExchange exchange) {
         return folderSharedService.deleteFromSharedFolderPublic(shareToken, fileId, exchange)
                 .thenReturn(ResponseEntity.noContent().build());

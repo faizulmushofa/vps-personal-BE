@@ -4,9 +4,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record FolderResponse(
-    UUID id,
+    String id,
     String name,
-    UUID parentId,
+    String parentId,
     Long userId,
     Instant createdAt
-) {}
+) {
+    public FolderResponse(UUID id, String name, UUID parentId, Long userId, Instant createdAt) {
+        this(id != null ? id.toString() : null, name, parentId != null ? parentId.toString() : null, userId, createdAt);
+    }
+}

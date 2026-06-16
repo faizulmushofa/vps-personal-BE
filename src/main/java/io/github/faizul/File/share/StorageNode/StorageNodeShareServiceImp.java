@@ -39,9 +39,10 @@ public class StorageNodeShareServiceImp implements ShareService {
     private String frontendUrl;
 
     @Override
-    public Mono<ShareFileResponse> shareFile(UUID fileId, ShareFileRequest request) {
+    public Mono<ShareFileResponse> shareFile(String fileId, ShareFileRequest request) {
+        UUID fileUUID = UUID.fromString(fileId);
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
+                .flatMap(userId -> fileRepository.findById(fileUUID)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             if (!isStorageNode(file.getProvider())) {
@@ -90,7 +91,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                                     }
 
                                                     if (Boolean.TRUE.equals(request.isPublic())) {
-                                                        return fileSharedRepository.findByFileId(fileId)
+                                                        return fileSharedRepository.findByFileId(fileUUID)
                                                                 .filter(FileShared::getIsPublic)
                                                                 .next()
                                                                 .flatMap(existing -> {
@@ -115,7 +116,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                                                     return limitCheck.then(Mono.defer(() -> {
                                                                         String shareToken = UUID.randomUUID().toString();
                                                                         FileShared shared = FileShared.builder()
-                                                                                .fileId(fileId)
+                                                                                .fileId(fileUUID)
                                                                                 .userId(null)
                                                                                 .isPublic(true)
                                                                                 .shareToken(shareToken)
@@ -142,7 +143,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                                                     if (userId.equals(targetUser.getId())) {
                                                                         return Mono.error(new IllegalArgumentException("Anda tidak dapat membagikan berkas dengan diri Anda sendiri"));
                                                                     }
-                                                                    return fileSharedRepository.findByFileIdAndUserId(fileId, targetUser.getId())
+                                                                    return fileSharedRepository.findByFileIdAndUserId(fileUUID, targetUser.getId())
                                                                             .flatMap(existing -> {
                                                                                 existing.setExpiresAt(finalExpiresAt);
                                                                                 existing.setIsPublic(false);
@@ -163,7 +164,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                                                                 }
                                                                                 return limitCheck.then(Mono.defer(() -> {
                                                                                     FileShared shared = FileShared.builder()
-                                                                                            .fileId(fileId)
+                                                                                            .fileId(fileUUID)
                                                                                             .userId(targetUser.getId())
                                                                                             .isPublic(false)
                                                                                             .expiresAt(finalExpiresAt)
@@ -187,9 +188,10 @@ public class StorageNodeShareServiceImp implements ShareService {
     }
 
     @Override
-    public Mono<Void> unshareFile(UUID fileId, Long targetUserId) {
+    public Mono<Void> unshareFile(String fileId, Long targetUserId) {
+        UUID fileUUID = UUID.fromString(fileId);
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(fileId)
+                .flatMap(userId -> fileRepository.findById(fileUUID)
                         .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
                         .flatMap(file -> {
                             if (!isStorageNode(file.getProvider())) {
@@ -198,7 +200,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                             if (!file.getUserId().equals(userId) && !targetUserId.equals(userId)) {
                                 return Mono.error(new AccessDeniedException("Anda tidak memiliki wewenang untuk membatalkan pembagian berkas ini"));
                             }
-                            return fileSharedRepository.deleteByFileIdAndUserId(fileId, targetUserId);
+                            return fileSharedRepository.deleteByFileIdAndUserId(fileUUID, targetUserId);
                         }));
     }
 
@@ -234,7 +236,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                     .filter(file -> isStorageNode(file.getProvider()))
                                     .flatMap(file -> userRepository.findById(file.getUserId())
                                             .map(owner -> new FileResponse(
-                                                    file.getId(),
+                                                    file.getId().toString(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -243,7 +245,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                                                     owner.getEmail()
                                             ))
                                             .defaultIfEmpty(new FileResponse(
-                                                    file.getId(),
+                                                    file.getId().toString(),
                                                     file.getOriginalFileName(),
                                                     file.getSize(),
                                                     file.getCreatedAt(),
@@ -257,8 +259,9 @@ public class StorageNodeShareServiceImp implements ShareService {
     }
 
     @Override
-    public Mono<Boolean> hasReadAccess(UUID fileId, Long userId) {
-        return fileRepository.findById(fileId)
+    public Mono<Boolean> hasReadAccess(String fileId, Long userId) {
+        UUID fileUUID = UUID.fromString(fileId);
+        return fileRepository.findById(fileUUID)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("File Not Found")))
                 .flatMap(file -> {
                     if (!isStorageNode(file.getProvider())) {
@@ -267,7 +270,7 @@ public class StorageNodeShareServiceImp implements ShareService {
                     if (file.getUserId().equals(userId)) {
                         return Mono.just(true);
                     }
-                    return fileSharedRepository.findByFileIdAndUserId(fileId, userId)
+                    return fileSharedRepository.findByFileIdAndUserId(fileUUID, userId)
                             .map(shared -> shared.getExpiresAt() == null || Instant.now().isBefore(shared.getExpiresAt()))
                             .defaultIfEmpty(false);
                 });

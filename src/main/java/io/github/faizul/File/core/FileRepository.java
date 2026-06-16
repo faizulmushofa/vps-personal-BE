@@ -21,4 +21,7 @@ public interface FileRepository extends ReactiveCrudRepository<File, UUID> {
     @Modifying
     @Query("DELETE FROM files WHERE user_id = :userId AND provider = :provider")
     Mono<Void> deleteByUserIdAndProvider(Long userId, String provider);
+
+    Mono<File> findByStorageNameAndProvider(String storageName, String provider);
 }
+
