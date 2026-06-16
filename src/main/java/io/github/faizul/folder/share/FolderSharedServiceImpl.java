@@ -200,7 +200,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Flux<SharedFolderResponse> getSharedFoldersByMe() {
         return currentUserContext.getUserId()
                 .flatMapMany(folderSharedRepository::findByUserId)
@@ -219,7 +219,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Mono<FolderContentResponse> getSharedFolderContentsPublic(String shareToken, String folderId, ServerWebExchange exchange) {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan atau tidak valid.")))
@@ -667,7 +667,7 @@ public class FolderSharedServiceImpl implements FolderSharedService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Mono<FileResponse> getSharedFileMetadataPublic(String shareToken, String fileId) {
         return folderSharedRepository.findByShareToken(shareToken)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("Link share tidak ditemukan.")))
