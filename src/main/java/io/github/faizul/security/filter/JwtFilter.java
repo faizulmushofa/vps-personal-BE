@@ -37,13 +37,8 @@ public class JwtFilter implements WebFilter {
 
         String token = resolveToken(exchange);
 
-        if (token == null) {
+        if (token == null || !jwtService.isValid(token)) {
             return chain.filter(exchange);
-        }
-
-        if (!jwtService.isValid(token)) {
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
         }
 
         String email = jwtService.extractEmail(token);
