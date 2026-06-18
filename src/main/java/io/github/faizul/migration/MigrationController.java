@@ -16,6 +16,7 @@ import java.util.UUID;
 public class MigrationController {
 
     private final MigrationService migrationService;
+    private final io.github.faizul.File.core.FileRepository fileRepository;
 
     @GetMapping("/config")
     public Mono<ResponseEntity<Map<String, Object>>> getMigrationConfig() {
@@ -44,8 +45,18 @@ public class MigrationController {
     @PostMapping("/tasks/cancel")
     public Mono<ResponseEntity<Map<String, Object>>> cancelTaskByBatchAndFile(
             @RequestParam UUID batchId,
-            @RequestParam UUID fileId) {
-        return migrationService.cancelTaskByBatchIdAndFileId(batchId, fileId)
+            @RequestParam String fileId) {
+        Mono<UUID> resolvedFileIdMono;
+        try {
+            resolvedFileIdMono = Mono.just(UUID.fromString(fileId));
+        } catch (IllegalArgumentException e) {
+            resolvedFileIdMono = fileRepository.findByStorageNameAndProvider(fileId, "GOOGLE_DRIVE")
+                    .map(io.github.faizul.File.core.File::getId)
+                    .switchIfEmpty(Mono.error(new java.util.NoSuchElementException("Berkas tidak ditemukan!")));
+        }
+
+        return resolvedFileIdMono
+                .flatMap(uuid -> migrationService.cancelTaskByBatchIdAndFileId(batchId, uuid))
                 .thenReturn(ResponseEntity.ok(Map.of("success", true)));
     }
 }

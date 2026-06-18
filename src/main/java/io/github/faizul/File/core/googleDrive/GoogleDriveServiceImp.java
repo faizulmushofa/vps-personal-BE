@@ -68,26 +68,34 @@ public class GoogleDriveServiceImp {
                 ));
     }
 
-    public Mono<String> deleteFile(UUID uuid, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<String> deleteFile(String id, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(uuid)
-                        .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")))
-                        .flatMap(file -> {
-                            if (!file.getUserId().equals(userId)) {
-                                return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk menghapus berkas Google Drive ini"));
-                            }
-                            return googleDriveClient.deleteFile(file.getExternalAccountId(), file.getStorageName())
-                                    .thenReturn("")
-                                    .onErrorResume(e -> {
-                                        System.err.println("Warning: Gagal menghapus file dari Google Drive API: " + e.getMessage());
-                                        return Mono.just(e.getMessage());
-                                    })
-                                    .flatMap(warning -> fileRepository.deleteById(uuid)
-                                            .then(userActivityService.log(userId, "DELETE_FILE_GD", "Menghapus berkas Google Drive: " + file.getOriginalFileName(), exchange))
-                                            .thenReturn(warning)
-                                    );
-                        })
-                );
+                .flatMap(userId -> {
+                    Mono<File> fileMono;
+                    try {
+                        UUID uuid = UUID.fromString(id);
+                        fileMono = fileRepository.findById(uuid);
+                    } catch (IllegalArgumentException e) {
+                        fileMono = fileRepository.findByStorageNameAndProvider(id, "GOOGLE_DRIVE");
+                    }
+                    return fileMono
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")))
+                            .flatMap(file -> {
+                                if (!file.getUserId().equals(userId)) {
+                                    return Mono.error(new org.springframework.security.access.AccessDeniedException("Anda tidak memiliki akses untuk menghapus berkas Google Drive ini"));
+                                }
+                                return googleDriveClient.deleteFile(file.getExternalAccountId(), file.getStorageName())
+                                        .thenReturn("")
+                                        .onErrorResume(e -> {
+                                            System.err.println("Warning: Gagal menghapus file dari Google Drive API: " + e.getMessage());
+                                            return Mono.just(e.getMessage());
+                                        })
+                                        .flatMap(warning -> fileRepository.deleteById(file.getId())
+                                                .then(userActivityService.log(userId, "DELETE_FILE_GD", "Menghapus berkas Google Drive: " + file.getOriginalFileName(), exchange))
+                                                .thenReturn(warning)
+                                        );
+                            });
+                });
     }
 
     public Mono<UserStorageResponse> getStorage(Long externalAccountId) {

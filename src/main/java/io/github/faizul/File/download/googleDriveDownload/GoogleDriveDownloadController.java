@@ -104,15 +104,27 @@ public class GoogleDriveDownloadController {
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
+    private Mono<UUID> resolveFileId(String fileIdString) {
+        try {
+            return Mono.just(UUID.fromString(fileIdString));
+        } catch (IllegalArgumentException e) {
+            return fileRepository.findByStorageNameAndProvider(fileIdString, "GOOGLE_DRIVE")
+                    .map(io.github.faizul.File.core.File::getId)
+                    .switchIfEmpty(Mono.error(new java.util.NoSuchElementException("Berkas tidak ditemukan!")));
+        }
+    }
+
     @GetMapping("/{fileId}/status")
-    public Mono<ResponseEntity<DownloadStatusResponse>> getStatus(@PathVariable UUID fileId) {
-        return downloadService.getStatus(fileId)
+    public Mono<ResponseEntity<DownloadStatusResponse>> getStatus(@PathVariable String fileId) {
+        return resolveFileId(fileId)
+                .flatMap(downloadService::getStatus)
                 .map(ResponseEntity::ok);
     }
 
     @PostMapping("/{fileId}/cancel")
-    public Mono<ResponseEntity<Void>> cancel(@PathVariable UUID fileId) {
-        return downloadService.cancel(fileId)
+    public Mono<ResponseEntity<Void>> cancel(@PathVariable String fileId) {
+        return resolveFileId(fileId)
+                .flatMap(downloadService::cancel)
                 .thenReturn(ResponseEntity.ok().build());
     }
 }

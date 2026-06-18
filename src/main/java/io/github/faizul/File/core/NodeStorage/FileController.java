@@ -26,18 +26,31 @@ public class FileController {
     private final io.github.faizul.activity.UserActivityService userActivityService;
     private final io.github.faizul.File.core.FileRepository fileRepository;
 
+    private Mono<UUID> resolveFileId(String id) {
+        try {
+            return Mono.just(UUID.fromString(id));
+        } catch (IllegalArgumentException e) {
+            return fileRepository.findByStorageNameAndProvider(id, "GOOGLE_DRIVE")
+                    .map(io.github.faizul.File.core.File::getId)
+                    .switchIfEmpty(Mono.error(new java.util.NoSuchElementException("Berkas tidak ditemukan!")));
+        }
+    }
+
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<FileResponse>> findById(@PathVariable UUID id) {
-        return fileService.findByUUID(id)
+    public Mono<ResponseEntity<FileResponse>> findById(@PathVariable String id) {
+        return resolveFileId(id)
+                .flatMap(fileService::findByUUID)
                 .map(response -> ResponseEntity.ok().body(response));
     }
 
     @DeleteMapping("/{id}")
-    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable String id, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(userId -> fileRepository.findById(id)
-                        .flatMap(file -> fileService.deleteByUUID(id)
-                                .then(userActivityService.log(userId, "DELETE_FILE", "Menghapus berkas: " + file.getOriginalFileName(), exchange))
+                .flatMap(userId -> resolveFileId(id)
+                        .flatMap(uuid -> fileRepository.findById(uuid)
+                                .flatMap(file -> fileService.deleteByUUID(uuid)
+                                        .then(userActivityService.log(userId, "DELETE_FILE", "Menghapus berkas: " + file.getOriginalFileName(), exchange))
+                                )
                         )
                 )
                 .thenReturn(ResponseEntity.noContent().build());

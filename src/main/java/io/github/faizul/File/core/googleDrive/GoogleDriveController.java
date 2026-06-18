@@ -25,7 +25,7 @@ public class GoogleDriveController {
     }
 
     @DeleteMapping({"/files/{id}", "/{id}"})
-    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable UUID id, ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Void>> deleteFile(@PathVariable String id, ServerWebExchange exchange) {
         return googleDriveService.deleteFile(id, exchange)
                 .map(warning -> {
                     if (warning != null && !warning.isEmpty()) {
