@@ -35,8 +35,8 @@ public class LlamaParseClient {
     @Value("${llamaparse.tier:fast}")
     private String tier;
 
-    public LlamaParseClient(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl("https://api.cloud.llamaindex.ai").build();
+    public LlamaParseClient() {
+        this.webClient = WebClient.builder().baseUrl("https://api.cloud.llamaindex.ai").build();
     }
 
     public boolean isEnabled() {

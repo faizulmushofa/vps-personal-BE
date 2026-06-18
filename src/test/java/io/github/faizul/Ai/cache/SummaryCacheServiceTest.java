@@ -99,10 +99,11 @@ class SummaryCacheServiceTest {
             Summary existing = Summary.builder()
                     .id(1L).fileId(fileId).summary("Existing summary").build();
 
-            when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.empty());
+            when(summaryRepository.findByFileId(fileId))
+                    .thenReturn(Mono.empty())
+                    .thenReturn(Mono.just(existing));
             when(summaryRepository.save(any(Summary.class)))
                     .thenReturn(Mono.error(new DuplicateKeyException("Duplicate")));
-            when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.just(existing));
 
             StepVerifier.create(summaryCacheService.cacheSummary(fileId, "New summary"))
                     .assertNext(text -> assertThat(text).isEqualTo("Existing summary"))
