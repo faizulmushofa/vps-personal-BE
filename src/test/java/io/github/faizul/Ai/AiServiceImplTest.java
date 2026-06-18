@@ -35,6 +35,7 @@ class AiServiceImplTest {
     @Mock private AppSettingService appSettingService;
     @Mock private AiQuotaAndLogService quotaAndLogService;
     @Mock private CurrentUserContext currentUserContext;
+    @Mock private io.github.faizul.activity.UserActivityService userActivityService;
 
     private AiServiceImpl aiService;
 
@@ -43,7 +44,7 @@ class AiServiceImplTest {
         Scheduler testScheduler = Schedulers.immediate();
         aiService = new AiServiceImpl(
                 aiFallbackService, cacheService, pdfService, testScheduler,
-                appSettingService, quotaAndLogService, currentUserContext
+                appSettingService, quotaAndLogService, currentUserContext, userActivityService
         );
 
         User mockUser = new User();
@@ -55,6 +56,8 @@ class AiServiceImplTest {
         lenient().when(appSettingService.getSetting(anyString(), anyString()))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(1)));
         lenient().when(quotaAndLogService.logTokenUsage(anyLong(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(Mono.empty());
+        lenient().when(userActivityService.log(anyLong(), anyString(), anyString(), any()))
                 .thenReturn(Mono.empty());
     }
 
@@ -128,6 +131,29 @@ class AiServiceImplTest {
                     .assertNext(response -> assertThat(response.response()).isEqualTo("Generated summary"))
                     .verifyComplete();
 
+            verify(cacheService).cacheSummary(fileId, "Generated summary");
+        }
+
+        @Test
+        @DisplayName("should reprocess summary when cached summary is 'Maaf, input tidak dapat diproses.'")
+        void summarizePdf_reprocessInvalidCache() {
+            UUID fileId = UUID.randomUUID();
+
+            when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("Maaf, input tidak dapat diproses."));
+            when(pdfService.extractFile(fileId)).thenReturn(Mono.just("PDF text content"));
+            when(aiFallbackService.callWithFallback(
+                    anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), contains("PDF text content")))
+                    .thenReturn(Mono.just(new io.github.faizul.Ai.client.AiGenerationResult("Generated summary", 10, 10)));
+            when(cacheService.cacheSummary(fileId, "Generated summary"))
+                    .thenReturn(Mono.just("Generated summary"));
+            when(userActivityService.log(anyLong(), eq("AI_REPROCESS_SUMMARY"), anyString(), any()))
+                    .thenReturn(Mono.empty());
+
+            StepVerifier.create(aiService.summarizePdf(fileId))
+                    .assertNext(response -> assertThat(response.response()).isEqualTo("Generated summary"))
+                    .verifyComplete();
+
+            verify(userActivityService).log(anyLong(), eq("AI_REPROCESS_SUMMARY"), anyString(), any());
             verify(cacheService).cacheSummary(fileId, "Generated summary");
         }
 

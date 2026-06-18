@@ -1,9 +1,9 @@
 package io.github.faizul.Ai;
 
+import io.github.faizul.Ai.cache.SummaryCacheService;
 import io.github.faizul.Ai.dtos.AiRequest;
 import io.github.faizul.Ai.dtos.AiResponse;
 import io.github.faizul.Ai.fallback.AiFallbackService;
-import io.github.faizul.File.pdf.PdfService;
 import io.github.faizul.setting.AppSettingService;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.User.core.User;
@@ -28,7 +28,8 @@ import static org.mockito.Mockito.*;
 class PdfChatServiceImplTest {
 
     @Mock private AiFallbackService aiFallbackService;
-    @Mock private PdfService pdfService;
+    @Mock private SummaryCacheService cacheService;
+    @Mock private AiService aiService;
     @Mock private AppSettingService appSettingService;
     @Mock private AiQuotaAndLogService quotaAndLogService;
     @Mock private CurrentUserContext currentUserContext;
@@ -39,13 +40,13 @@ class PdfChatServiceImplTest {
     void setUp() {
         Scheduler testScheduler = Schedulers.immediate();
         pdfChatService = new PdfChatServiceImpl(
-                aiFallbackService, pdfService, testScheduler,
+                aiFallbackService, cacheService, aiService, testScheduler,
                 appSettingService, quotaAndLogService, currentUserContext
         );
     }
 
     @Test
-    @DisplayName("should chat with PDF by extracting text and calling AI")
+    @DisplayName("should chat with PDF by retrieving context from cache and calling AI")
     void chatPdf_success() {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this document about?");
@@ -53,7 +54,7 @@ class PdfChatServiceImplTest {
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
-        when(pdfService.extractFile(fileId)).thenReturn(Mono.just("This document describes cloud storage."));
+        when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("This document describes cloud storage."));
 
         when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
         when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
@@ -61,7 +62,7 @@ class PdfChatServiceImplTest {
         when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
         when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
-        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI yang menjawab pertanyaan pengguna berdasarkan dokumen PDF berikut. Jawablah dengan sopan dan informatif berdasarkan isi dokumen ini."));
+        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI..."));
 
         io.github.faizul.Ai.client.AiGenerationResult mockResult = new io.github.faizul.Ai.client.AiGenerationResult("This document is about cloud storage systems.", 10, 10);
         when(aiFallbackService.callWithFallback(
@@ -78,19 +79,55 @@ class PdfChatServiceImplTest {
     }
 
     @Test
-    @DisplayName("should return error message when PDF extraction fails")
-    void chatPdf_extractionError() {
+    @DisplayName("should trigger reprocessing summary when cached summary is empty or invalid during chat")
+    void chatPdf_reprocessInvalidCache() {
+        UUID fileId = UUID.randomUUID();
+        AiRequest request = new AiRequest("What is this document about?");
+        User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
+
+        when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
+        when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("Maaf, input tidak dapat diproses."));
+        when(aiService.summarizePdf(fileId)).thenReturn(Mono.just(new AiResponse("Reprocessed cloud storage summary context")));
+
+        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
+        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
+        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
+        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI..."));
+
+        io.github.faizul.Ai.client.AiGenerationResult mockResult = new io.github.faizul.Ai.client.AiGenerationResult("This document is about cloud storage.", 10, 10);
+        when(aiFallbackService.callWithFallback(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                contains("Reprocessed cloud storage"), eq("What is this document about?")))
+                .thenReturn(Mono.just(mockResult));
+        when(quotaAndLogService.logTokenUsage(eq(1L), eq("CHAT"), anyString(), anyString(), eq(mockResult)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(pdfChatService.chatPdf(fileId, request))
+                .assertNext(response -> assertThat(response.response())
+                        .isEqualTo("This document is about cloud storage."))
+                .verifyComplete();
+
+        verify(aiService).summarizePdf(fileId);
+    }
+
+    @Test
+    @DisplayName("should return error message when summary generation/reprocessing fails during chat")
+    void chatPdf_reprocessError() {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this about?");
         User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
-        when(pdfService.extractFile(fileId))
-                .thenReturn(Mono.error(new RuntimeException("Cannot access file")));
+        when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.empty());
+        when(aiService.summarizePdf(fileId)).thenReturn(Mono.error(new RuntimeException("AI service down")));
 
         StepVerifier.create(pdfChatService.chatPdf(fileId, request))
-                .expectErrorMatches(t -> t.getMessage().contains("Cannot access file"))
+                .expectErrorMatches(t -> t.getMessage().contains("AI service down"))
                 .verify();
     }
 
@@ -103,7 +140,7 @@ class PdfChatServiceImplTest {
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
-        when(pdfService.extractFile(fileId)).thenReturn(Mono.just("Some text"));
+        when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("Some text"));
 
         when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
         when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));

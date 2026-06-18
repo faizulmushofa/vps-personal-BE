@@ -28,6 +28,7 @@ public class AiServiceImpl implements AiService {
     private final AppSettingService appSettingService;
     private final AiQuotaAndLogService quotaAndLogService;
     private final CurrentUserContext currentUserContext;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     @Override
     public Mono<AiResponse> summary(AiRequest request) {
@@ -70,6 +71,15 @@ public class AiServiceImpl implements AiService {
     @Override
     public Mono<AiResponse> summarizePdf(UUID fileId) {
         return cacheService.getCachedSummary(fileId)
+                .flatMap(summary -> {
+                    if (summary.equalsIgnoreCase("Maaf, input tidak dapat diproses.")) {
+                        log.info("Terdeteksi summary tidak valid ('Maaf, input tidak dapat diproses.') untuk fileId: {}. Memicu pemrosesan ulang...", fileId);
+                        return currentUserContext.getUserId()
+                                .flatMap(userId -> userActivityService.log(userId, "AI_REPROCESS_SUMMARY", "Memproses ulang ringkasan PDF ID: " + fileId + " karena status gagal sebelumnya", null))
+                                .then(Mono.empty());
+                    }
+                    return Mono.just(summary);
+                })
                 .map(AiResponse::new)
                 .switchIfEmpty(Mono.defer(() -> currentUserContext.getUserId()
                         .flatMap(userId -> quotaAndLogService.checkAndIncrementQuota(userId)

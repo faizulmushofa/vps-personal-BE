@@ -22,11 +22,18 @@ public class SummaryCacheService {
     }
 
     public Mono<String> cacheSummary(UUID fileId, String summaryText) {
-        Summary newSummary = Summary.builder()
-                .fileId(fileId)
-                .summary(summaryText)
-                .build();
-        return summaryRepository.save(newSummary)
+        return summaryRepository.findByFileId(fileId)
+                .flatMap(existingSummary -> {
+                    existingSummary.setSummary(summaryText);
+                    return summaryRepository.save(existingSummary);
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    Summary newSummary = Summary.builder()
+                            .fileId(fileId)
+                            .summary(summaryText)
+                            .build();
+                    return summaryRepository.save(newSummary);
+                }))
                 .map(Summary::getSummary)
                 .onErrorResume(DuplicateKeyException.class, e -> {
                     log.warn("Summary terdeteksi duplikat untuk fileId: {} (mungkin karena request konkuren). Mengambil dari database...", fileId);

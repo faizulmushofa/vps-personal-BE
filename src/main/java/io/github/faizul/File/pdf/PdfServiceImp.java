@@ -33,6 +33,8 @@ public class PdfServiceImp implements PdfService {
     private final Scheduler pdfScheduler;
     private final FileRepository fileRepository;
     private final GoogleDriveClient googleDriveClient;
+    private final io.github.faizul.File.pdf.llamaparse.LlamaParseClient llamaParseClient;
+    private final io.github.faizul.activity.UserActivityService userActivityService;
 
     @Override
     public Mono<String> extractFile(UUID fileId) {
@@ -93,8 +95,21 @@ public class PdfServiceImp implements PdfService {
                                             })
                                             .subscribeOn(pdfScheduler)
                                             .flatMap(path -> {
-                                                log.info("Memulai ekstraksi teks dari file: {}", path);
-                                                return this.extract(path);
+                                                if (llamaParseClient.isEnabled()) {
+                                                    log.info("Mulai ekstraksi PDF menggunakan LlamaParse...");
+                                                    return llamaParseClient.parsePdf(path)
+                                                            .flatMap(text -> userActivityService.log(userId, "AI_PDF_EXTRACTION", "Mengekstrak teks PDF dengan LlamaParse", null)
+                                                                    .thenReturn(text))
+                                                            .onErrorResume(err -> {
+                                                                log.error("LlamaParse gagal, menggunakan fallback PDFBox. Error: {}", err.getMessage());
+                                                                return userActivityService.log(userId, "AI_PDF_EXTRACTION", "Mengekstrak teks PDF dengan PDFBox (Fallback)", null)
+                                                                        .then(this.extract(path));
+                                                            });
+                                                } else {
+                                                    log.info("LlamaParse dinonaktifkan, mengekstrak dengan PDFBox...");
+                                                    return userActivityService.log(userId, "AI_PDF_EXTRACTION", "Mengekstrak teks PDF dengan PDFBox", null)
+                                                            .then(this.extract(path));
+                                                }
                                             })
                                             .doFinally(signal -> {
                                                 log.info("doFinally signal: {} — Menghapus file untuk fileId: {}", signal, fileId);

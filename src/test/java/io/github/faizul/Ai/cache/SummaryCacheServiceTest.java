@@ -61,13 +61,31 @@ class SummaryCacheServiceTest {
     class CacheSummaryTests {
 
         @Test
-        @DisplayName("should save and return summary text")
+        @DisplayName("should save and return summary text when not existing")
         void cacheSummary_success() {
             UUID fileId = UUID.randomUUID();
             Summary saved = Summary.builder()
                     .id(1L).fileId(fileId).summary("New summary").build();
 
+            when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.empty());
             when(summaryRepository.save(any(Summary.class))).thenReturn(Mono.just(saved));
+
+            StepVerifier.create(summaryCacheService.cacheSummary(fileId, "New summary"))
+                    .assertNext(text -> assertThat(text).isEqualTo("New summary"))
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("should update and return summary text when already exists")
+        void cacheSummary_update() {
+            UUID fileId = UUID.randomUUID();
+            Summary existing = Summary.builder()
+                    .id(1L).fileId(fileId).summary("Old summary").build();
+            Summary updated = Summary.builder()
+                    .id(1L).fileId(fileId).summary("New summary").build();
+
+            when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.just(existing));
+            when(summaryRepository.save(any(Summary.class))).thenReturn(Mono.just(updated));
 
             StepVerifier.create(summaryCacheService.cacheSummary(fileId, "New summary"))
                     .assertNext(text -> assertThat(text).isEqualTo("New summary"))
@@ -81,6 +99,7 @@ class SummaryCacheServiceTest {
             Summary existing = Summary.builder()
                     .id(1L).fileId(fileId).summary("Existing summary").build();
 
+            when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.empty());
             when(summaryRepository.save(any(Summary.class)))
                     .thenReturn(Mono.error(new DuplicateKeyException("Duplicate")));
             when(summaryRepository.findByFileId(fileId)).thenReturn(Mono.just(existing));

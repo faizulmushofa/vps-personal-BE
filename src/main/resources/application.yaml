@@ -51,3 +51,8 @@ springdoc:
 
 app:
   frontend-url: ${FRONTEND_URL}
+
+llamaparse:
+  api-key: ${LLAMA_CLOUD_API_KEY:}
+  enabled: ${LLAMAPARSE_ENABLED:true}
+  tier: ${LLAMAPARSE_TIER:fast}
