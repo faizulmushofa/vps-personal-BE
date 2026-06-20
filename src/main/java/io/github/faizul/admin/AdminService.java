@@ -1,21 +1,20 @@
 package io.github.faizul.admin;
 
-import io.github.faizul.File.core.FileRepository;
-import io.github.faizul.User.core.UserRepository;
-import io.github.faizul.User.core.User;
+import io.github.faizul.storage.file.repository.FileRepository;
+import io.github.faizul.user.repository.UserRepository;
+import io.github.faizul.user.model.User;
 import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
 import io.github.faizul.admin.dtos.TokenHistoryEntry;
-import io.github.faizul.security.role.RoleRepository;
-import io.github.faizul.security.userrole.UserRoleRepository;
+import io.github.faizul.security.role.repository.RoleRepository;
+import io.github.faizul.security.userrole.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.r2dbc.core.DatabaseClient;
+import io.github.faizul.ai.repository.AiTokenLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -31,7 +30,7 @@ public class AdminService {
     private final FileRepository fileRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
-    private final DatabaseClient databaseClient;
+    private final AiTokenLogRepository aiTokenLogRepository;
 
     public Flux<AdminUserResponse> getAllUsers() {
         return userRepository.findAll()
@@ -128,46 +127,19 @@ public class AdminService {
         LocalDateTime monthStart = LocalDateTime.of(today.withDayOfMonth(1), LocalTime.MIN);
         LocalDateTime historyStart = LocalDateTime.of(today.minusDays(6), LocalTime.MIN);
 
-        // Query Today Stats
-        String todayQuery = "SELECT COALESCE(SUM(input_tokens), 0) as in_t, COALESCE(SUM(output_tokens), 0) as out_t, COALESCE(SUM(total_tokens), 0) as tot_t FROM ai_token_logs WHERE created_at >= :todayStart";
-        
-        // Query Month Stats
-        String monthQuery = "SELECT COALESCE(SUM(input_tokens), 0) as in_t, COALESCE(SUM(output_tokens), 0) as out_t, COALESCE(SUM(total_tokens), 0) as tot_t FROM ai_token_logs WHERE created_at >= :monthStart";
+        Mono<AiTokenLogRepository.TokenStatsTuple> todayStatsMono = aiTokenLogRepository.getStatsSince(todayStart)
+                .defaultIfEmpty(new AiTokenLogRepository.TokenStatsTuple(0L, 0L, 0L));
 
-        // Query History Stats (7 days)
-        String historyQuery = "SELECT CAST(created_at AS DATE) as log_date, COALESCE(SUM(input_tokens), 0) as in_t, COALESCE(SUM(output_tokens), 0) as out_t, COALESCE(SUM(total_tokens), 0) as tot_t " +
-                "FROM ai_token_logs WHERE created_at >= :historyStart " +
-                "GROUP BY CAST(created_at AS DATE) ORDER BY log_date ASC";
+        Mono<AiTokenLogRepository.TokenStatsTuple> monthStatsMono = aiTokenLogRepository.getStatsSince(monthStart)
+                .defaultIfEmpty(new AiTokenLogRepository.TokenStatsTuple(0L, 0L, 0L));
 
-        Mono<TokenStatsTuple> todayStatsMono = databaseClient.sql(todayQuery)
-                .bind("todayStart", todayStart)
-                .map(row -> new TokenStatsTuple(
-                        getLongValue(row, "in_t"),
-                        getLongValue(row, "out_t"),
-                        getLongValue(row, "tot_t")
-                ))
-                .one()
-                .defaultIfEmpty(new TokenStatsTuple(0L, 0L, 0L));
-
-        Mono<TokenStatsTuple> monthStatsMono = databaseClient.sql(monthQuery)
-                .bind("monthStart", monthStart)
-                .map(row -> new TokenStatsTuple(
-                        getLongValue(row, "in_t"),
-                        getLongValue(row, "out_t"),
-                        getLongValue(row, "tot_t")
-                ))
-                .one()
-                .defaultIfEmpty(new TokenStatsTuple(0L, 0L, 0L));
-
-        Flux<TokenHistoryEntry> historyFlux = databaseClient.sql(historyQuery)
-                .bind("historyStart", historyStart)
+        Flux<TokenHistoryEntry> historyFlux = aiTokenLogRepository.getHistorySince(historyStart)
                 .map(row -> new TokenHistoryEntry(
-                        getStringValue(row, "log_date"),
-                        getLongValue(row, "in_t"),
-                        getLongValue(row, "out_t"),
-                        getLongValue(row, "tot_t")
-                ))
-                .all();
+                        row.logDate(),
+                        row.inputTokens(),
+                        row.outputTokens(),
+                        row.totalTokens()
+                ));
 
         return Mono.zip(todayStatsMono, monthStatsMono, historyFlux.collectList())
                 .map(tuple -> {
@@ -189,31 +161,5 @@ public class AdminService {
                             new java.util.ArrayList<>(mergedMap.values())
                     );
                 });
-    }
-
-    private record TokenStatsTuple(Long inputTokens, Long outputTokens, Long totalTokens) {}
-
-    private static Long getLongValue(io.r2dbc.spi.Readable row, String columnName) {
-        Object val = null;
-        try {
-            val = row.get(columnName);
-        } catch (Exception e) {
-            try {
-                val = row.get(columnName.toUpperCase());
-            } catch (Exception ex) {}
-        }
-        return val != null ? ((Number) val).longValue() : 0L;
-    }
-
-    private static String getStringValue(io.r2dbc.spi.Readable row, String columnName) {
-        Object val = null;
-        try {
-            val = row.get(columnName);
-        } catch (Exception e) {
-            try {
-                val = row.get(columnName.toUpperCase());
-            } catch (Exception ex) {}
-        }
-        return val != null ? val.toString() : "";
     }
 }

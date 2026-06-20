@@ -1,13 +1,18 @@
 package io.github.faizul.admin;
 
-import io.github.faizul.activity.UserActivity;
-import io.github.faizul.activity.UserActivityService;
+import io.github.faizul.activity.dtos.UserActivityResponse;
+import io.github.faizul.activity.service.UserActivityService;
 import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
-import io.github.faizul.setting.AppSetting;
-import io.github.faizul.setting.AppSettingService;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.setting.model.AppSetting;
+import io.github.faizul.setting.service.AppSettingService;
+import io.github.faizul.user.dtos.UserDto;
+import io.github.faizul.user.model.SubscriptionRequest;
+import io.github.faizul.user.service.SubscriptionRequestService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,9 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import io.github.faizul.User.subscription.SubscriptionRequest;
-import io.github.faizul.User.subscription.SubscriptionRequestService;
-import java.util.Map;
+
 
 @RestController
 @RequestMapping("/api/admin")
@@ -28,7 +31,7 @@ public class AdminController {
     private final AdminService adminService;
     private final AppSettingService appSettingService;
     private final UserActivityService userActivityService;
-    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final CurrentUserContext currentUserContext;
     private final SubscriptionRequestService subscriptionRequestService;
 
     @GetMapping("/settings")
@@ -71,7 +74,7 @@ public class AdminController {
     }
 
     @GetMapping("/activities")
-    public Flux<io.github.faizul.activity.dtos.UserActivityResponse> getUserActivities(
+    public Flux<UserActivityResponse> getUserActivities(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
@@ -109,9 +112,9 @@ public class AdminController {
     }
 
     @PostMapping("/subscription-requests/{id}/approve")
-    public Mono<io.github.faizul.User.dtos.UserDto> approveSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<UserDto> approveSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(adminId -> subscriptionRequestService.approveRequest(id)
+                .flatMap(adminId -> subscriptionRequestService.approveRequest(id, exchange)
                         .flatMap(userDto -> userActivityService.log(adminId, "APPROVE_SUBSCRIPTION", 
                                 "Menyetujui permintaan upgrade paket pengguna (ID: " + userDto.id() + ", Tier: " + userDto.subscriptionTier() + ")", exchange)
                                 .thenReturn(userDto))
@@ -121,7 +124,7 @@ public class AdminController {
     @PostMapping("/subscription-requests/{id}/reject")
     public Mono<SubscriptionRequest> rejectSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(adminId -> subscriptionRequestService.rejectRequest(id)
+                .flatMap(adminId -> subscriptionRequestService.rejectRequest(id, exchange)
                         .flatMap(req -> userActivityService.log(adminId, "REJECT_SUBSCRIPTION", 
                                 "Menolak permintaan upgrade paket pengguna (ID: " + req.getUserId() + ", Tier: " + req.getRequestedTier() + ")", exchange)
                                 .thenReturn(req))
@@ -129,9 +132,9 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/subscription")
-    public Mono<io.github.faizul.User.dtos.UserDto> directUpdateSubscription(@PathVariable Long id, @RequestParam String tier, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<UserDto> directUpdateSubscription(@PathVariable Long id, @RequestParam String tier, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
-                .flatMap(adminId -> subscriptionRequestService.directUpdateSubscription(id, tier)
+                .flatMap(adminId -> subscriptionRequestService.directUpdateSubscription(id, tier, exchange)
                         .flatMap(userDto -> userActivityService.log(adminId, "DIRECT_UPDATE_SUBSCRIPTION", 
                                 "Mengubah paket langganan pengguna secara langsung (ID: " + id + ", Tier: " + tier + ")", exchange)
                                 .thenReturn(userDto))

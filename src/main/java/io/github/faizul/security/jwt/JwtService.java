@@ -1,6 +1,6 @@
 package io.github.faizul.security.jwt;
 
-import io.github.faizul.User.core.User;
+import io.github.faizul.user.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.UUID;
+import io.github.faizul.security.jwt.model.RefreshToken;
+import io.github.faizul.security.jwt.repository.RefreshTokenRepository;
 
 @Component
 @RequiredArgsConstructor

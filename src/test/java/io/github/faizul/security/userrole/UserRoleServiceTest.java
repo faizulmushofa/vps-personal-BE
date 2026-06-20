@@ -1,8 +1,8 @@
 package io.github.faizul.security.userrole;
 
-import io.github.faizul.security.role.Role;
-import io.github.faizul.security.role.RoleRepository;
-import io.github.faizul.security.role.Roles;
+import io.github.faizul.security.role.model.Role;
+import io.github.faizul.security.role.repository.RoleRepository;
+import io.github.faizul.security.role.model.Roles;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +14,9 @@ import reactor.test.StepVerifier;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import io.github.faizul.security.userrole.model.UserRole;
+import io.github.faizul.security.userrole.repository.UserRoleRepository;
+import io.github.faizul.security.userrole.service.impl.UserRoleServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class UserRoleServiceTest {
@@ -22,7 +25,7 @@ class UserRoleServiceTest {
     @Mock private RoleRepository roleRepository;
 
     @InjectMocks
-    private UserRoleService userRoleService;
+    private UserRoleServiceImpl userRoleService;
 
     @Test
     @DisplayName("should assign default USER role to a new user")

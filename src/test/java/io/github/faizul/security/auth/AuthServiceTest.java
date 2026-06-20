@@ -1,15 +1,27 @@
 package io.github.faizul.security.auth;
 
-import io.github.faizul.User.core.User;
-import io.github.faizul.User.core.UserRepository;
-import io.github.faizul.User.core.UserService;
-import io.github.faizul.User.dtos.UserDto;
-import io.github.faizul.notification.NotificationService;
+import io.github.faizul.activity.service.UserActivityService;
+import io.github.faizul.notification.service.NotificationService;
 import io.github.faizul.security.auth.dtos.*;
+import io.github.faizul.security.auth.dtos.ForgotPasswordRequest;
+import io.github.faizul.security.auth.dtos.LoginRequest;
+import io.github.faizul.security.auth.dtos.RegisterRequest;
+import io.github.faizul.security.auth.dtos.ResetPasswordRequest;
+import io.github.faizul.security.auth.dtos.VerifyOtpRequest;
 import io.github.faizul.security.auth.otp.OtpVerification;
 import io.github.faizul.security.auth.otp.OtpVerificationRepository;
+import io.github.faizul.security.auth.service.impl.AuthServiceImpl;
 import io.github.faizul.security.jwt.JwtService;
-import io.github.faizul.security.jwt.RefreshToken;
+import io.github.faizul.security.jwt.model.RefreshToken;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.storage.file.gdrive.service.GoogleDriveFileService;
+import io.github.faizul.user.dtos.UserDto;
+import io.github.faizul.user.model.User;
+import io.github.faizul.user.repository.ExternalAccountRepository;
+import io.github.faizul.user.repository.UserRepository;
+import io.github.faizul.user.service.UserService;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,13 +34,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
+
+
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -39,12 +50,13 @@ class AuthServiceTest {
     @Mock private UserService userService;
     @Mock private OtpVerificationRepository otpVerificationRepository;
     @Mock private NotificationService notificationService;
-    @Mock private io.github.faizul.activity.UserActivityService userActivityService;
-    @Mock private io.github.faizul.User.externalAccount.ExternalAccountRepository externalAccountRepository;
-    @Mock private io.github.faizul.File.core.googleDrive.GoogleDriveServiceImp googleDriveService;
+    @Mock private UserActivityService userActivityService;
+    @Mock private ExternalAccountRepository externalAccountRepository;
+    @Mock private GoogleDriveFileService googleDriveService;
+    @Mock private CurrentUserContext currentUserContext;
 
     @InjectMocks
-    private AuthService authService;
+    private AuthServiceImpl authService;
 
     private User activeUser;
 
