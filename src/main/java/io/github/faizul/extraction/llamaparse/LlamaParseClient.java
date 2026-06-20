@@ -36,7 +36,12 @@ public class LlamaParseClient {
     private String customPrompt;
 
     public LlamaParseClient() {
-        this.webClient = WebClient.builder().baseUrl("https://api.cloud.llamaindex.ai").build();
+        io.netty.resolver.DefaultAddressResolverGroup resolver = io.netty.resolver.DefaultAddressResolverGroup.INSTANCE;
+        reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create().resolver(resolver);
+        this.webClient = WebClient.builder()
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
+                .baseUrl("https://api.cloud.llamaindex.ai")
+                .build();
     }
 
     public boolean isEnabled() {
