@@ -51,6 +51,8 @@ app:
 DATABASE_URL: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
 GEMINI_API_KEY: test_key
 STORAGE_NODE_URL: localhost:9095
-XENDIT_SECRET_KEY: dummy-xendit-secret-key
-XENDIT_CALLBACK_TOKEN: dummy-xendit-callback-token
+midtrans:
+  server-key: dummy-midtrans-server-key
+  client-key: dummy-midtrans-client-key
+
 

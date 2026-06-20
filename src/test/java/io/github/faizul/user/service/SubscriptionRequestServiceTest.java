@@ -25,15 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-
-
-
 import io.github.faizul.activity.service.UserActivityService;
 import io.github.faizul.security.filter.CurrentUserContext;
 import io.github.faizul.user.service.impl.SubscriptionRequestServiceImpl;
 
-import io.github.faizul.payment.service.XenditService;
-import io.github.faizul.payment.config.XenditConfig;
+import io.github.faizul.payment.service.PaymentService;
+import io.github.faizul.payment.config.MidtransConfig;
 
 @ExtendWith(MockitoExtension.class)
 class SubscriptionRequestServiceTest {
@@ -44,8 +41,8 @@ class SubscriptionRequestServiceTest {
     @Mock private RoleRepository roleRepository;
     @Mock private UserActivityService userActivityService;
     @Mock private CurrentUserContext currentUserContext;
-    @Mock private XenditService xenditService;
-    @Mock private XenditConfig xenditConfig;
+    @Mock private PaymentService paymentService;
+    @Mock private MidtransConfig midtransConfig;
 
     @InjectMocks
     private SubscriptionRequestServiceImpl subscriptionRequestService;
@@ -71,6 +68,22 @@ class SubscriptionRequestServiceTest {
         lenient().when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
     }
 
+    private String hashSha512(String input) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
+            byte[] hash = digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception ex) {
+            throw new RuntimeException("SHA-512 hashing failed", ex);
+        }
+    }
+
     @Test
     @DisplayName("should create request successfully when no pending request exists")
     void createRequest_success() {
@@ -79,11 +92,10 @@ class SubscriptionRequestServiceTest {
                 .thenReturn(Mono.just(false));
 
         java.util.Map<String, Object> fakeInvoice = java.util.Map.of(
-            "id", "inv-123",
-            "invoice_url", "https://checkout.xendit.co/web/inv-123",
-            "status", "PENDING"
+            "token", "inv-123",
+            "redirect_url", "https://checkout.midtrans.com/web/inv-123"
         );
-        when(xenditService.createInvoice(any(), anyLong(), any(), any()))
+        when(paymentService.createPayment(any(), anyLong(), any(), any()))
                 .thenReturn(Mono.just(fakeInvoice));
 
         when(subscriptionRequestRepository.save(any(SubscriptionRequest.class)))
@@ -95,7 +107,7 @@ class SubscriptionRequestServiceTest {
                     assertThat(req.getRequestedTier()).isEqualTo("PREMIUM_INDIVIDUAL");
                     assertThat(req.getStatus()).isEqualTo("PENDING");
                     assertThat(req.getXenditInvoiceId()).isEqualTo("inv-123");
-                    assertThat(req.getInvoiceUrl()).isEqualTo("https://checkout.xendit.co/web/inv-123");
+                    assertThat(req.getInvoiceUrl()).isEqualTo("https://checkout.midtrans.com/web/inv-123");
                 })
                 .verifyComplete();
 
@@ -207,17 +219,26 @@ class SubscriptionRequestServiceTest {
     }
 
     @Test
-    @DisplayName("should process xendit webhook successfully and upgrade user tier")
-    void processXenditWebhook_success() {
-        String tokenHeader = "mCeUVBeNcCUIzQTC2Vg124buQaIKUU2hOrp0e4bxpiqdu7QQ";
-        when(xenditConfig.getCallbackToken()).thenReturn(tokenHeader);
+    @DisplayName("should process midtrans webhook successfully and upgrade user tier")
+    void processMidtransWebhook_success() {
+        when(midtransConfig.getServerKey()).thenReturn("dummy-server-key");
 
-        java.util.Map<String, Object> payload = java.util.Map.of("id", "inv-123");
-        java.util.Map<String, Object> xenditInvoice = java.util.Map.of(
-            "id", "inv-123",
-            "external_id", "SUB-REQ-1L-123",
-            "status", "PAID",
-            "amount", 20000
+        String orderId = "SUB-REQ-1L-123";
+        String statusCode = "200";
+        String grossAmount = "20000.00";
+        String serverKey = "dummy-server-key";
+
+        String signature = hashSha512(orderId + statusCode + grossAmount + serverKey);
+        java.util.Map<String, Object> payload = java.util.Map.of(
+            "order_id", orderId,
+            "status_code", statusCode,
+            "gross_amount", grossAmount,
+            "signature_key", signature
+        );
+
+        java.util.Map<String, Object> midtransStatus = java.util.Map.of(
+            "transaction_status", "settlement",
+            "order_id", orderId
         );
 
         SubscriptionRequest request = SubscriptionRequest.builder()
@@ -225,35 +246,39 @@ class SubscriptionRequestServiceTest {
                 .userId(1L)
                 .requestedTier("PREMIUM_INDIVIDUAL")
                 .status("PENDING")
-                .externalId("SUB-REQ-1L-123")
+                .externalId(orderId)
                 .build();
 
-        when(xenditService.getInvoice("inv-123")).thenReturn(Mono.just(xenditInvoice));
-        when(subscriptionRequestRepository.findByExternalId("SUB-REQ-1L-123")).thenReturn(Mono.just(request));
+        when(paymentService.getPaymentStatus(orderId)).thenReturn(Mono.just(midtransStatus));
+        when(subscriptionRequestRepository.findByExternalId(orderId)).thenReturn(Mono.just(request));
         when(subscriptionRequestRepository.save(any(SubscriptionRequest.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         when(userRepository.findById(1L)).thenReturn(Mono.just(sampleUser));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        StepVerifier.create(subscriptionRequestService.processXenditWebhook(tokenHeader, payload, null))
+        StepVerifier.create(subscriptionRequestService.processMidtransWebhook(payload, null))
                 .verifyComplete();
 
         assertThat(request.getStatus()).isEqualTo("APPROVED");
-        assertThat(request.getPaymentStatus()).isEqualTo("PAID");
+        assertThat(request.getPaymentStatus()).isEqualTo("settlement");
         verify(userRepository).save(any(User.class));
     }
 
     @Test
-    @DisplayName("should fail when token header is invalid")
-    void processXenditWebhook_invalidToken() {
-        String tokenHeader = "mCeUVBeNcCUIzQTC2Vg124buQaIKUU2hOrp0e4bxpiqdu7QQ";
-        when(xenditConfig.getCallbackToken()).thenReturn(tokenHeader);
+    @DisplayName("should fail when signature is invalid")
+    void processMidtransWebhook_invalidSignature() {
+        when(midtransConfig.getServerKey()).thenReturn("dummy-server-key");
 
-        java.util.Map<String, Object> payload = java.util.Map.of("id", "inv-123");
+        java.util.Map<String, Object> payload = java.util.Map.of(
+            "order_id", "SUB-REQ-1L-123",
+            "status_code", "200",
+            "gross_amount", "20000.00",
+            "signature_key", "invalid-signature"
+        );
 
-        StepVerifier.create(subscriptionRequestService.processXenditWebhook("invalid-token", payload, null))
+        StepVerifier.create(subscriptionRequestService.processMidtransWebhook(payload, null))
                 .expectError(org.springframework.security.access.AccessDeniedException.class)
                 .verify();
 
-        verify(xenditService, never()).getInvoice(any());
+        verify(paymentService, never()).getPaymentStatus(any());
     }
 }

@@ -49,6 +49,7 @@ llamaparse:
   enabled: false
   tier: fast
 
-XENDIT_SECRET_KEY: dummy-xendit-secret-key
-XENDIT_CALLBACK_TOKEN: dummy-xendit-callback-token
+midtrans:
+  server-key: dummy-midtrans-server-key
+  client-key: dummy-midtrans-client-key
 

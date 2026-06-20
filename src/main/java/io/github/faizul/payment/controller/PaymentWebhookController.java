@@ -19,15 +19,14 @@ public class PaymentWebhookController {
     private final SubscriptionRequestService subscriptionRequestService;
 
     @PostMapping("/webhook")
-    public Mono<ResponseEntity<Void>> handleXenditWebhook(
-            @RequestHeader(value = "x-callback-token", required = false) String callbackToken,
+    public Mono<ResponseEntity<Void>> handleMidtransWebhook(
             @RequestBody Map<String, Object> payload,
             ServerWebExchange exchange) {
-        log.info("Received Xendit webhook callback for invoice ID: {}", payload.get("id"));
-        return subscriptionRequestService.processXenditWebhook(callbackToken, payload, exchange)
+        log.info("Received Midtrans webhook callback for order ID: {}", payload.get("order_id"));
+        return subscriptionRequestService.processMidtransWebhook(payload, exchange)
                 .then(Mono.just(ResponseEntity.ok().<Void>build()))
                 .onErrorResume(ex -> {
-                    log.error("Error processing Xendit webhook", ex);
+                    log.error("Error processing Midtrans webhook", ex);
                     if (ex instanceof org.springframework.security.access.AccessDeniedException) {
                         return Mono.just(ResponseEntity.status(401).build());
                     }

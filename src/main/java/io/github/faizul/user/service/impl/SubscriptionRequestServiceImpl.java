@@ -19,8 +19,8 @@ import java.util.NoSuchElementException;
 import io.github.faizul.user.model.SubscriptionRequest;
 import io.github.faizul.user.repository.SubscriptionRequestRepository;
 
-import io.github.faizul.payment.service.XenditService;
-import io.github.faizul.payment.config.XenditConfig;
+import io.github.faizul.payment.service.PaymentService;
+import io.github.faizul.payment.config.MidtransConfig;
 
 @Service
 @RequiredArgsConstructor
@@ -33,8 +33,8 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
     private final RoleRepository roleRepository;
     private final io.github.faizul.activity.service.UserActivityService userActivityService;
     private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
-    private final XenditService xenditService;
-    private final XenditConfig xenditConfig;
+    private final PaymentService paymentService;
+    private final MidtransConfig midtransConfig;
 
     @Override
     public Mono<SubscriptionRequest> createRequest(Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange) {
@@ -56,27 +56,26 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
                                 if (exists) {
                                     return Mono.error(new IllegalArgumentException("Anda masih memiliki permintaan upgrade yang sedang diproses. Silakan selesaikan pembayaran sebelumnya."));
                                 }
-                                return xenditService.createInvoice(externalId, amount, email, description)
-                                        .flatMap(invoice -> {
-                                            String xenditInvoiceId = (String) invoice.get("id");
-                                            String invoiceUrl = (String) invoice.get("invoice_url");
-                                            String invoiceStatus = (String) invoice.get("status");
+                                return paymentService.createPayment(externalId, amount, email, description)
+                                         .flatMap(transaction -> {
+                                             String token = (String) transaction.get("token");
+                                             String redirectUrl = (String) transaction.get("redirect_url");
 
-                                            SubscriptionRequest request = SubscriptionRequest.builder()
-                                                    .userId(userId)
-                                                    .requestedTier(upperTier)
-                                                    .status("PENDING")
-                                                    .xenditInvoiceId(xenditInvoiceId)
-                                                    .invoiceUrl(invoiceUrl)
-                                                    .externalId(externalId)
-                                                    .amount(amount)
-                                                    .paymentStatus(invoiceStatus)
-                                                    .build();
+                                             SubscriptionRequest request = SubscriptionRequest.builder()
+                                                     .userId(userId)
+                                                     .requestedTier(upperTier)
+                                                     .status("PENDING")
+                                                     .xenditInvoiceId(token)
+                                                     .invoiceUrl(redirectUrl)
+                                                     .externalId(externalId)
+                                                     .amount(amount)
+                                                     .paymentStatus("pending")
+                                                     .build();
 
-                                            return subscriptionRequestRepository.save(request)
-                                                    .flatMap(savedReq -> userActivityService.log(userId, "CREATE_SUBSCRIPTION_REQUEST", "Mengajukan upgrade paket langganan ke tier: " + tier + " dengan nominal Rp " + amount, exchange)
-                                                            .thenReturn(savedReq));
-                                        });
+                                             return subscriptionRequestRepository.save(request)
+                                                     .flatMap(savedReq -> userActivityService.log(userId, "CREATE_SUBSCRIPTION_REQUEST", "Mengajukan upgrade paket langganan ke tier: " + tier + " dengan nominal Rp " + amount, exchange)
+                                                             .thenReturn(savedReq));
+                                         });
                             });
                 });
     }
@@ -174,25 +173,47 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
                 .map(roles -> UserMapper.UserToDto(user, roles));
     }
 
+    private String hashSha512(String input) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
+            byte[] hash = digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception ex) {
+            throw new RuntimeException("SHA-512 hashing failed", ex);
+        }
+    }
+
     @Override
-    public Mono<Void> processXenditWebhook(String callbackTokenHeader, java.util.Map<String, Object> payload, org.springframework.web.server.ServerWebExchange exchange) {
-        // 1. Validate Xendit Callback Token
-        String configuredToken = xenditConfig.getCallbackToken();
-        if (callbackTokenHeader == null || !callbackTokenHeader.equals(configuredToken)) {
-            return Mono.error(new org.springframework.security.access.AccessDeniedException("Invalid callback token"));
+    public Mono<Void> processMidtransWebhook(java.util.Map<String, Object> payload, org.springframework.web.server.ServerWebExchange exchange) {
+        // 1. Extract values
+        String orderId = (String) payload.get("order_id");
+        String statusCode = (String) payload.get("status_code");
+        String grossAmount = (String) payload.get("gross_amount");
+        String signatureKeyFromPayload = (String) payload.get("signature_key");
+        String serverKey = midtransConfig.getServerKey();
+
+        if (orderId == null || statusCode == null || grossAmount == null || signatureKeyFromPayload == null) {
+            return Mono.error(new IllegalArgumentException("Required Midtrans notification fields are missing"));
         }
 
-        // 2. Extract payload info
-        String invoiceId = (String) payload.get("id");
-        if (invoiceId == null) {
-            return Mono.error(new IllegalArgumentException("Invoice ID is missing from payload"));
+        // 2. Validate Signature Key
+        String rawString = orderId + statusCode + grossAmount + serverKey;
+        String calculatedSignature = hashSha512(rawString);
+        if (!calculatedSignature.equalsIgnoreCase(signatureKeyFromPayload)) {
+            return Mono.error(new org.springframework.security.access.AccessDeniedException("Invalid Midtrans signature key"));
         }
 
-        // 3. Double Check GET API directly from Xendit
-        return xenditService.getInvoice(invoiceId)
-                .flatMap(xenditInvoice -> {
-                    String actualStatus = (String) xenditInvoice.get("status");
-                    String actualExternalId = (String) xenditInvoice.get("external_id");
+        // 3. Double Check GET API directly from Midtrans
+        return paymentService.getPaymentStatus(orderId)
+                .flatMap(midtransStatus -> {
+                    String actualStatus = (String) midtransStatus.get("transaction_status");
+                    String actualExternalId = (String) midtransStatus.get("order_id");
 
                     return subscriptionRequestRepository.findByExternalId(actualExternalId)
                             .switchIfEmpty(Mono.error(new NoSuchElementException("Subscription request tidak ditemukan untuk externalId: " + actualExternalId)))
@@ -204,7 +225,7 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
                                 request.setPaymentStatus(actualStatus);
                                 request.setUpdatedAt(LocalDateTime.now());
 
-                                if ("PAID".equalsIgnoreCase(actualStatus) || "SETTLED".equalsIgnoreCase(actualStatus)) {
+                                if ("settlement".equalsIgnoreCase(actualStatus) || "capture".equalsIgnoreCase(actualStatus)) {
                                     request.setStatus("APPROVED");
 
                                     return subscriptionRequestRepository.save(request)
@@ -220,12 +241,12 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
                                                         user.setMigrationMaxFileSize(plan.getLimits().migrationMaxFileSize());
                                                         return userRepository.save(user);
                                                     })
-                                                    .flatMap(user -> userActivityService.log(user.getId(), "APPROVE_SUBSCRIPTION_VIA_PAYMENT", "Upgrade paket langganan berhasil disetujui otomatis melalui pembayaran invoice Xendit: " + invoiceId, exchange))
+                                                    .flatMap(user -> userActivityService.log(user.getId(), "APPROVE_SUBSCRIPTION_VIA_PAYMENT", "Upgrade paket langganan berhasil disetujui otomatis melalui pembayaran Midtrans: " + actualExternalId, exchange))
                                             );
-                                } else if ("EXPIRED".equalsIgnoreCase(actualStatus) || "FAILED".equalsIgnoreCase(actualStatus)) {
+                                } else if ("expire".equalsIgnoreCase(actualStatus) || "cancel".equalsIgnoreCase(actualStatus) || "deny".equalsIgnoreCase(actualStatus)) {
                                     request.setStatus("REJECTED");
                                     return subscriptionRequestRepository.save(request)
-                                            .flatMap(savedReq -> userActivityService.log(savedReq.getUserId(), "SUBSCRIPTION_PAYMENT_FAILED", "Upgrade paket langganan gagal/expired dengan status: " + actualStatus, exchange));
+                                            .flatMap(savedReq -> userActivityService.log(savedReq.getUserId(), "SUBSCRIPTION_PAYMENT_FAILED", "Upgrade paket langganan gagal/expired dengan status Midtrans: " + actualStatus, exchange));
                                 } else {
                                     return subscriptionRequestRepository.save(request);
                                 }

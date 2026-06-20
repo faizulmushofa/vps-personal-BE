@@ -12,5 +12,5 @@ public interface SubscriptionRequestService {
     Mono<UserDto> approveRequest(Long requestId, org.springframework.web.server.ServerWebExchange exchange);
     Mono<SubscriptionRequest> rejectRequest(Long requestId, org.springframework.web.server.ServerWebExchange exchange);
     Mono<UserDto> directUpdateSubscription(Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange);
-    Mono<Void> processXenditWebhook(String callbackTokenHeader, java.util.Map<String, Object> payload, org.springframework.web.server.ServerWebExchange exchange);
+    Mono<Void> processMidtransWebhook(java.util.Map<String, Object> payload, org.springframework.web.server.ServerWebExchange exchange);
 }

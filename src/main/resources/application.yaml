@@ -57,3 +57,9 @@ llamaparse:
   enabled: ${LLAMAPARSE_ENABLED:true}
   tier: ${LLAMAPARSE_TIER:fast}
   custom-prompt: ${LLAMAPARSE_CUSTOM_PROMPT:Ekstrak semua teks secara verbatim (kata per kata), pertahankan urutan dan format aslinya. Jangan merangkum, menjelaskan, atau menafsirkan teks; berikan transkripsi literal.}
+
+midtrans:
+  server-key: ${MIDTRANS_SERVER_KEY:}
+  client-key: ${MIDTRANS_CLIENT_KEY:}
+  snap-url: ${MIDTRANS_SNAP_URL:https://app.sandbox.midtrans.com/snap/v1}
+  api-url: ${MIDTRANS_API_URL:https://api.sandbox.midtrans.com}
