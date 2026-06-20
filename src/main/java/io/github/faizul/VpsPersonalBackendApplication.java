@@ -11,6 +11,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class VpsPersonalBackendApplication {
 
     public static void main(String[] args) {
+        System.setProperty("java.net.preferIPv4Stack", "true");
+        System.setProperty("java.net.preferIPv4Addresses", "true");
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
         SpringApplication.run(VpsPersonalBackendApplication.class, args);
     }
