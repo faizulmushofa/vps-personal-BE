@@ -15,10 +15,10 @@ import java.util.Base64;
 @Getter
 public class XenditConfig {
 
-    @Value("${XENDIT_SECRET_KEY}")
+    @Value("${XENDIT_SECRET_KEY:dummy-xendit-secret-key}")
     private String secretKey;
 
-    @Value("${XENDIT_CALLBACK_TOKEN}")
+    @Value("${XENDIT_CALLBACK_TOKEN:dummy-xendit-callback-token}")
     private String callbackToken;
 
     @Value("${XENDIT_BASE_URL:https://api.xendit.co}")
