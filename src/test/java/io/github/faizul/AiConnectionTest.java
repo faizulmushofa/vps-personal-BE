@@ -1,12 +1,13 @@
 package io.github.faizul;
 
-import io.github.faizul.Ai.client.GroqService;
+import io.github.faizul.ai.service.client.GroqService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 import java.time.Duration;
 import java.util.List;
+import io.github.faizul.security.auth.dtos.Response;
 
 @SpringBootTest
 public class AiConnectionTest {
@@ -18,24 +19,12 @@ public class AiConnectionTest {
     private Environment environment;
 
     private static final List<String> VALID_MODELS = List.of(
-        "openrouter/free",
-        "openai/gpt-oss-120b:free",
-        "openai/gpt-oss-20b:free",
         "meta-llama/llama-3.3-70b-instruct:free",
         "meta-llama/llama-3.2-3b-instruct:free",
         "qwen/qwen3-coder:free",
-        "poolside/laguna-xs.2:free",
-        "poolside/laguna-m.1:free",
         "google/gemma-4-26b-a4b-it:free",
-        "google/gemma-4-31b-it:free",
-        "liquid/lfm-2.5-1.2b-thinking:free",
-        "liquid/lfm-2.5-1.2b-instruct:free",
-        "nvidia/nemotron-3-nano-30b-a3b:free",
-        "nvidia/nemotron-nano-12b-v2-vl:free",
-        "nvidia/nemotron-nano-9b-v2:free",
         "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "openrouter/owl-alpha"
+        "nousresearch/hermes-3-llama-3.1-405b:free"
     );
 
     @Test

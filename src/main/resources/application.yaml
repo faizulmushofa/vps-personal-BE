@@ -56,3 +56,4 @@ llamaparse:
   api-key: ${LLAMA_CLOUD_API_KEY:}
   enabled: ${LLAMAPARSE_ENABLED:true}
   tier: ${LLAMAPARSE_TIER:fast}
+  custom-prompt: ${LLAMAPARSE_CUSTOM_PROMPT:Ekstrak semua teks secara verbatim (kata per kata), pertahankan urutan dan format aslinya. Jangan merangkum, menjelaskan, atau menafsirkan teks; berikan transkripsi literal.}

@@ -7,15 +7,15 @@ import reactor.core.publisher.Mono;
 @Component
 public class CurrentUserContext {
 
-    public Mono<UserDetailImp> getUser() {
+    public Mono<UserDetailImpl> getUser() {
         return ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication().getPrincipal())
-                .cast(UserDetailImp.class);
+                .cast(UserDetailImpl.class);
     }
 
     public Mono<Long> getUserId() {
         return getUser()
-                .map(UserDetailImp::getId);
+                .map(UserDetailImpl::getId);
     }
 
 }

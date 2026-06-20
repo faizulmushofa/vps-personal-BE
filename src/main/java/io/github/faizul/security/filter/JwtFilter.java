@@ -2,9 +2,9 @@ package io.github.faizul.security.filter;
 
 import com.google.common.net.HttpHeaders;
 import io.github.faizul.security.jwt.JwtService;
-import io.github.faizul.security.role.RoleRepository;
-import io.github.faizul.User.core.UserRepository;
-import io.github.faizul.security.userrole.UserRoleRepository;
+import io.github.faizul.security.role.repository.RoleRepository;
+import io.github.faizul.user.repository.UserRepository;
+import io.github.faizul.security.userrole.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -21,6 +21,8 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import io.github.faizul.security.role.model.Role;
+import io.github.faizul.user.model.User;
 
 @Component
 @RequiredArgsConstructor
@@ -87,7 +89,7 @@ public class JwtFilter implements WebFilter {
                                     ? List.of(new SimpleGrantedAuthority("ROLE_USER"))
                                     : authorities;
 
-                            UserDetails userDetails = new UserDetailImp(user, effectiveAuthorities);
+                            UserDetails userDetails = new UserDetailImpl(user, effectiveAuthorities);
 
                             return (Authentication) new UsernamePasswordAuthenticationToken(
                                     userDetails,

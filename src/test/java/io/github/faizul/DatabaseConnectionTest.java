@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.r2dbc.core.DatabaseClient;
-import io.github.faizul.Ai.AiService;
-import io.github.faizul.Ai.dtos.AiRequest;
+import io.github.faizul.ai.service.AiService;
+import io.github.faizul.ai.dtos.AiRequest;
 import reactor.test.StepVerifier;
 
 @SpringBootTest(properties = {
@@ -25,7 +25,7 @@ public class DatabaseConnectionTest {
     public void testAiConnection() {
         try {
             System.out.println("\n>>> CALLING AI SERVICE...");
-            aiService.summary(new AiRequest("Hello"))
+            aiService.summary(new AiRequest("Hello"), null)
                 .subscribe(response -> System.out.println(">>> AI RESPONSE: " + response.response() + "\n"),
                            err -> {
                                System.err.println(">>> AI SERVICE EXCEPTION:");

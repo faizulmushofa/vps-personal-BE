@@ -1,0 +1,16 @@
+package io.github.faizul.security.jwt.repository;
+
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Mono;
+import io.github.faizul.security.jwt.model.RefreshToken;
+
+@Repository
+public interface RefreshTokenRepository extends R2dbcRepository<RefreshToken,Long> {
+    Mono<RefreshToken> findByToken(String token);
+
+    @Query("UPDATE refresh_token SET revoked = true WHERE user_id = :userId AND revoked = false")
+    Mono<Void> revokeAllByUserId(Long userId);
+}
+

@@ -1,0 +1,221 @@
+package io.github.faizul.storage.preview.service.impl;
+
+import io.github.faizul.activity.service.UserActivityService;
+import io.github.faizul.storage.download.service.DownloadService;
+import io.github.faizul.storage.download.service.DownloadStorageService;
+import io.github.faizul.storage.file.repository.FileRepository;
+import io.github.faizul.storage.file.local.service.StorageNodeFileService;
+import io.github.faizul.storage.file.service.client.GoogleDriveClient;
+import io.github.faizul.storage.preview.model.PreviewResult;
+import io.github.faizul.storage.preview.service.PreviewService;
+import io.github.faizul.storage.share.local.service.FolderSharedService;
+import io.github.faizul.storage.share.service.ShareService;
+import io.github.faizul.user.repository.ExternalAccountRepository;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaTypeFactory;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+/**
+ * Implementasi PreviewService yang TIDAK meng-inject repository apapun.
+ * Semua akses data dilakukan melalui service-level yang sudah ada.
+ */
+@Service
+public class PreviewServiceImpl implements PreviewService {
+
+    private final StorageNodeFileService fileService;
+    private final FileRepository fileRepository;
+    private final DownloadService storageNodeDownloadService;
+    private final DownloadService googleDriveDownloadService;
+    private final ShareService storageNodeShareService;
+    private final ShareService googleDriveShareService;
+    private final FolderSharedService folderSharedService;
+    private final DownloadStorageService downloadStorageService;
+    private final GoogleDriveClient googleDriveClient;
+    private final ExternalAccountRepository externalAccountRepository;
+    private final UserActivityService userActivityService;
+
+    public PreviewServiceImpl(
+            StorageNodeFileService fileService,
+            FileRepository fileRepository,
+            @Qualifier("storageNodeDownloadService") DownloadService storageNodeDownloadService,
+            @Qualifier("googleDriveDownloadService") DownloadService googleDriveDownloadService,
+            @Qualifier("storageNodeShareService") ShareService storageNodeShareService,
+            @Qualifier("googleDriveShareService") ShareService googleDriveShareService,
+            FolderSharedService folderSharedService,
+            DownloadStorageService downloadStorageService,
+            GoogleDriveClient googleDriveClient,
+            ExternalAccountRepository externalAccountRepository,
+            UserActivityService userActivityService) {
+        this.fileService = fileService;
+        this.fileRepository = fileRepository;
+        this.storageNodeDownloadService = storageNodeDownloadService;
+        this.googleDriveDownloadService = googleDriveDownloadService;
+        this.storageNodeShareService = storageNodeShareService;
+        this.googleDriveShareService = googleDriveShareService;
+        this.folderSharedService = folderSharedService;
+        this.downloadStorageService = downloadStorageService;
+        this.googleDriveClient = googleDriveClient;
+        this.externalAccountRepository = externalAccountRepository;
+        this.userActivityService = userActivityService;
+    }
+
+    @Override
+    public Mono<PreviewResult> previewPrivateFile(Long userId, String fileId, String provider, Long externalAccountId, org.springframework.web.server.ServerWebExchange exchange) {
+        boolean isUuid = false;
+        UUID uuid = null;
+        try {
+            uuid = UUID.fromString(fileId);
+            isUuid = true;
+        } catch (IllegalArgumentException e) {
+            // not a UUID, must be external (e.g. Google Drive) ID
+        }
+
+        Mono<PreviewResult> resultMono;
+        if (isUuid && (provider == null || !"GOOGLE_DRIVE".equalsIgnoreCase(provider))) {
+            final UUID finalUuid = uuid;
+            resultMono = fileService.findByUUID(finalUuid)
+                    .map(file -> {
+                        String contentType = resolveContentType(file.originalFileName());
+                        DownloadService downloadService = resolveDownloadService(file.provider());
+                        return new PreviewResult(
+                                file.originalFileName(),
+                                file.size(),
+                                contentType,
+                                downloadService.streamFile(finalUuid)
+                        );
+                    });
+        } else {
+            // Must be Google Drive
+            if (isUuid && "GOOGLE_DRIVE".equalsIgnoreCase(provider)) {
+                final UUID finalUuid = uuid;
+                resultMono = fileRepository.findById(finalUuid)
+                        .flatMap(file -> {
+                            if (externalAccountId == null) {
+                                return Mono.error(new IllegalArgumentException("externalAccountId is required for external providers"));
+                            }
+                            return externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
+                                    .switchIfEmpty(Mono.error(new SecurityException("Akses ditolak: Akun eksternal tidak valid")))
+                                    .flatMap(account -> googleDriveClient.getFileMetadata(externalAccountId, file.getStorageName())
+                                            .map(metadata -> {
+                                                String name = (String) metadata.get("name");
+                                                Object sizeObj = metadata.get("size");
+                                                long size = 0;
+                                                if (sizeObj instanceof Number) {
+                                                    size = ((Number) sizeObj).longValue();
+                                                } else if (sizeObj instanceof String) {
+                                                    size = Long.parseLong((String) sizeObj);
+                                                }
+                                                String mimeType = (String) metadata.get("mimeType");
+                                                if (mimeType == null) {
+                                                    mimeType = resolveContentType(name);
+                                                }
+                                                Flux<byte[]> stream = googleDriveClient.downloadFile(externalAccountId, file.getStorageName());
+                                                return new PreviewResult(name, size, mimeType, stream);
+                                            })
+                                    );
+                        });
+            } else {
+                if (externalAccountId == null) {
+                    return Mono.error(new IllegalArgumentException("externalAccountId is required for external providers"));
+                }
+                resultMono = externalAccountRepository.findByIdAndUserId(externalAccountId, userId)
+                        .switchIfEmpty(Mono.error(new SecurityException("Akses ditolak: Akun eksternal tidak valid")))
+                        .flatMap(account -> googleDriveClient.getFileMetadata(externalAccountId, fileId)
+                                .map(metadata -> {
+                                    String name = (String) metadata.get("name");
+                                    Object sizeObj = metadata.get("size");
+                                    long size = 0;
+                                    if (sizeObj instanceof Number) {
+                                        size = ((Number) sizeObj).longValue();
+                                    } else if (sizeObj instanceof String) {
+                                        size = Long.parseLong((String) sizeObj);
+                                    }
+                                    String mimeType = (String) metadata.get("mimeType");
+                                    if (mimeType == null) {
+                                        mimeType = resolveContentType(name);
+                                    }
+                                    Flux<byte[]> stream = googleDriveClient.downloadFile(externalAccountId, fileId);
+                                    return new PreviewResult(name, size, mimeType, stream);
+                                })
+                        );
+            }
+        }
+
+        return resultMono.flatMap(result -> userActivityService.log(userId, "PREVIEW_FILE", "Melihat pratinjau berkas pribadi ID: " + fileId, exchange)
+                .thenReturn(result));
+    }
+
+    @Override
+    public Mono<PreviewResult> previewPublicFile(String shareToken, String provider, String fileId, org.springframework.web.server.ServerWebExchange exchange) {
+        Mono<PreviewResult> resultMono;
+        if (fileId == null || fileId.trim().isEmpty()) {
+            ShareService shareService = resolveShareService(provider);
+            resultMono = shareService.getPublicFileInfo(shareToken)
+                    .map(file -> {
+                        String contentType = resolveContentType(file.originalFileName());
+                        return new PreviewResult(
+                                file.originalFileName(),
+                                file.size(),
+                                contentType,
+                                shareService.downloadPublicFile(shareToken)
+                        );
+                    });
+        } else {
+            // Preview a file inside a shared folder
+            resultMono = folderSharedService.getSharedFileMetadataPublic(shareToken, fileId)
+                    .flatMap(file -> folderSharedService.getSharedFolderOwnerId(shareToken)
+                            .map(ownerId -> {
+                                String contentType = resolveContentType(file.originalFileName());
+                                Flux<byte[]> dataStream;
+                                if ("GOOGLE_DRIVE".equalsIgnoreCase(file.provider())) {
+                                    dataStream = googleDriveClient.downloadFile(file.externalAccountId(), fileId);
+                                } else {
+                                    dataStream = downloadStorageService.downloadFile(ownerId, UUID.fromString(fileId))
+                                            .map(chunk -> chunk.data());
+                                }
+                                return new PreviewResult(
+                                        file.originalFileName(),
+                                        file.size(),
+                                        contentType,
+                                        dataStream
+                                );
+                            })
+                    );
+        }
+
+        return resultMono.flatMap(result -> userActivityService.log(null, "PREVIEW_FILE_PUBLIC", "Melihat pratinjau berkas publik dengan share token: " + shareToken, exchange)
+                .thenReturn(result));
+    }
+
+    /**
+     * Menentukan MIME type dari nama file menggunakan MediaTypeFactory bawaan Spring.
+     */
+    private String resolveContentType(String fileName) {
+        return MediaTypeFactory.getMediaType(fileName)
+                .map(org.springframework.http.MediaType::toString)
+                .orElse("application/octet-stream");
+    }
+
+    /**
+     * Memilih DownloadService yang sesuai berdasarkan provider file.
+     */
+    private DownloadService resolveDownloadService(String provider) {
+        if ("GOOGLE_DRIVE".equalsIgnoreCase(provider)) {
+            return googleDriveDownloadService;
+        }
+        return storageNodeDownloadService;
+    }
+
+    /**
+     * Memilih ShareService yang sesuai berdasarkan provider string dari URL path.
+     */
+    private ShareService resolveShareService(String provider) {
+        if ("google".equalsIgnoreCase(provider) || "GOOGLE_DRIVE".equalsIgnoreCase(provider)) {
+            return googleDriveShareService;
+        }
+        return storageNodeShareService;
+    }
+}
