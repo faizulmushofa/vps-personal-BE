@@ -119,7 +119,7 @@ public class GlobalExceptionHandler {
                 .timestamp(Instant.now())
                 .status(HttpStatus.FAILED_DEPENDENCY.value())
                 .error(HttpStatus.FAILED_DEPENDENCY.getReasonPhrase())
-                .message("Gagal berkomunikasi dengan layanan eksternal (Google Drive API). Silakan hubungkan ulang atau coba lagi nanti.")
+                .message("Gagal berkomunikasi dengan layanan eksternal. Silakan coba lagi nanti.")
                 .path(exchange.getRequest().getPath().value())
                 .build();
 
