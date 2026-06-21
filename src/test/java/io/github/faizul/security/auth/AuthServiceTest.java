@@ -87,7 +87,7 @@ class AuthServiceTest {
 
             UserDto createdDto = new UserDto(1L, "newuser", "new@example.com",
                     "New User", null, "081234567890", null, false, List.of("USER"),
-                    LocalDateTime.now(), null, null, "FREEMIUM", null);
+                    LocalDateTime.now(), null, null, "FREEMIUM", null, null, false);
 
             when(userRepository.findByEmail(anyString())).thenReturn(Mono.empty());
             when(userService.createUser(any(User.class))).thenReturn(Mono.just(createdDto));
