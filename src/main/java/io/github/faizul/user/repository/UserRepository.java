@@ -10,4 +10,5 @@ import io.github.faizul.user.model.User;
 public interface UserRepository extends ReactiveCrudRepository<User,Long> {
     Mono<Boolean> existsByEmail(String email);
     Mono<User> findByEmail(String email);
+    Mono<Boolean> existsByAcademicEmail(String academicEmail);
 }
