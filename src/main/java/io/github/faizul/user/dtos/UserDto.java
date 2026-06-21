@@ -17,6 +17,8 @@ public record UserDto(
         LocalDateTime updateAt,
         LocalDateTime deleteAt,
         String subscriptionTier,
-        LocalDateTime subscriptionExpiresAt
+        LocalDateTime subscriptionExpiresAt,
+        String academicEmail,
+        Boolean studentVerified
 ) {
 }

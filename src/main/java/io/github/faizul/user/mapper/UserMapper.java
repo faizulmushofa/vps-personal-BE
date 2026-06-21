@@ -21,6 +21,8 @@ public class UserMapper {
                 .updatedAt(userDto.updateAt())
                 .subscriptionTier(userDto.subscriptionTier())
                 .subscriptionExpiresAt(userDto.subscriptionExpiresAt())
+                .academicEmail(userDto.academicEmail())
+                .studentVerified(userDto.studentVerified())
                 .build();
     }
 
@@ -43,7 +45,9 @@ public class UserMapper {
                 user.getUpdatedAt(),
                 user.getDeletedAt(),
                 user.getSubscriptionTier(),
-                user.getSubscriptionExpiresAt()
+                user.getSubscriptionExpiresAt(),
+                user.getAcademicEmail(),
+                user.getStudentVerified()
         );
     }
 }
