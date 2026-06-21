@@ -13,8 +13,10 @@ spring:
       channels:
         storage-node:
           address: ${STORAGE_NODE_URL}
-          negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:plaintext}
-          secure: ${GRPC_CLIENT_SECURE:false}
+          negotiation-type: ${GRPC_CLIENT_NEGOTIATION_TYPE:tls}
+          secure: ${GRPC_CLIENT_SECURE:true}
+          ssl:
+            bundle: trust-all-bundle
   ai:
     openai:
       api-key: ${OPEN_ROUTER_API_KEY}
@@ -49,3 +51,15 @@ springdoc:
 
 app:
   frontend-url: ${FRONTEND_URL}
+
+llamaparse:
+  api-key: ${LLAMA_CLOUD_API_KEY:}
+  enabled: ${LLAMAPARSE_ENABLED:true}
+  tier: ${LLAMAPARSE_TIER:fast}
+  custom-prompt: ${LLAMAPARSE_CUSTOM_PROMPT:Ekstrak semua teks secara verbatim (kata per kata), pertahankan urutan dan format aslinya. Jangan merangkum, menjelaskan, atau menafsirkan teks; berikan transkripsi literal.}
+
+midtrans:
+  server-key: ${MIDTRANS_SERVER_KEY:}
+  client-key: ${MIDTRANS_CLIENT_KEY:}
+  snap-url: ${MIDTRANS_SNAP_URL:https://app.sandbox.midtrans.com/snap/v1}
+  api-url: ${MIDTRANS_API_URL:https://api.sandbox.midtrans.com}

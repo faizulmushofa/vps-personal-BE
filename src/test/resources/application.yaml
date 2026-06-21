@@ -2,7 +2,7 @@ spring:
   application:
     name: vps-personal-backend-test
   r2dbc:
-    url: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1
+    url: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
     username: sa
     password:
   sql:
@@ -43,8 +43,16 @@ brevo:
     name: Premium VPS Cloud Test
 
 app:
-  frontend-url: ${frontend-url}
+  frontend-url: ${frontend-url:http://localhost:5173}
+  seed:
+    admin-password: TestAdminPass123!@
+    user-password: TestUserPass123!@
 
-DATABASE_URL: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1
+DATABASE_URL: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
 GEMINI_API_KEY: test_key
 STORAGE_NODE_URL: localhost:9095
+midtrans:
+  server-key: dummy-midtrans-server-key
+  client-key: dummy-midtrans-client-key
+
+

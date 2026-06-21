@@ -4,14 +4,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.r2dbc.core.DatabaseClient;
-import io.github.faizul.Ai.AiService;
-import io.github.faizul.Ai.dtos.AiRequest;
+import io.github.faizul.ai.service.AiService;
+import io.github.faizul.ai.dtos.AiRequest;
 import reactor.test.StepVerifier;
 
 @SpringBootTest(properties = {
     "spring.ai.openai.api-key=dummy-openrouter-key",
     "spring.ai.google.genai.api-key=dummy-gemini-key"
 })
+@org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "RUN_INTEGRATION_TESTS", matches = "true")
 public class DatabaseConnectionTest {
 
     @Autowired
@@ -24,7 +25,7 @@ public class DatabaseConnectionTest {
     public void testAiConnection() {
         try {
             System.out.println("\n>>> CALLING AI SERVICE...");
-            aiService.summary(new AiRequest("Hello"))
+            aiService.summary(new AiRequest("Hello"), null)
                 .subscribe(response -> System.out.println(">>> AI RESPONSE: " + response.response() + "\n"),
                            err -> {
                                System.err.println(">>> AI SERVICE EXCEPTION:");
@@ -101,6 +102,29 @@ public class DatabaseConnectionTest {
                 .all()
                 .collectList()
                 .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL FILE_SHARED: " + err.getMessage()))
+                .block();
+        System.out.println(">>> ================================================= <<<\n");
+    }
+
+    @Test
+    public void testMigrationTasks() {
+        System.out.println("\n>>> ================================================= <<<");
+        System.out.println(">>> MEMBACA ISI TABEL MIGRATION_TASKS...               <<<");
+        databaseClient.sql("SELECT id, file_id, file_name, status, error_message, source_provider, target_provider, created_at FROM migration_tasks ORDER BY created_at DESC LIMIT 10")
+                .map((row, metadata) -> {
+                    System.out.println("TASK ROW -> id: " + row.get("id") + 
+                                       ", file_id: " + row.get("file_id") + 
+                                       ", name: " + row.get("file_name") + 
+                                       ", status: " + row.get("status") + 
+                                       ", error: " + row.get("error_message") +
+                                       ", source: " + row.get("source_provider") +
+                                       ", target: " + row.get("target_provider") +
+                                       ", created: " + row.get("created_at"));
+                    return row.get("id", java.util.UUID.class);
+                })
+                .all()
+                .collectList()
+                .doOnError(err -> System.err.println(">>> ERROR MEMBACA TABEL MIGRATION_TASKS: " + err.getMessage()))
                 .block();
         System.out.println(">>> ================================================= <<<\n");
     }

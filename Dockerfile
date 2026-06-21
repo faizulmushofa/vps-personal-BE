@@ -39,10 +39,6 @@ USER appuser
 EXPOSE 8090
 EXPOSE 50051
 
-# Longer health check start (30s for 1GB)
-HEALTHCHECK --interval=45s --timeout=5s --start-period=40s --retries=2 \
-  CMD curl -f http://localhost:8090/actuator/health || exit 1
-
 # JVM tuned for 1GB: AGGRESSIVE settings
 # -Xms128m -Xmx512m: minimal heap (accept slower startup/GC frequency)
 # -XX:+UseZGC: Use ZGC instead of G1 (lower latency, simpler, better for 1GB)

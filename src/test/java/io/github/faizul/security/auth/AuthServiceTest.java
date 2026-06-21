@@ -1,15 +1,27 @@
 package io.github.faizul.security.auth;
 
-import io.github.faizul.User.core.User;
-import io.github.faizul.User.core.UserRepository;
-import io.github.faizul.User.core.UserService;
-import io.github.faizul.User.dtos.UserDto;
-import io.github.faizul.notification.NotificationService;
+import io.github.faizul.activity.service.UserActivityService;
+import io.github.faizul.notification.service.NotificationService;
 import io.github.faizul.security.auth.dtos.*;
+import io.github.faizul.security.auth.dtos.ForgotPasswordRequest;
+import io.github.faizul.security.auth.dtos.LoginRequest;
+import io.github.faizul.security.auth.dtos.RegisterRequest;
+import io.github.faizul.security.auth.dtos.ResetPasswordRequest;
+import io.github.faizul.security.auth.dtos.VerifyOtpRequest;
 import io.github.faizul.security.auth.otp.OtpVerification;
 import io.github.faizul.security.auth.otp.OtpVerificationRepository;
+import io.github.faizul.security.auth.service.impl.AuthServiceImpl;
 import io.github.faizul.security.jwt.JwtService;
-import io.github.faizul.security.jwt.RefreshToken;
+import io.github.faizul.security.jwt.model.RefreshToken;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.storage.file.gdrive.service.GoogleDriveFileService;
+import io.github.faizul.user.dtos.UserDto;
+import io.github.faizul.user.model.User;
+import io.github.faizul.user.repository.ExternalAccountRepository;
+import io.github.faizul.user.repository.UserRepository;
+import io.github.faizul.user.service.UserService;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,13 +34,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
+
+
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -39,9 +50,13 @@ class AuthServiceTest {
     @Mock private UserService userService;
     @Mock private OtpVerificationRepository otpVerificationRepository;
     @Mock private NotificationService notificationService;
+    @Mock private UserActivityService userActivityService;
+    @Mock private ExternalAccountRepository externalAccountRepository;
+    @Mock private GoogleDriveFileService googleDriveService;
+    @Mock private CurrentUserContext currentUserContext;
 
     @InjectMocks
-    private AuthService authService;
+    private AuthServiceImpl authService;
 
     private User activeUser;
 
@@ -55,6 +70,9 @@ class AuthServiceTest {
                 .fullName("Test User")
                 .isActive(true)
                 .build();
+
+        lenient().when(userActivityService.log(any(), any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(externalAccountRepository.findAllByUserId(anyLong())).thenReturn(reactor.core.publisher.Flux.empty());
     }
 
     @Nested
@@ -69,15 +87,16 @@ class AuthServiceTest {
 
             UserDto createdDto = new UserDto(1L, "newuser", "new@example.com",
                     "New User", null, "081234567890", null, false, List.of("USER"),
-                    LocalDateTime.now(), null, null);
+                    LocalDateTime.now(), null, null, "FREEMIUM", null);
 
+            when(userRepository.findByEmail(anyString())).thenReturn(Mono.empty());
             when(userService.createUser(any(User.class))).thenReturn(Mono.just(createdDto));
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
             when(notificationService.sendNotification(anyString(), anyString(), anyString()))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.register(request))
+            StepVerifier.create(authService.register(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("Register Successfully"))
                     .verifyComplete();
 
@@ -114,7 +133,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("Verifikasi email berhasil"))
                     .verifyComplete();
         }
@@ -135,7 +154,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "REGISTRATION"))
                     .thenReturn(Mono.just(expiredOtp));
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("kadaluarsa"))
                     .verify();
@@ -149,7 +168,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "REGISTRATION"))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.verifyRegistration(request))
+            StepVerifier.create(authService.verifyRegistration(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("OTP tidak valid"))
                     .verify();
@@ -168,9 +187,10 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("correctPassword", "hashedPassword")).thenReturn(true);
             when(jwtService.generateAccessToken(activeUser)).thenReturn("access-token-abc");
+            when(jwtService.revokeAllUserTokens(activeUser.getId())).thenReturn(Mono.empty());
             when(jwtService.generateRefreshToken(activeUser)).thenReturn(Mono.just("refresh-token-xyz"));
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .assertNext(response -> {
                         assertThat(response.accessToken()).isEqualTo("access-token-abc");
                         assertThat(response.refreshToken()).isEqualTo("refresh-token-xyz");
@@ -186,7 +206,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("wrongPassword", "hashedPassword")).thenReturn(false);
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -200,7 +220,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(activeUser));
             when(passwordEncoder.matches("correctPassword", "hashedPassword")).thenReturn(true);
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("belum aktif"))
                     .verify();
@@ -213,7 +233,7 @@ class AuthServiceTest {
 
             when(userRepository.findByEmail("unknown@example.com")).thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.login(request))
+            StepVerifier.create(authService.login(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -234,7 +254,7 @@ class AuthServiceTest {
             when(notificationService.sendNotification(anyString(), anyString(), anyString()))
                     .thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.requestForgotPassword(request))
+            StepVerifier.create(authService.requestForgotPassword(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("OTP pemulihan"))
                     .verifyComplete();
         }
@@ -246,7 +266,7 @@ class AuthServiceTest {
 
             when(userRepository.findByEmail("unknown@example.com")).thenReturn(Mono.empty());
 
-            StepVerifier.create(authService.requestForgotPassword(request))
+            StepVerifier.create(authService.requestForgotPassword(request, null))
                     .expectError(UsernameNotFoundException.class)
                     .verify();
         }
@@ -278,7 +298,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.save(any(OtpVerification.class)))
                     .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-            StepVerifier.create(authService.resetPassword(request))
+            StepVerifier.create(authService.resetPassword(request, null))
                     .assertNext(response -> assertThat(response.response()).contains("berhasil diperbarui"))
                     .verifyComplete();
         }
@@ -298,7 +318,7 @@ class AuthServiceTest {
             when(otpVerificationRepository.findLatestUnverified("test@example.com", "FORGOT_PASSWORD"))
                     .thenReturn(Mono.just(expiredOtp));
 
-            StepVerifier.create(authService.resetPassword(request))
+            StepVerifier.create(authService.resetPassword(request, null))
                     .expectErrorMatches(t -> t instanceof IllegalArgumentException &&
                             t.getMessage().contains("kadaluarsa"))
                     .verify();

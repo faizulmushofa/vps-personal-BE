@@ -1,0 +1,210 @@
+package io.github.faizul.storage.upload.local.service.impl;
+
+import io.github.faizul.activity.service.UserActivityService;
+import io.github.faizul.storage.file.model.File;
+import io.github.faizul.storage.file.repository.FileRepository;
+import io.github.faizul.storage.upload.model.FileStatus;
+import io.github.faizul.storage.upload.local.service.StorageNodeUploadService;
+import io.github.faizul.storage.upload.model.UploadSession;
+import io.github.faizul.storage.upload.repository.UploadSessionRepository;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.storage.file.dtos.UploadSessionResponse;
+import io.github.faizul.storage.file.dtos.InitRequest;
+import io.github.faizul.storage.file.dtos.InitResponse;
+import io.github.faizul.infra.config.StorageConfig;
+import io.github.faizul.storage.uploadunit.model.Chunk;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileSystemUtils;
+import java.util.NoSuchElementException;
+import org.springframework.security.access.AccessDeniedException;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.UUID;
+
+import io.github.faizul.user.repository.UserRepository;
+import io.github.faizul.user.model.User;
+
+@Service("storageNodeUploadService")
+@Transactional
+@RequiredArgsConstructor
+public class StorageNodeUploadServiceImpl implements StorageNodeUploadService {
+
+    private final FileRepository fileRepository;
+    private final UploadSessionRepository uploadSessionRepository;
+    private final CurrentUserContext currentUserContext;
+    private final Scheduler fileCleanupScheduler;
+    private final StorageConfig storageConfig;
+    private final UserRepository userRepository;
+    private final UserActivityService userActivityService;
+
+    @Override
+    public Mono<InitResponse> create(InitRequest request) {
+        UUID fileId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        String extension = "";
+        int lastDot = request.fileName().lastIndexOf(".");
+        if (lastDot != -1) {
+            extension = request.fileName().substring(lastDot);
+        }
+
+        String storageName = UUID.randomUUID() + extension;
+        return currentUserContext.getUserId()
+                .flatMap(userId -> userRepository.findById(userId)
+                        .switchIfEmpty(Mono.error(new NoSuchElementException("User Not Found")))
+                        .flatMap(user -> {
+                            Mono<User> activeUserMono = Mono.just(user);
+                            if (user.getSubscriptionExpiresAt() != null && user.getSubscriptionExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                                user.setSubscriptionTier("FREEMIUM");
+                                user.setStorageQuota(1073741824L);
+                                user.setSubscriptionExpiresAt(null);
+                                activeUserMono = userRepository.save(user);
+                            }
+                            return activeUserMono;
+                        })
+                        .flatMap(user -> {
+                            Mono<Void> quotaCheck = fileRepository.calculateUsedStorageByUserId(userId)
+                                    .flatMap(usedStorage -> {
+                                        long totalSize = request.totalSize();
+                                        long quota = user.getStorageQuota() != null ? user.getStorageQuota() : 1073741824L;
+                                        if (usedStorage > quota) {
+                                            return Mono.error(new IllegalArgumentException(
+                                                    "Kapasitas penyimpanan Anda sudah melebihi batas. Harap upgrade paket Anda!"));
+                                        }
+                                        if (usedStorage + totalSize > quota) {
+                                            return Mono.error(new IllegalArgumentException(
+                                                    "Kapasitas penyimpanan tidak mencukupi untuk file ini!"));
+                                        }
+                                        return Mono.empty();
+                                    });
+
+                            return quotaCheck.then(Mono.defer(() -> {
+                                String tempPath = storageConfig.tempDir(userId, fileId).toString();
+                                File file = File.builder()
+                                        .id(fileId)
+                                        .userId(userId)
+                                        .originalFileName(request.fileName())
+                                        .storageName(storageName)
+                                        .size(request.totalSize())
+                                        .provider("STORAGE_NODE")
+                                        .folderId(request.folderId() != null && !request.folderId().isBlank() ? UUID.fromString(request.folderId()) : null)
+                                        .build();
+
+                                UploadSession session = UploadSession.builder()
+                                        .id(sessionId)
+                                        .fileId(fileId)
+                                        .tempPath(tempPath)
+                                        .totalChunks(Chunk.calculateTotalChunks(request.totalSize()))
+                                        .uploadedChunks(0)
+                                        .status(FileStatus.UPLOADING)
+                                        .build();
+
+                                return fileRepository.save(file)
+                                        .then(uploadSessionRepository.save(session))
+                                        .thenReturn(file);
+                            }));
+                        }))
+                .map(file -> new InitResponse(file.getId(), file.getOriginalFileName()));
+    }
+
+    @Override
+    public Mono<InitResponse> createWithLog(InitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> create(request)
+                        .flatMap(response -> userActivityService.log(userId, "UPLOAD_INIT", "Mengunggah berkas: " + request.fileName(), exchange)
+                                .thenReturn(response))
+                );
+    }
+
+    private Mono<UploadSession> getValidSession(UUID fileId, Long userId) {
+        return fileRepository.findById(fileId)
+                .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan")))
+                .flatMap(file -> {
+                    if (!file.getUserId().equals(userId)) {
+                        return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunggah berkas ini"));
+                    }
+                    return uploadSessionRepository.findByFileId(fileId)
+                            .switchIfEmpty(Mono.error(new NoSuchElementException("Sesi unggah tidak ditemukan")));
+                });
+    }
+
+    @Override
+    public Mono<Void> updateUploadProgress(UUID fileId, int receivedChunks) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> getValidSession(fileId, userId))
+                .flatMap(session -> {
+                    session.setUploadedChunks(receivedChunks);
+
+                    if (session.getStatus() != FileStatus.UPLOADING) {
+                        session.setStatus(FileStatus.UPLOADING);
+                    }
+
+                    return uploadSessionRepository.save(session);
+                })
+                .then();
+    }
+
+    @Override
+    public Mono<Void> markAsCompleted(UUID fileId) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> getValidSession(fileId, userId))
+                .flatMap(session -> {
+                    session.setStatus(FileStatus.COMPLETED);
+                    session.setUploadedChunks(session.getTotalChunks());
+                    session.setCompletedAt(Instant.now());
+
+                    return uploadSessionRepository.save(session);
+                })
+                .then();
+    }
+
+    @Override
+    public Mono<Void> cancelUpload(UUID fileId) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> getValidSession(fileId, userId))
+                .flatMap(session -> {
+                    session.setStatus(FileStatus.CANCELED);
+
+                    return uploadSessionRepository.save(session)
+                            .flatMap(savedSession -> Mono.<Void>fromRunnable(() -> {
+                                try {
+                                    FileSystemUtils.deleteRecursively(Paths.get(savedSession.getTempPath()));
+                                } catch (Exception e) {
+                                    // silently ignore temp-dir cleanup failures during cancel
+                                }
+                            })
+                                    .subscribeOn(fileCleanupScheduler)
+                                    .thenReturn(savedSession));
+                })
+                .then();
+    }
+
+    @Override
+    public Mono<Void> cancelUploadWithLog(UUID fileId, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> cancelUpload(fileId)
+                        .then(userActivityService.log(userId, "UPLOAD_CANCEL", "Membatalkan unggah berkas ID: " + fileId, exchange))
+                        .then()
+                );
+    }
+
+    @Override
+    public Mono<UploadSessionResponse> getStatus(UUID fileId) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> getValidSession(fileId, userId))
+                .map(session -> new UploadSessionResponse(
+                        session.getId(),
+                        session.getFileId(),
+                        session.getUploadedChunks(),
+                        session.getTotalChunks(),
+                        session.getStatus(),
+                        session.getCreatedAt(),
+                        session.getCompletedAt()));
+    }
+}

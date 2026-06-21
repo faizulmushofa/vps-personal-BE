@@ -1,11 +1,18 @@
 package io.github.faizul.admin;
 
-import io.github.faizul.activity.UserActivity;
-import io.github.faizul.activity.UserActivityService;
+import io.github.faizul.activity.dtos.UserActivityResponse;
+import io.github.faizul.activity.service.UserActivityService;
 import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
-import io.github.faizul.setting.AppSetting;
-import io.github.faizul.setting.AppSettingService;
+import io.github.faizul.security.filter.CurrentUserContext;
+import io.github.faizul.setting.model.AppSetting;
+import io.github.faizul.setting.service.AppSettingService;
+import io.github.faizul.user.dtos.UserDto;
+import io.github.faizul.user.model.SubscriptionRequest;
+import io.github.faizul.user.service.SubscriptionRequestService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
+
 
 @RestController
 @RequestMapping("/api/admin")
@@ -24,7 +31,8 @@ public class AdminController {
     private final AdminService adminService;
     private final AppSettingService appSettingService;
     private final UserActivityService userActivityService;
-    private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
+    private final CurrentUserContext currentUserContext;
+    private final SubscriptionRequestService subscriptionRequestService;
 
     @GetMapping("/settings")
     public Flux<AppSetting> getSettings() {
@@ -46,7 +54,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/status")
-    public Mono<Void> toggleUserStatus(@PathVariable Long id, @RequestBody ToggleStatusRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> toggleUserStatus(@PathVariable Long id, @Valid @RequestBody ToggleStatusRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.toggleUserStatus(id, request.isActive())
                         .then(userActivityService.log(adminId, "TOGGLE_USER_STATUS", 
@@ -56,7 +64,7 @@ public class AdminController {
     }
 
     @PutMapping("/users/{id}/ai-limit")
-    public Mono<Void> updateUserAiLimit(@PathVariable Long id, @RequestBody UpdateAiLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+    public Mono<Void> updateUserAiLimit(@PathVariable Long id, @Valid @RequestBody UpdateAiLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
         return currentUserContext.getUserId()
                 .flatMap(adminId -> adminService.updateUserAiLimit(id, request.aiLimit())
                         .then(userActivityService.log(adminId, "UPDATE_USER_AI_LIMIT", 
@@ -66,11 +74,11 @@ public class AdminController {
     }
 
     @GetMapping("/activities")
-    public Flux<UserActivity> getUserActivities(
+    public Flux<UserActivityResponse> getUserActivities(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return userActivityService.getAllActivities(PageRequest.of(page, size));
+        return userActivityService.getAllActivitiesWithUserDetails(PageRequest.of(page, size));
     }
 
     @GetMapping("/ai/token-stats")
@@ -78,7 +86,64 @@ public class AdminController {
         return adminService.getAiTokenStats();
     }
 
+    @PutMapping("/users/{id}/migration-limit")
+    public Mono<Void> updateUserMigrationLimit(@PathVariable Long id, @Valid @RequestBody UpdateMigrationLimitRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> adminService.updateUserMigrationLimit(id, request.migrationLimit())
+                        .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_LIMIT", 
+                                "Mengubah batas migrasi harian user (ID: " + id + ") menjadi " + request.migrationLimit() + " request", exchange))
+                        .then()
+                );
+    }
+
+    @PutMapping("/users/{id}/migration-max-size")
+    public Mono<Void> updateUserMigrationMaxSize(@PathVariable Long id, @Valid @RequestBody UpdateMigrationMaxSizeRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> adminService.updateUserMigrationMaxSize(id, request.maxFileSize())
+                        .then(userActivityService.log(adminId, "UPDATE_USER_MIGRATION_MAX_SIZE", 
+                                "Mengubah batas ukuran migrasi maks user (ID: " + id + ") menjadi " + request.maxFileSize() + " bytes", exchange))
+                        .then()
+                );
+    }
+
+    @GetMapping("/subscription-requests")
+    public Flux<SubscriptionRequest> getSubscriptionRequests() {
+        return subscriptionRequestService.getPendingRequests();
+    }
+
+    @PostMapping("/subscription-requests/{id}/approve")
+    public Mono<UserDto> approveSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.approveRequest(id, exchange)
+                        .flatMap(userDto -> userActivityService.log(adminId, "APPROVE_SUBSCRIPTION", 
+                                "Menyetujui permintaan upgrade paket pengguna (ID: " + userDto.id() + ", Tier: " + userDto.subscriptionTier() + ")", exchange)
+                                .thenReturn(userDto))
+                );
+    }
+
+    @PostMapping("/subscription-requests/{id}/reject")
+    public Mono<SubscriptionRequest> rejectSubscriptionRequest(@PathVariable Long id, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.rejectRequest(id, exchange)
+                        .flatMap(req -> userActivityService.log(adminId, "REJECT_SUBSCRIPTION", 
+                                "Menolak permintaan upgrade paket pengguna (ID: " + req.getUserId() + ", Tier: " + req.getRequestedTier() + ")", exchange)
+                                .thenReturn(req))
+                );
+    }
+
+    @PutMapping("/users/{id}/subscription")
+    public Mono<UserDto> directUpdateSubscription(@PathVariable Long id, @RequestParam String tier, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(adminId -> subscriptionRequestService.directUpdateSubscription(id, tier, exchange)
+                        .flatMap(userDto -> userActivityService.log(adminId, "DIRECT_UPDATE_SUBSCRIPTION", 
+                                "Mengubah paket langganan pengguna secara langsung (ID: " + id + ", Tier: " + tier + ")", exchange)
+                                .thenReturn(userDto))
+                );
+    }
+
     // Inner request records
-    public record ToggleStatusRequest(Boolean isActive) {}
-    public record UpdateAiLimitRequest(Integer aiLimit) {}
+    public record ToggleStatusRequest(@NotNull(message = "Status aktif wajib diisi") Boolean isActive) {}
+    public record UpdateAiLimitRequest(@NotNull(message = "AI limit wajib diisi") Integer aiLimit) {}
+    public record UpdateMigrationLimitRequest(@NotNull(message = "Migration limit wajib diisi") Integer migrationLimit) {}
+    public record UpdateMigrationMaxSizeRequest(@NotNull(message = "Max file size wajib diisi") Long maxFileSize) {}
 }

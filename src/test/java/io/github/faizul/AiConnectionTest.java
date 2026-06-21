@@ -1,12 +1,13 @@
 package io.github.faizul;
 
-import io.github.faizul.Ai.client.GeminiService;
-import io.github.faizul.Ai.client.GroqService;
+import io.github.faizul.ai.service.client.GroqService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import reactor.test.StepVerifier;
+import org.springframework.core.env.Environment;
 import java.time.Duration;
+import java.util.List;
+import io.github.faizul.security.auth.dtos.Response;
 
 @SpringBootTest
 public class AiConnectionTest {
@@ -15,68 +16,59 @@ public class AiConnectionTest {
     private GroqService groqService;
 
     @Autowired
-    private GeminiService geminiService;
+    private Environment environment;
+
+    private static final List<String> VALID_MODELS = List.of(
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "qwen/qwen3-coder:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free"
+    );
 
     @Test
     public void testAllAiConnections() {
+        String apiKey = environment.getProperty("spring.ai.openai.api-key");
+        if (apiKey == null || apiKey.trim().isEmpty() || "dummy-openrouter-key".equals(apiKey)) {
+            System.out.println("\n>>> ================================================= <<<");
+            System.out.println(">>> SKIPPING AI CONNECTION INTEGRATION TESTS          <<<");
+            System.out.println(">>> Reason: OPEN_ROUTER_API_KEY is not set or dummy  <<<");
+            System.out.println(">>> ================================================= <<<\n");
+            return;
+        }
+
         System.out.println("\n>>> ================================================= <<<");
         System.out.println(">>> STARTING AI CONNECTION INTEGRATION TESTS          <<<");
         System.out.println(">>> ================================================= <<<\n");
 
-        // 1. Summary Primary: qwen/qwen3-next-80b-a3b-instruct
-        System.out.println(">>> 1. Testing Summary Primary (OpenRouter): qwen/qwen3-next-80b-a3b-instruct");
-        try {
-            groqService.generate("Say hello briefly", "Hello", "qwen/qwen3-next-80b-a3b-instruct")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 2. Chat PDF Primary: meta-llama/llama-3.3-70b-instruct
-        System.out.println("\n>>> 2. Testing Chat PDF Primary (OpenRouter): meta-llama/llama-3.3-70b-instruct");
-        try {
-            groqService.generate("Say hello briefly", "Hello", "meta-llama/llama-3.3-70b-instruct")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 3. Summary Fallback: gemini-2.5-flash
-        System.out.println("\n>>> 3. Testing Summary Fallback (Gemini Native): gemini-2.5-flash");
-        try {
-            geminiService.generate("Say hello briefly", "Hello", "gemini-2.5-flash")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
-        }
-
-        // 4. Chat PDF Fallback: gemini-3.1-flash-lite
-        System.out.println("\n>>> 4. Testing Chat PDF Fallback (Gemini Native): gemini-3.1-flash-lite");
-        try {
-            geminiService.generate("Say hello briefly", "Hello", "gemini-3.1-flash-lite")
-                    .timeout(Duration.ofSeconds(20))
-                    .doOnNext(res -> System.out.println("    [SUCCESS] Response: " + res.trim()))
-                    .doOnError(err -> System.err.println("    [FAILED] Error: " + err.getMessage()))
-                    .as(StepVerifier::create)
-                    .expectNextCount(1)
-                    .verifyComplete();
-        } catch (Throwable t) {
-            System.err.println("    [FAILED] Exception: " + t.getMessage());
+        for (String model : VALID_MODELS) {
+            System.out.println(">>> Testing OpenRouter Model: " + model);
+            long startTime = System.currentTimeMillis();
+            try {
+                var res = groqService.generate("Say 'Connection OK' briefly", "Test", model)
+                        .timeout(Duration.ofSeconds(20))
+                        .block();
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                if (res != null && res.content() != null) {
+                    System.out.println("    [SUCCESS] Response: " + res.content().trim().replace("\n", " "));
+                    System.out.println("    [TIME] Duration: " + duration + " ms");
+                } else {
+                    System.err.println("    [FAILED] Error: Response is empty");
+                    System.err.println("    [TIME] Duration: " + duration + " ms");
+                }
+            } catch (Throwable t) {
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+                String msg = t.getMessage();
+                if (msg == null) {
+                    msg = t.getClass().getSimpleName();
+                }
+                System.err.println("    [FAILED] Error: " + msg);
+                System.err.println("    [TIME] Duration: " + duration + " ms");
+            }
+            System.out.println("-------------------------------------------------------");
         }
 
         System.out.println("\n>>> ================================================= <<<");

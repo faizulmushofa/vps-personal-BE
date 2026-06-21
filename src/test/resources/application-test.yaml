@@ -1,0 +1,55 @@
+spring:
+  r2dbc:
+    url: r2dbc:h2:mem:///testdb;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+  grpc:
+    security:
+      service-token: test-secret-token
+    client:
+      channels:
+        storage-node:
+          address: static://localhost:9095
+          negotiation-type: plaintext
+  ai:
+    openai:
+      api-key: dummy-openrouter-key
+      base-url: https://openrouter.ai/api/v1
+    google:
+      genai:
+        api-key: dummy-gemini-key
+
+jwt:
+  access-token-expiry-hours: 24
+
+SECRET_KEY: test-secret-key-for-jwt-signing-minimum-32-bytes
+
+google:
+  client-id: dummy-google-client-id
+  client-secret: dummy-google-client-secret
+
+brevo:
+  api-key: dummy-brevo-api-key
+  sender:
+    email: test@example.com
+    name: Premium VPS Cloud Test
+
+app:
+  frontend-url: http://localhost:5173
+  seed:
+    admin-password: TestAdminPass123!@
+    user-password: TestUserPass123!@
+
+llamaparse:
+  api-key: dummy-llamaparse-key
+  enabled: false
+  tier: fast
+
+midtrans:
+  server-key: dummy-midtrans-server-key
+  client-key: dummy-midtrans-client-key
+
