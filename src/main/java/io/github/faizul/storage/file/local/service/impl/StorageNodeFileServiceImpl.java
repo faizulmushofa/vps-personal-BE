@@ -111,7 +111,7 @@ public class StorageNodeFileServiceImpl implements StorageNodeFileService {
                                         .map(File::getId)
                                         .switchIfEmpty(Mono.defer(() -> {
                                                 log.info("Berkas Google Drive {} tidak ditemukan di database lokal. Memicu JIT import...", fileIdString);
-                                                return externalAccountRepository.findByUserIdAndProvider(userId, "GOOGLE")
+                                                return externalAccountRepository.findAllByUserIdAndProvider(userId, "GOOGLE")
                                                                 .flatMap(account -> googleDriveClient.getFileMetadata(account.getId(), fileIdString)
                                                                                 .flatMap(metadata -> {
                                                                                         String name = (String) metadata.get("name");
@@ -135,7 +135,12 @@ public class StorageNodeFileServiceImpl implements StorageNodeFileService {
                                                                                         return fileRepository.save(newFile)
                                                                                                         .map(File::getId);
                                                                                 })
+                                                                                .onErrorResume(err -> {
+                                                                                        log.warn("Gagal mengambil metadata file {} untuk akun id {}: {}", fileIdString, account.getId(), err.getMessage());
+                                                                                        return Mono.empty();
+                                                                                })
                                                                 )
+                                                                .next()
                                                                 .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")));
                                         }));
                 }
