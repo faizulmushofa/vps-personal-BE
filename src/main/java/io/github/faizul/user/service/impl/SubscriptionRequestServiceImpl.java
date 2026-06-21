@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
 import io.github.faizul.user.model.SubscriptionRequest;
 import io.github.faizul.user.repository.SubscriptionRequestRepository;
+import io.github.faizul.user.repository.AcademicDomainRepository;
+import io.github.faizul.user.model.AcademicDomain;
 
 import io.github.faizul.payment.service.PaymentService;
 import io.github.faizul.payment.config.MidtransConfig;
@@ -35,6 +37,7 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
     private final io.github.faizul.security.filter.CurrentUserContext currentUserContext;
     private final PaymentService paymentService;
     private final MidtransConfig midtransConfig;
+    private final AcademicDomainRepository academicDomainRepository;
 
     @Override
     public Mono<SubscriptionRequest> createRequest(Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange) {
@@ -46,37 +49,60 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
         return userRepository.findById(userId)
                 .switchIfEmpty(Mono.error(new NoSuchElementException("User tidak ditemukan")))
                 .flatMap(user -> {
-                    String email = user.getEmail();
-                    long amount = upperTier.equals("PREMIUM_INDIVIDUAL") ? 20000L : 15000L;
-                    String externalId = "SUB-REQ-" + userId + "-" + System.currentTimeMillis();
-                    String description = "Horizon Cloud Upgrade: Paket Langganan " + (upperTier.equals("PREMIUM_INDIVIDUAL") ? "Premium Individual" : "Premium Academic");
+                    if (upperTier.equals("PREMIUM_ACADEMIC")) {
+                        return academicDomainRepository.findAll()
+                                .map(AcademicDomain::getDomain)
+                                .collectList()
+                                .flatMap(domains -> {
+                                    String email = user.getEmail().toLowerCase();
+                                    boolean hasAcademicDomain = domains.stream().anyMatch(domain -> 
+                                            email.endsWith("." + domain.toLowerCase()) || 
+                                            email.endsWith("@" + domain.toLowerCase())
+                                    );
+                                    boolean isVerified = Boolean.TRUE.equals(user.getStudentVerified());
 
-                    return subscriptionRequestRepository.existsByUserIdAndStatus(userId, "PENDING")
-                            .flatMap(exists -> {
-                                if (exists) {
-                                    return Mono.error(new IllegalArgumentException("Anda masih memiliki permintaan upgrade yang sedang diproses. Silakan selesaikan pembayaran sebelumnya."));
-                                }
-                                return paymentService.createPayment(externalId, amount, email, description)
-                                         .flatMap(transaction -> {
-                                             String token = (String) transaction.get("token");
-                                             String redirectUrl = (String) transaction.get("redirect_url");
+                                    if (!isVerified && !hasAcademicDomain) {
+                                        return Mono.error(new IllegalArgumentException("Anda harus memverifikasi email akademik terlebih dahulu untuk menikmati paket ini."));
+                                    }
+                                    return proceedWithSubscriptionRequest(user, upperTier, userId, tier, exchange);
+                                });
+                    } else {
+                        return proceedWithSubscriptionRequest(user, upperTier, userId, tier, exchange);
+                    }
+                });
+    }
 
-                                             SubscriptionRequest request = SubscriptionRequest.builder()
-                                                     .userId(userId)
-                                                     .requestedTier(upperTier)
-                                                     .status("PENDING")
-                                                     .xenditInvoiceId(token)
-                                                     .invoiceUrl(redirectUrl)
-                                                     .externalId(externalId)
-                                                     .amount(amount)
-                                                     .paymentStatus("pending")
-                                                     .build();
+    private Mono<SubscriptionRequest> proceedWithSubscriptionRequest(User user, String upperTier, Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange) {
+        String email = user.getEmail();
+        long amount = upperTier.equals("PREMIUM_INDIVIDUAL") ? 20000L : 15000L;
+        String externalId = "SUB-REQ-" + userId + "-" + System.currentTimeMillis();
+        String description = "Horizon Cloud Upgrade: Paket Langganan " + (upperTier.equals("PREMIUM_INDIVIDUAL") ? "Premium Individual" : "Premium Academic");
 
-                                             return subscriptionRequestRepository.save(request)
-                                                     .flatMap(savedReq -> userActivityService.log(userId, "CREATE_SUBSCRIPTION_REQUEST", "Mengajukan upgrade paket langganan ke tier: " + tier + " dengan nominal Rp " + amount, exchange)
-                                                             .thenReturn(savedReq));
-                                         });
-                            });
+        return subscriptionRequestRepository.existsByUserIdAndStatus(userId, "PENDING")
+                .flatMap(exists -> {
+                    if (exists) {
+                        return Mono.error(new IllegalArgumentException("Anda masih memiliki permintaan upgrade yang sedang diproses. Silakan selesaikan pembayaran sebelumnya."));
+                    }
+                    return paymentService.createPayment(externalId, amount, email, description)
+                             .flatMap(transaction -> {
+                                 String token = (String) transaction.get("token");
+                                 String redirectUrl = (String) transaction.get("redirect_url");
+
+                                 SubscriptionRequest request = SubscriptionRequest.builder()
+                                         .userId(userId)
+                                         .requestedTier(upperTier)
+                                         .status("PENDING")
+                                         .xenditInvoiceId(token)
+                                         .invoiceUrl(redirectUrl)
+                                         .externalId(externalId)
+                                         .amount(amount)
+                                         .paymentStatus("pending")
+                                         .build();
+
+                                 return subscriptionRequestRepository.save(request)
+                                         .flatMap(savedReq -> userActivityService.log(userId, "CREATE_SUBSCRIPTION_REQUEST", "Mengajukan upgrade paket langganan ke tier: " + tier + " dengan nominal Rp " + amount, exchange)
+                                                 .thenReturn(savedReq));
+                             });
                 });
     }
 

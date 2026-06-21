@@ -84,6 +84,13 @@ public class User {
     @Column("subscription_expires_at")
     private LocalDateTime subscriptionExpiresAt;
 
+    @Column("academic_email")
+    private String academicEmail;
+
+    @Column("student_verified")
+    @Builder.Default
+    private Boolean studentVerified = false;
+
     public SubscriptionPlanType getSubscriptionPlan() {
         return SubscriptionPlanType.getPlan(this.subscriptionTier);
     }

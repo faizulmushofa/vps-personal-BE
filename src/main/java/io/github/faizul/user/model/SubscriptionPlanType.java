@@ -15,7 +15,7 @@ public enum SubscriptionPlanType {
     
     PREMIUM_INDIVIDUAL("Premium Individual", PlanLimits.builder()
         .storageQuota(16106127360L)         // Kapasitas Penyimpanan: 15 GB
-        .maxCloudAccounts(5)                // Maksimal Akun Cloud: 5
+        .maxCloudAccounts(10)               // Maksimal Akun Cloud: 10
         .aiDailyLimit(50)                   // Batas AI per Hari: 50 request
         .migrationDailyLimit(-1)            // Batas Migrasi per Hari: Tanpa Batas (-1)
         .migrationMaxFileSize(-1L)          // Maks. Ukuran File Migrasi: Tanpa Batas (-1)
@@ -25,7 +25,7 @@ public enum SubscriptionPlanType {
     
     PREMIUM_ACADEMIC("Premium Academic", PlanLimits.builder()
         .storageQuota(10737418240L)         // Kapasitas Penyimpanan: 10 GB
-        .maxCloudAccounts(3)                // Maksimal Akun Cloud: 3
+        .maxCloudAccounts(5)                // Maksimal Akun Cloud: 5
         .aiDailyLimit(30)                   // Batas AI per Hari: 30 request
         .migrationDailyLimit(30)            // Batas Migrasi per Hari: 30 kali
         .migrationMaxFileSize(10737418240L) // Maks. Ukuran File Migrasi: 10 GB

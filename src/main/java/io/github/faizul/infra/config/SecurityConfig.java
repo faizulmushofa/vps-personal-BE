@@ -77,6 +77,7 @@ public class SecurityConfig {
                 .authorizeExchange( authorizeExchangeSpec -> {
                     authorizeExchangeSpec
                             .pathMatchers("/", "/index.html", "/styles.css", "/app.js", "/favicon.ico").permitAll()
+                            .pathMatchers("/api/auth/academic/**").authenticated()
                             .pathMatchers("/api/auth/**").permitAll()
                             .pathMatchers("/api/reports").permitAll()
                             .pathMatchers("/api/files/share/public/**").permitAll()
