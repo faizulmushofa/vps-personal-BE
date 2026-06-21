@@ -32,7 +32,7 @@ public class LlamaParseClient {
     @Value("${llamaparse.tier:fast}")
     private String tier;
 
-    @Value("${llamaparse.custom-prompt:}")
+    @Value("${llamaparse.custom-prompt:Extract all text verbatim. Do not summarize or rewrite.}")
     private String customPrompt;
 
     public LlamaParseClient() {
