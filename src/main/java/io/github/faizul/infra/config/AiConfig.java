@@ -9,7 +9,7 @@ import io.github.faizul.ai.model.Summary;
 public class AiConfig {
 
     // Default Temperature
-    public static final double DEFAULT_TEMPERATURE = 0.7;
+    public static final double DEFAULT_TEMPERATURE = 0.5;
 
     // Timeout Configurations (in seconds)
     public static final int PRIMARY_TIMEOUT_SECONDS = 30;
@@ -38,8 +38,9 @@ public class AiConfig {
 
     // System Prompt Rangkuman (Summary)
     public static final String SUMMARY_SYSTEM_PROMPT = 
-            "Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. " +
+            "Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia secara sangat faktual dan akurat. " +
             "Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. " +
+            "PENTING: Jangan membuat-buat informasi (halusinasi) yang tidak ada di dalam teks asli. Anda dilarang keras menambahkan opini, interpretasi, spekulasi, atau fakta baru yang tidak tertulis secara eksplisit. " +
             "Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. " +
             "Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), " +
             "Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"";

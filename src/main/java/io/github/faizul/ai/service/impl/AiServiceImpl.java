@@ -104,7 +104,10 @@ public class AiServiceImpl implements AiService {
                         .flatMap(userId -> quotaAndLogService.checkAndIncrementQuota(userId)
                                 .flatMap(user -> pdfService.extractFile(fileId)
                                         .flatMap(text -> {
-                                            String prompt = "Tolong rangkum teks berikut secara singkat dan jelas dalam Bahasa Indonesia:\n\n" + text;
+                                            String prompt = "Tolong rangkum teks dari dokumen berikut secara singkat, padat, terstruktur, dan jelas dalam Bahasa Indonesia. " +
+                                                            "PENTING: Rangkum HANYA informasi yang benar-benar tertulis di dalam dokumen. Jangan berasumsi, menebak, berspekulasi, atau menambahkan informasi dari luar dokumen (hindari halusinasi). " +
+                                                            "Jika teks dokumen tidak berisi informasi yang dapat dirangkum atau tidak terbaca, abaikan saja.\n\n" +
+                                                            "Teks dokumen:\n" + text;
                                             return Mono.zip(
                                                     appSettingService.getSetting("ai.summary.primary.provider", AiConfig.SUMMARY_PRIMARY_PROVIDER),
                                                     appSettingService.getSetting("ai.summary.primary.model", AiConfig.SUMMARY_PRIMARY_MODEL),

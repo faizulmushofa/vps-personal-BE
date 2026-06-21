@@ -458,7 +458,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .build(),
                 AppSetting.builder()
                         .key("ai.system_prompt")
-                        .value("Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"")
+                        .value("Anda adalah asisten AI yang bertugas merangkum teks atau dokumen dalam Bahasa Indonesia secara sangat faktual dan akurat. Rangkum isi teks/dokumen secara singkat, padat, jelas, dan terstruktur. PENTING: Jangan membuat-buat informasi (halusinasi) yang tidak ada di dalam teks asli. Anda dilarang keras menambahkan opini, interpretasi, spekulasi, atau fakta baru yang tidak tertulis secara eksplisit. Jika dokumen sangat pendek (seperti kartu identitas, sertifikat, atau kuitansi), berikan ringkasan informasi penting secara langsung tanpa menolaknya. Jika input tidak berisi informasi yang dapat dirangkum (misalnya hanya sapaan kosong atau teks acak tanpa makna), Anda WAJIB menjawab: \"Maaf, input tidak dapat diproses.\"")
                         .description("System prompt utama untuk AI")
                         .build(),
                 AppSetting.builder()
@@ -483,6 +483,14 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .build()
         )
         .flatMap(setting -> appSettingRepository.findByKey(setting.getKey())
+                .flatMap(existingSetting -> {
+                    if (!java.util.Objects.equals(setting.getValue(), existingSetting.getValue())) {
+                        log.info("Updating setting: {} to new value...", setting.getKey());
+                        existingSetting.setValue(setting.getValue());
+                        return appSettingRepository.save(existingSetting);
+                    }
+                    return Mono.just(existingSetting);
+                })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("Seeding setting: {}...", setting.getKey());
                     return appSettingRepository.save(setting);

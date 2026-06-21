@@ -55,8 +55,8 @@ app:
 llamaparse:
   api-key: ${LLAMA_CLOUD_API_KEY:}
   enabled: ${LLAMAPARSE_ENABLED:true}
-  tier: ${LLAMAPARSE_TIER:fast}
-  custom-prompt: ${LLAMAPARSE_CUSTOM_PROMPT:Ekstrak semua teks secara verbatim (kata per kata), pertahankan urutan dan format aslinya. Jangan merangkum, menjelaskan, atau menafsirkan teks; berikan transkripsi literal.}
+  tier: ${LLAMAPARSE_TIER:cost_effective}
+  custom-prompt: ${LLAMAPARSE_CUSTOM_PROMPT:Extract all text from the document verbatim. Do not summarize, explain, interpret, or rewrite any content. Do not add any text, commentary, or info not in the original document. Output only the raw extracted text and tables. Dilarang keras menuliskan informasi tambahan, ringkasan, penjelasan, opini, atau teks yang tidak ada pada dokumen asli. Lakukan ekstraksi kata per kata (verbatim) sesuai dokumen asli.}
 
 midtrans:
   server-key: ${MIDTRANS_SERVER_KEY:}
