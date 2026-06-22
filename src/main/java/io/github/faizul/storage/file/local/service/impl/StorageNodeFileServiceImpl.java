@@ -135,7 +135,12 @@ public class StorageNodeFileServiceImpl implements StorageNodeFileService {
                                                                                         return fileRepository.save(newFile)
                                                                                                         .map(File::getId);
                                                                                 })
+                                                                                .onErrorResume(err -> {
+                                                                                        log.warn("Gagal mengambil metadata file {} untuk akun id {}: {}", fileIdString, account.getId(), err.getMessage());
+                                                                                        return Mono.empty();
+                                                                                })
                                                                 )
+                                                                .next()
                                                                 .switchIfEmpty(Mono.error(new NoSuchElementException("Berkas tidak ditemukan!")));
                                         }));
                 }
