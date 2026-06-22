@@ -10,5 +10,7 @@ public record PlanLimits(
     int migrationDailyLimit,
     long migrationMaxFileSize,
     int publicShareLimit,
-    int privateShareLimit
+    int privateShareLimit,
+    int maxWorkspaces,
+    int maxInputTokensPerRequest
 ) {}

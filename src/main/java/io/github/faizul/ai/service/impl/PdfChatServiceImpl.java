@@ -11,7 +11,9 @@ import io.github.faizul.ai.service.cache.SummaryCacheService;
 import io.github.faizul.ai.service.fallback.AiFallbackService;
 import io.github.faizul.infra.config.AiConfig;
 import io.github.faizul.security.filter.CurrentUserContext;
-import io.github.faizul.setting.service.AppSettingService;
+import io.github.faizul.ai.service.AiConfigService;
+import io.github.faizul.ai.dtos.AiSettings;
+import io.github.faizul.storage.file.local.service.StorageNodeFileService;
 import java.time.Duration;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,10 +32,11 @@ public class PdfChatServiceImpl implements PdfChatService {
     private final SummaryCacheService cacheService;
     private final AiService aiService;
     private final Scheduler aiScheduler;
-    private final AppSettingService appSettingService;
+    private final AiConfigService aiConfigService;
     private final AiQuotaAndLogService quotaAndLogService;
     private final CurrentUserContext currentUserContext;
     private final UserActivityService userActivityService;
+    private final StorageNodeFileService storageNodeFileService;
 
     @Override
     public Mono<AiResponse> chatPdf(UUID fileId, AiRequest request, org.springframework.web.server.ServerWebExchange exchange) {
@@ -49,33 +52,17 @@ public class PdfChatServiceImpl implements PdfChatService {
                                     }));
 
                             return contextSummaryMono.flatMap(text -> {
-                                return Mono.zip(
-                                        appSettingService.getSetting("ai.chat.primary.provider", AiConfig.CHAT_PRIMARY_PROVIDER),
-                                        appSettingService.getSetting("ai.chat.primary.model", AiConfig.CHAT_PRIMARY_MODEL),
-                                        appSettingService.getSetting("ai.chat.fallback.provider", AiConfig.CHAT_FALLBACK_PROVIDER),
-                                        appSettingService.getSetting("ai.chat.fallback.model", AiConfig.CHAT_FALLBACK_MODEL),
-                                        appSettingService.getSetting("ai.chat.fallback.provider.two", AiConfig.CHAT_FALLBACK_PROVIDER_TWO),
-                                        appSettingService.getSetting("ai.chat.fallback.model.two", AiConfig.CHAT_FALLBACK_MODEL_TWO),
-                                        appSettingService.getSetting("ai.chat.system_prompt", AiConfig.CHAT_SYSTEM_PROMPT)
-                                ).flatMap(tuple -> {
-                                    String primaryProvider = tuple.getT1();
-                                    String primaryModel = tuple.getT2();
-                                    String fallback1Provider = tuple.getT3();
-                                    String fallback1Model = tuple.getT4();
-                                    String fallback2Provider = tuple.getT5();
-                                    String fallback2Model = tuple.getT6();
-                                    String chatSystemPrompt = tuple.getT7();
-
-                                    String systemPrompt = chatSystemPrompt + "\n\nRingkasan Dokumen:\n" + text;
+                                return aiConfigService.getChatSettings().flatMap(settings -> {
+                                    String systemPrompt = settings.systemPrompt() + "\n\nRingkasan Dokumen:\n" + text;
 
                                     return aiFallbackService.callWithFallback(
-                                            primaryProvider, primaryModel,
-                                            fallback1Provider, fallback1Model,
-                                            fallback2Provider, fallback2Model,
+                                            settings.primaryProvider(), settings.primaryModel(),
+                                            settings.fallbackProvider(), settings.fallbackModel(),
+                                            settings.fallback2Provider(), settings.fallback2Model(),
                                             systemPrompt, request.teks()
                                     )
                                     .flatMap(result -> quotaAndLogService.logTokenUsage(
-                                            userId, "CHAT", primaryProvider, primaryModel, result)
+                                            userId, "CHAT", settings.primaryProvider(), settings.primaryModel(), result)
                                             .onErrorResume(err -> {
                                                 log.warn("Gagal mencatat penggunaan token AI untuk userId: {}", userId, err);
                                                 return Mono.empty();
@@ -84,7 +71,7 @@ public class PdfChatServiceImpl implements PdfChatService {
                                                     .onErrorResume(err -> {
                                                         log.warn("Gagal mencatat aktivitas AI_CHAT_PDF untuk userId: {}", userId, err);
                                                         return Mono.empty();
-                                                    })
+                                                     })
                                             ))
                                             .thenReturn(result.content())
                                     );
@@ -95,5 +82,12 @@ public class PdfChatServiceImpl implements PdfChatService {
                 .subscribeOn(aiScheduler)
                 .map(AiResponse::new)
                 .doOnError(e -> log.error("Gagal melakukan chat PDF untuk fileId: {}", fileId, e));
+    }
+
+    @Override
+    public Mono<AiResponse> chatPdf(String fileId, AiRequest request, org.springframework.web.server.ServerWebExchange exchange) {
+        return currentUserContext.getUserId()
+                .flatMap(userId -> storageNodeFileService.resolveFileId(fileId, userId))
+                .flatMap(uuid -> chatPdf(uuid, request, exchange));
     }
 }

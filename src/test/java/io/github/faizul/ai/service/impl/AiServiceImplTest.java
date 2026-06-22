@@ -8,7 +8,9 @@ import io.github.faizul.ai.service.client.AiGenerationResult;
 import io.github.faizul.ai.service.fallback.AiFallbackService;
 import io.github.faizul.extraction.service.ExtractionService;
 import io.github.faizul.security.filter.CurrentUserContext;
-import io.github.faizul.setting.service.AppSettingService;
+import io.github.faizul.ai.service.AiConfigService;
+import io.github.faizul.ai.dtos.AiSettings;
+import io.github.faizul.storage.file.local.service.StorageNodeFileService;
 import io.github.faizul.storage.file.model.File;
 import io.github.faizul.user.model.User;
 import java.util.UUID;
@@ -36,10 +38,11 @@ class AiServiceImplTest {
     @Mock private AiFallbackService aiFallbackService;
     @Mock private SummaryCacheService cacheService;
     @Mock private ExtractionService pdfService;
-    @Mock private AppSettingService appSettingService;
+    @Mock private AiConfigService aiConfigService;
     @Mock private AiQuotaAndLogService quotaAndLogService;
     @Mock private CurrentUserContext currentUserContext;
     @Mock private UserActivityService userActivityService;
+    @Mock private StorageNodeFileService storageNodeFileService;
 
     private AiServiceImpl aiService;
 
@@ -48,17 +51,19 @@ class AiServiceImplTest {
         Scheduler testScheduler = Schedulers.immediate();
         aiService = new AiServiceImpl(
                 aiFallbackService, cacheService, pdfService, testScheduler,
-                appSettingService, quotaAndLogService, currentUserContext, userActivityService
+                aiConfigService, quotaAndLogService, currentUserContext, userActivityService,
+                storageNodeFileService
         );
 
         User mockUser = new User();
         mockUser.setId(1L);
         mockUser.setSubscriptionTier("FREEMIUM");
 
+        AiSettings settings = new AiSettings("gemini", "gemini-1.5-flash", "groq", "llama3-8b", "groq", "llama3-70b", "System prompt");
+
         lenient().when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         lenient().when(quotaAndLogService.checkAndIncrementQuota(anyLong())).thenReturn(Mono.just(mockUser));
-        lenient().when(appSettingService.getSetting(anyString(), anyString()))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(1)));
+        lenient().when(aiConfigService.getSummarySettings()).thenReturn(Mono.just(settings));
         lenient().when(quotaAndLogService.logTokenUsage(anyLong(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(Mono.empty());
         lenient().when(userActivityService.log(anyLong(), anyString(), anyString(), any()))
@@ -173,6 +178,22 @@ class AiServiceImplTest {
             StepVerifier.create(aiService.summarizePdf(fileId, null))
                     .expectErrorMatches(t -> t.getMessage().contains("File not found"))
                     .verify();
+        }
+
+        @Test
+        @DisplayName("should resolve file ID and summarize pdf")
+        void summarizePdf_byStringId() {
+            String fileId = "some-file-id";
+            UUID resolvedUuid = UUID.randomUUID();
+
+            when(storageNodeFileService.resolveFileId(fileId, 1L)).thenReturn(Mono.just(resolvedUuid));
+            when(cacheService.getCachedSummary(resolvedUuid)).thenReturn(Mono.just("Resolved summary"));
+
+            StepVerifier.create(aiService.summarizePdf(fileId, null))
+                    .assertNext(response -> assertThat(response.response()).isEqualTo("Resolved summary"))
+                    .verifyComplete();
+
+            verify(storageNodeFileService).resolveFileId(fileId, 1L);
         }
     }
 }

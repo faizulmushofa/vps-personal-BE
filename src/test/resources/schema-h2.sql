@@ -167,3 +167,50 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS student_verified BOOLEAN DEFAULT FALS
 
 INSERT INTO academic_domains (domain) SELECT 'ac.id' WHERE NOT EXISTS (SELECT 1 FROM academic_domains WHERE domain = 'ac.id');
 INSERT INTO academic_domains (domain) SELECT 'edu' WHERE NOT EXISTS (SELECT 1 FROM academic_domains WHERE domain = 'edu');
+
+CREATE TABLE IF NOT EXISTS ai_workspaces (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_workspace_files (
+    workspace_id UUID NOT NULL REFERENCES ai_workspaces(id) ON DELETE CASCADE,
+    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (workspace_id, file_id)
+);
+
+CREATE TABLE IF NOT EXISTS ai_workspace_notes (
+    id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES ai_workspaces(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_workspace_chats (
+    id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES ai_workspaces(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ai_workspace_messages (
+    id UUID PRIMARY KEY,
+    chat_id UUID NOT NULL REFERENCES ai_workspace_chats(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS file_extractions (
+    file_id UUID PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    extracted_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

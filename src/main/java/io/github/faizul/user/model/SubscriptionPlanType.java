@@ -11,6 +11,8 @@ public enum SubscriptionPlanType {
         .migrationMaxFileSize(268435456L)   // Maks. Ukuran File Migrasi: 256 MB
         .publicShareLimit(30)               // Batas Link Share Publik Aktif: 30 link
         .privateShareLimit(30)              // Batas Share Privat Aktif: 30 email
+        .maxWorkspaces(2)                   // Batas Maksimal Workspace: 2
+        .maxInputTokensPerRequest(20000)    // Maksimal Token Input per Request: 20.000 (~80rb Karakter)
         .build()),
     
     PREMIUM_INDIVIDUAL("Premium Individual", PlanLimits.builder()
@@ -21,6 +23,8 @@ public enum SubscriptionPlanType {
         .migrationMaxFileSize(-1L)          // Maks. Ukuran File Migrasi: Tanpa Batas (-1)
         .publicShareLimit(-1)               // Batas Link Share Publik Aktif: Tanpa Batas (-1)
         .privateShareLimit(-1)              // Batas Share Privat Aktif: Tanpa Batas (-1)
+        .maxWorkspaces(-1)                  // Batas Maksimal Workspace: Tanpa Batas (-1)
+        .maxInputTokensPerRequest(150000)   // Maksimal Token Input per Request: 150.000 (~600rb Karakter)
         .build()),
     
     PREMIUM_ACADEMIC("Premium Academic", PlanLimits.builder()
@@ -31,6 +35,8 @@ public enum SubscriptionPlanType {
         .migrationMaxFileSize(10737418240L) // Maks. Ukuran File Migrasi: 10 GB
         .publicShareLimit(100)              // Batas Link Share Publik Aktif: 100 link
         .privateShareLimit(100)             // Batas Share Privat Aktif: 100 email
+        .maxWorkspaces(15)                  // Batas Maksimal Workspace: 15
+        .maxInputTokensPerRequest(75000)    // Maksimal Token Input per Request: 75.000 (~300rb Karakter)
         .build());
 
     private final String displayName;
