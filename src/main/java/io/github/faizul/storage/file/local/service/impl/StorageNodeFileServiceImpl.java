@@ -111,7 +111,7 @@ public class StorageNodeFileServiceImpl implements StorageNodeFileService {
                                         .map(File::getId)
                                         .switchIfEmpty(Mono.defer(() -> {
                                                 log.info("Berkas Google Drive {} tidak ditemukan di database lokal. Memicu JIT import...", fileIdString);
-                                                return externalAccountRepository.findAllByUserIdAndProvider(userId, "GOOGLE")
+                                                return externalAccountRepository.findByUserIdAndProvider(userId, "GOOGLE")
                                                                 .flatMap(account -> googleDriveClient.getFileMetadata(account.getId(), fileIdString)
                                                                                 .flatMap(metadata -> {
                                                                                         String name = (String) metadata.get("name");
