@@ -12,5 +12,6 @@ public record PlanLimits(
     int publicShareLimit,
     int privateShareLimit,
     int maxWorkspaces,
-    int maxInputTokensPerRequest
+    int maxInputTokensPerRequest,
+    int maxMonthlyTokens
 ) {}
