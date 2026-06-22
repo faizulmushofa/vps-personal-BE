@@ -12,4 +12,6 @@ public interface AiService {
 
     Mono<AiResponse> summarizePdf(UUID fileId, org.springframework.web.server.ServerWebExchange exchange);
 
+    Mono<AiResponse> summarizePdf(String fileId, org.springframework.web.server.ServerWebExchange exchange);
+
 }

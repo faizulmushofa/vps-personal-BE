@@ -9,7 +9,9 @@ import io.github.faizul.ai.service.cache.SummaryCacheService;
 import io.github.faizul.ai.service.client.AiGenerationResult;
 import io.github.faizul.ai.service.fallback.AiFallbackService;
 import io.github.faizul.security.filter.CurrentUserContext;
-import io.github.faizul.setting.service.AppSettingService;
+import io.github.faizul.ai.service.AiConfigService;
+import io.github.faizul.ai.dtos.AiSettings;
+import io.github.faizul.storage.file.local.service.StorageNodeFileService;
 import io.github.faizul.user.model.User;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,10 +37,11 @@ class PdfChatServiceImplTest {
     @Mock private AiFallbackService aiFallbackService;
     @Mock private SummaryCacheService cacheService;
     @Mock private AiService aiService;
-    @Mock private AppSettingService appSettingService;
+    @Mock private AiConfigService aiConfigService;
     @Mock private AiQuotaAndLogService quotaAndLogService;
     @Mock private CurrentUserContext currentUserContext;
     @Mock private UserActivityService userActivityService;
+    @Mock private StorageNodeFileService storageNodeFileService;
 
     private PdfChatServiceImpl pdfChatService;
 
@@ -47,8 +50,8 @@ class PdfChatServiceImplTest {
         Scheduler testScheduler = Schedulers.immediate();
         pdfChatService = new PdfChatServiceImpl(
                 aiFallbackService, cacheService, aiService, testScheduler,
-                appSettingService, quotaAndLogService, currentUserContext,
-                userActivityService
+                aiConfigService, quotaAndLogService, currentUserContext,
+                userActivityService, storageNodeFileService
         );
     }
 
@@ -58,18 +61,12 @@ class PdfChatServiceImplTest {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this document about?");
         User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
+        AiSettings settings = new AiSettings("gemini", "gemini-1.5-pro", "groq", "llama3-8b", "groq", "poolside/laguna-xs.2:free", "Anda adalah asisten AI...");
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("This document describes cloud storage."));
-
-        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
-        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
-        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI..."));
+        when(aiConfigService.getChatSettings()).thenReturn(Mono.just(settings));
 
         AiGenerationResult mockResult = new AiGenerationResult("This document is about cloud storage systems.", 10, 10);
         when(aiFallbackService.callWithFallback(
@@ -93,19 +90,13 @@ class PdfChatServiceImplTest {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("What is this document about?");
         User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
+        AiSettings settings = new AiSettings("gemini", "gemini-1.5-pro", "groq", "llama3-8b", "groq", "poolside/laguna-xs.2:free", "Anda adalah asisten AI...");
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("Maaf, input tidak dapat diproses."));
         when(aiService.summarizePdf(fileId, null)).thenReturn(Mono.just(new AiResponse("Reprocessed cloud storage summary context")));
-
-        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
-        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
-        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI..."));
+        when(aiConfigService.getChatSettings()).thenReturn(Mono.just(settings));
 
         AiGenerationResult mockResult = new AiGenerationResult("This document is about cloud storage.", 10, 10);
         when(aiFallbackService.callWithFallback(
@@ -148,18 +139,12 @@ class PdfChatServiceImplTest {
         UUID fileId = UUID.randomUUID();
         AiRequest request = new AiRequest("Summarize");
         User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
+        AiSettings settings = new AiSettings("gemini", "gemini-1.5-pro", "groq", "llama3-8b", "groq", "poolside/laguna-xs.2:free", "Anda adalah asisten AI...");
 
         when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
         when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
         when(cacheService.getCachedSummary(fileId)).thenReturn(Mono.just("Some text"));
-
-        when(appSettingService.getSetting(eq("ai.chat.primary.provider"), any())).thenReturn(Mono.just("gemini"));
-        when(appSettingService.getSetting(eq("ai.chat.primary.model"), any())).thenReturn(Mono.just("gemini-1.5-pro"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model"), any())).thenReturn(Mono.just("llama3-8b"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.provider.two"), any())).thenReturn(Mono.just("groq"));
-        when(appSettingService.getSetting(eq("ai.chat.fallback.model.two"), any())).thenReturn(Mono.just("poolside/laguna-xs.2:free"));
-        when(appSettingService.getSetting(eq("ai.chat.system_prompt"), any())).thenReturn(Mono.just("Anda adalah asisten AI yang menjawab..."));
+        when(aiConfigService.getChatSettings()).thenReturn(Mono.just(settings));
 
         when(aiFallbackService.callWithFallback(
                 anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
@@ -168,5 +153,38 @@ class PdfChatServiceImplTest {
         StepVerifier.create(pdfChatService.chatPdf(fileId, request, null))
                 .expectErrorMatches(t -> t.getMessage().contains("AI timeout"))
                 .verify();
+    }
+
+    @Test
+    @DisplayName("should resolve file ID and chat with PDF by String ID")
+    void chatPdf_byStringId() {
+        String fileId = "some-file-id";
+        UUID resolvedUuid = UUID.randomUUID();
+        AiRequest request = new AiRequest("What is this document about?");
+        User user = User.builder().id(1L).subscriptionTier("FREEMIUM").build();
+        AiSettings settings = new AiSettings("gemini", "gemini-1.5-pro", "groq", "llama3-8b", "groq", "poolside/laguna-xs.2:free", "Anda adalah asisten AI...");
+
+        when(currentUserContext.getUserId()).thenReturn(Mono.just(1L));
+        when(storageNodeFileService.resolveFileId(fileId, 1L)).thenReturn(Mono.just(resolvedUuid));
+        when(quotaAndLogService.checkAndIncrementQuota(1L)).thenReturn(Mono.just(user));
+        when(cacheService.getCachedSummary(resolvedUuid)).thenReturn(Mono.just("This document describes cloud storage."));
+        when(aiConfigService.getChatSettings()).thenReturn(Mono.just(settings));
+
+        AiGenerationResult mockResult = new AiGenerationResult("This document is about cloud storage systems.", 10, 10);
+        when(aiFallbackService.callWithFallback(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                contains("cloud storage"), eq("What is this document about?")))
+                .thenReturn(Mono.just(mockResult));
+        when(quotaAndLogService.logTokenUsage(eq(1L), eq("CHAT"), anyString(), anyString(), eq(mockResult)))
+                .thenReturn(Mono.empty());
+        when(userActivityService.log(any(), any(), any(), any()))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(pdfChatService.chatPdf(fileId, request, null))
+                .assertNext(response -> assertThat(response.response())
+                        .isEqualTo("This document is about cloud storage systems."))
+                .verifyComplete();
+
+        verify(storageNodeFileService).resolveFileId(fileId, 1L);
     }
 }
