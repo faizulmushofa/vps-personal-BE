@@ -43,6 +43,13 @@ public class GeminiService implements AiClient {
                 int promptTokens = usage != null && usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0;
                 int generationTokens = usage != null && usage.getCompletionTokens() != null ? usage.getCompletionTokens().intValue() : 0;
 
+                if (promptTokens == 0) {
+                    promptTokens = Math.max(1, (systemPrompt.length() + userMessage.length()) / 4);
+                }
+                if (generationTokens == 0 && content != null) {
+                    generationTokens = Math.max(1, content.length() / 4);
+                }
+
                 log.info("Gemini Native sukses menghasilkan konten. Token: Input={}, Output={}", promptTokens, generationTokens);
                 return new AiGenerationResult(content, promptTokens, generationTokens);
             } catch (Exception e) {

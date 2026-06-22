@@ -135,7 +135,7 @@ public class AdminService {
 
         Flux<TokenHistoryEntry> historyFlux = aiTokenLogRepository.getHistorySince(historyStart)
                 .map(row -> new TokenHistoryEntry(
-                        row.logDate(),
+                        row.logDate() != null ? row.logDate().toString() : "",
                         row.inputTokens(),
                         row.outputTokens(),
                         row.totalTokens()

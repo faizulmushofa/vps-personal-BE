@@ -13,18 +13,18 @@ public interface AiTokenLogRepository extends ReactiveCrudRepository<AiTokenLog,
 
     record TokenStatsTuple(Long inputTokens, Long outputTokens, Long totalTokens) {}
 
-    record TokenHistoryTuple(String logDate, Long inputTokens, Long outputTokens, Long totalTokens) {}
+    record TokenHistoryTuple(java.time.LocalDate logDate, Long inputTokens, Long outputTokens, Long totalTokens) {}
 
-    @Query("SELECT COALESCE(SUM(input_tokens), 0) as input_tokens, " +
-           "COALESCE(SUM(output_tokens), 0) as output_tokens, " +
-           "COALESCE(SUM(total_tokens), 0) as total_tokens " +
+    @Query("SELECT CAST(COALESCE(SUM(input_tokens), 0) AS BIGINT) as input_tokens, " +
+           "CAST(COALESCE(SUM(output_tokens), 0) AS BIGINT) as output_tokens, " +
+           "CAST(COALESCE(SUM(total_tokens), 0) AS BIGINT) as total_tokens " +
            "FROM ai_token_logs WHERE created_at >= :start")
     Mono<TokenStatsTuple> getStatsSince(LocalDateTime start);
 
     @Query("SELECT CAST(created_at AS DATE) as log_date, " +
-           "COALESCE(SUM(input_tokens), 0) as input_tokens, " +
-           "COALESCE(SUM(output_tokens), 0) as output_tokens, " +
-           "COALESCE(SUM(total_tokens), 0) as total_tokens " +
+           "CAST(COALESCE(SUM(input_tokens), 0) AS BIGINT) as input_tokens, " +
+           "CAST(COALESCE(SUM(output_tokens), 0) AS BIGINT) as output_tokens, " +
+           "CAST(COALESCE(SUM(total_tokens), 0) AS BIGINT) as total_tokens " +
            "FROM ai_token_logs WHERE created_at >= :start " +
            "GROUP BY CAST(created_at AS DATE) " +
            "ORDER BY log_date ASC")
