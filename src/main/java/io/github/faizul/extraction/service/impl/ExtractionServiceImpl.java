@@ -152,7 +152,7 @@ public class ExtractionServiceImpl implements ExtractionService {
                                                     })
                                     );
                                 })
-                        ))
+                        )
                 ));
     }
 
