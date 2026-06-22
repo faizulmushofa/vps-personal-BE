@@ -29,4 +29,8 @@ public interface AiTokenLogRepository extends ReactiveCrudRepository<AiTokenLog,
            "GROUP BY CAST(created_at AS DATE) " +
            "ORDER BY log_date ASC")
     Flux<TokenHistoryTuple> getHistorySince(LocalDateTime start);
+
+    @Query("SELECT CAST(COALESCE(SUM(total_tokens), 0) AS BIGINT) " +
+           "FROM ai_token_logs WHERE user_id = :userId AND created_at >= :start")
+    Mono<Long> getSumTotalTokensByUserIdSince(Long userId, LocalDateTime start);
 }

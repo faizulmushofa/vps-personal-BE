@@ -64,9 +64,22 @@ public class AiQuotaAndLogService {
                                         "Batas penggunaan harian AI Anda (" + limit + " request) telah tercapai. Silakan coba lagi besok."));
                             }
 
-                            user.setDailyAiRequests(user.getDailyAiRequests() + 1);
-                            return userRepository.save(user)
-                                    .doOnSuccess(saved -> log.info("Berhasil menginkremen kuota AI user {}: {}/{}", userId, saved.getDailyAiRequests(), limit));
+                            int maxMonthlyTokens = user.getSubscriptionPlan().getLimits().maxMonthlyTokens();
+                            java.time.LocalDateTime monthStart = java.time.LocalDateTime.of(LocalDate.now().withDayOfMonth(1), java.time.LocalTime.MIN);
+
+                            return aiTokenLogRepository.getSumTotalTokensByUserIdSince(userId, monthStart)
+                                    .defaultIfEmpty(0L)
+                                    .flatMap(usedTokens -> {
+                                        if (maxMonthlyTokens != -1 && usedTokens >= maxMonthlyTokens) {
+                                            log.warn("User {} telah mencapai batas token AI bulanan ({}/{})", userId, usedTokens, maxMonthlyTokens);
+                                            return Mono.error(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                                                    "Batas kuota token AI bulanan Anda (" + maxMonthlyTokens + " token) telah habis."));
+                                        }
+
+                                        user.setDailyAiRequests(user.getDailyAiRequests() + 1);
+                                        return userRepository.save(user)
+                                                .doOnSuccess(saved -> log.info("Berhasil menginkremen kuota AI user {}: {}/{}", userId, saved.getDailyAiRequests(), limit));
+                                    });
                         })
                 );
     }

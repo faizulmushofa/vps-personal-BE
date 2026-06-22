@@ -13,6 +13,7 @@ public enum SubscriptionPlanType {
         .privateShareLimit(30)              // Batas Share Privat Aktif: 30 email
         .maxWorkspaces(2)                   // Batas Maksimal Workspace: 2
         .maxInputTokensPerRequest(20000)    // Maksimal Token Input per Request: 20.000 (~80rb Karakter)
+        .maxMonthlyTokens(20000)            // Batas Token AI per Bulan: 20.000
         .build()),
     
     PREMIUM_INDIVIDUAL("Premium Individual", PlanLimits.builder()
@@ -25,6 +26,7 @@ public enum SubscriptionPlanType {
         .privateShareLimit(-1)              // Batas Share Privat Aktif: Tanpa Batas (-1)
         .maxWorkspaces(-1)                  // Batas Maksimal Workspace: Tanpa Batas (-1)
         .maxInputTokensPerRequest(150000)   // Maksimal Token Input per Request: 150.000 (~600rb Karakter)
+        .maxMonthlyTokens(150000)           // Batas Token AI per Bulan: 150.000
         .build()),
     
     PREMIUM_ACADEMIC("Premium Academic", PlanLimits.builder()
@@ -37,6 +39,7 @@ public enum SubscriptionPlanType {
         .privateShareLimit(100)             // Batas Share Privat Aktif: 100 email
         .maxWorkspaces(15)                  // Batas Maksimal Workspace: 15
         .maxInputTokensPerRequest(75000)    // Maksimal Token Input per Request: 75.000 (~300rb Karakter)
+        .maxMonthlyTokens(75000)            // Batas Token AI per Bulan: 75.000
         .build());
 
     private final String displayName;
