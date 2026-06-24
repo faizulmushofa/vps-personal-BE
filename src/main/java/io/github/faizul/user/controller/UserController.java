@@ -43,6 +43,13 @@ public class UserController {
                 .defaultIfEmpty(ResponseEntity.noContent().build());
     }
 
+    @DeleteMapping("/me/subscription-request")
+    public Mono<ResponseEntity<Void>> cancelMySubscriptionRequest() {
+        return currentUserContext.getUserId()
+                .flatMap(subscriptionRequestService::cancelPendingRequest)
+                .then(Mono.just(ResponseEntity.ok().<Void>build()));
+    }
+
     @GetMapping("/me")
     public Mono<ResponseEntity<UserDto>> getMyProfile() {
         return currentUserContext.getUserId()

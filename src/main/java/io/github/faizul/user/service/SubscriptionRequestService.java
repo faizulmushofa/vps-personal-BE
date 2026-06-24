@@ -8,6 +8,7 @@ import reactor.core.publisher.Mono;
 public interface SubscriptionRequestService {
     Mono<SubscriptionRequest> createRequest(Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange);
     Mono<SubscriptionRequest> getPendingRequest(Long userId);
+    Mono<Void> cancelPendingRequest(Long userId);
     Flux<SubscriptionRequest> getPendingRequests();
     Mono<UserDto> approveRequest(Long requestId, org.springframework.web.server.ServerWebExchange exchange);
     Mono<SubscriptionRequest> rejectRequest(Long requestId, org.springframework.web.server.ServerWebExchange exchange);
