@@ -112,6 +112,12 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
     }
 
     @Override
+    public Mono<Void> cancelPendingRequest(Long userId) {
+        return subscriptionRequestRepository.findFirstByUserIdAndStatusOrderByCreatedAtDesc(userId, "PENDING")
+                .flatMap(request -> subscriptionRequestRepository.delete(request));
+    }
+
+    @Override
     public Flux<SubscriptionRequest> getPendingRequests() {
         return subscriptionRequestRepository.findAllByStatus("PENDING");
     }
