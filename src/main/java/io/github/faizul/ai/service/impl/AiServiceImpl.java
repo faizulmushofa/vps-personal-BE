@@ -78,7 +78,7 @@ public class AiServiceImpl implements AiService {
                         return currentUserContext.getUserId()
                                 .flatMap(userId -> userActivityService.log(userId, "AI_REPROCESS_SUMMARY", "Memproses ulang ringkasan PDF ID: " + fileId + " karena status gagal sebelumnya", exchange))
                                 .onErrorResume(err -> Mono.empty())
-                                .then(Mono.empty());
+                                .then(Mono.<String>empty());
                     }
                     return currentUserContext.getUserId()
                             .flatMap(userId -> userActivityService.log(userId, "AI_SUMMARY_PDF", "Mengambil ringkasan PDF ID: " + fileId + " dari cache", exchange))
