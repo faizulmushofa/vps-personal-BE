@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   vps-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/faizulmushofa/vps-personal-be:latest
     container_name: vps-personal-backend
     ports:
       - "${PORT:-8090}:8090"
