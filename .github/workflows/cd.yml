@@ -1,8 +1,7 @@
 name: Continuous Deployment (CD) with Tailscale & GHCR
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - main
       - dev
@@ -13,8 +12,6 @@ permissions:
 
 jobs:
   deploy:
-    # Hanya jalankan jika pull request berhasil di-merge (bukan di-close tanpa merge)
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
