@@ -64,6 +64,16 @@ jobs:
       with:
         authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
+    - name: Copy docker-compose.yml to VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: debian.tail8c6155.ts.net
+        username: horizon
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        source: "docker-compose.yml"
+        target: "/home/horizon/vps-personal-backend/"
+
     - name: Deploy to VPS via SSH over Tailscale
       uses: appleboy/ssh-action@v1.0.3
       with:
