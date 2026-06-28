@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   vps-backend:
-    image: ghcr.io/faizulmushofa/vps-personal-be:latest
+    image: ghcr.io/faizulmushofa/vps-personal-backend:latest
     container_name: vps-personal-backend
     ports:
       - "${PORT:-8090}:8090"
