@@ -44,3 +44,6 @@ src/main/resources/static/
 *.p12
 *.jks
 *.keystore
+
+### Logs ###
+*.log
