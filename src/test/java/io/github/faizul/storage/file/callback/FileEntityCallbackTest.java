@@ -45,7 +45,7 @@ class FileEntityCallbackTest {
         StepVerifier.create(Mono.from(fileEntityCallback.onBeforeSave(file, row, table)))
                 .assertNext(savedFile -> {
                     assertThat(savedFile.getOriginalFileName()).isEqualTo("encrypted-paper-123");
-                    Parameter param = row.get(SqlIdentifier.unquoted("original_file_name"));
+                    Parameter param = row.get(SqlIdentifier.quoted("original_file_name"));
                     assertThat(param).isNotNull();
                     assertThat(param.getValue()).isEqualTo("encrypted-paper-123");
                 })
@@ -67,7 +67,7 @@ class FileEntityCallbackTest {
         StepVerifier.create(Mono.from(fileEntityCallback.onBeforeSave(file, row, table)))
                 .assertNext(savedFile -> {
                     assertThat(savedFile.getOriginalFileName()).isEqualTo("local-file.txt");
-                    assertThat(row.get(SqlIdentifier.unquoted("original_file_name"))).isNull();
+                    assertThat(row.get(SqlIdentifier.quoted("original_file_name"))).isNull();
                 })
                 .verifyComplete();
     }

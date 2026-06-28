@@ -27,7 +27,7 @@ public class FileEntityCallback implements BeforeSaveCallback<File>, AfterConver
             // Mutate the entity so that the returned entity reflects the saved state if needed
             entity.setOriginalFileName(encryptedName);
             // Mutate the OutboundRow which is actually written to the database
-            row.put(SqlIdentifier.unquoted("original_file_name"), Parameter.from(encryptedName));
+            row.put(SqlIdentifier.quoted("original_file_name"), Parameter.from(encryptedName));
         }
         return Mono.just(entity);
     }
