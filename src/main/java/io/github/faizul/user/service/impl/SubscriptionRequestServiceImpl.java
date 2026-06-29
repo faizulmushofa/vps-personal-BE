@@ -74,7 +74,7 @@ public class SubscriptionRequestServiceImpl implements SubscriptionRequestServic
 
     private Mono<SubscriptionRequest> proceedWithSubscriptionRequest(User user, String upperTier, Long userId, String tier, org.springframework.web.server.ServerWebExchange exchange) {
         String email = user.getEmail();
-        long amount = upperTier.equals("PREMIUM_INDIVIDUAL") ? 20000L : 15000L;
+        long amount = upperTier.equals("PREMIUM_INDIVIDUAL") ? 15000L : 10000L;
         String externalId = "SUB-REQ-" + userId + "-" + System.currentTimeMillis();
         String description = "Horizon Cloud Upgrade: Paket Langganan " + (upperTier.equals("PREMIUM_INDIVIDUAL") ? "Premium Individual" : "Premium Academic");
 

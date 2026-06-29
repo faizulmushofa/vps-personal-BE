@@ -225,7 +225,7 @@ class SubscriptionRequestServiceTest {
 
         String orderId = "SUB-REQ-1L-123";
         String statusCode = "200";
-        String grossAmount = "20000.00";
+        String grossAmount = "15000.00";
         String serverKey = "dummy-server-key";
 
         String signature = hashSha512(orderId + statusCode + grossAmount + serverKey);
@@ -271,7 +271,7 @@ class SubscriptionRequestServiceTest {
         java.util.Map<String, Object> payload = java.util.Map.of(
             "order_id", "SUB-REQ-1L-123",
             "status_code", "200",
-            "gross_amount", "20000.00",
+            "gross_amount", "15000.00",
             "signature_key", "invalid-signature"
         );
 
