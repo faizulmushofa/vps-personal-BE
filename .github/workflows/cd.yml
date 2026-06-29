@@ -1,16 +1,22 @@
-name: Continuous Deployment (CD) with Tailscale & GHCR
+name: CI/CD Pipeline - Tailscale & GHCR
 
 on:
   push:
     branches:
       - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  deploy:
+  ci:
+    name: Continuous Integration (Build & Push)
     runs-on: ubuntu-latest
 
     steps:
@@ -55,6 +61,17 @@ jobs:
           ghcr.io/faizulmushofa/vps-personal-be:latest
           ghcr.io/faizulmushofa/vps-personal-be:${{ github.sha }}
 
+  cd:
+    name: Continuous Deployment (VPS Deploy)
+    runs-on: ubuntu-latest
+    needs: ci
+    # Hanya jalankan deploy jika push/merge terjadi langsung di branch main
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
     - name: Connect to Tailscale Network
       uses: tailscale/github-action@v2
       with:
@@ -78,17 +95,28 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         script: |
-          # 1. Pindah ke direktori proyek backend di VPS
           cd /home/horizon/vps-personal-backend
-
-          # 2. Login ke GHCR di dalam VPS untuk mengunduh image privat
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-          # 3. Download image versi terbaru
           docker compose pull
-
-          # 4. Terapkan container baru secara background (restart)
           docker compose up -d
-
-          # 5. Logout dari GHCR demi keamanan di server
           docker logout ghcr.io
+
+    - name: Verify Deployment Health (Health Check)
+      run: |
+        echo "Menjalankan Health Check ke backend di port 8090..."
+        SUCCESS=false
+        for i in {1..12}; do
+          # Lakukan request ke VPS Host (IP Tailscale) di port 8090
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.VPS_HOST }}:8090/ || echo "000")
+          if [ "$STATUS" != "000" ]; then
+            echo "Health Check SUKSES! Backend merespon dengan HTTP status: $STATUS"
+            SUCCESS=true
+            break
+          fi
+          echo "Menunggu backend menyala... Percobaan $i/12 (Tidur 5 detik)"
+          sleep 5
+        done
+        if [ "$SUCCESS" = false ]; then
+          echo "Health Check GAGAL! Backend tidak merespon dalam waktu 60 detik."
+          exit 1
+        fi
