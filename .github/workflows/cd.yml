@@ -52,8 +52,8 @@ jobs:
         platforms: linux/amd64
         push: true
         tags: |
-          ghcr.io/${{ env.REPO_NAME }}:latest
-          ghcr.io/${{ env.REPO_NAME }}:${{ github.sha }}
+          ghcr.io/faizulmushofa/vps-personal-be:latest
+          ghcr.io/faizulmushofa/vps-personal-be:${{ github.sha }}
 
     - name: Connect to Tailscale Network
       uses: tailscale/github-action@v2
