@@ -1,36 +1,15 @@
-# Stage 1: Dependencies (cached)
-FROM eclipse-temurin:21-jdk-jammy AS dependency-cache
-
-WORKDIR /build
-
-COPY mvnw mvnw
-COPY mvnw.cmd mvnw.cmd
-COPY .mvn .mvn
-COPY pom.xml pom.xml
-
-RUN chmod +x ./mvnw && ./mvnw dependency:go-offline -B
-
-# Stage 2: Build
-FROM eclipse-temurin:21-jdk-jammy AS builder
-
-WORKDIR /build
-
-COPY --from=dependency-cache /build /build
-COPY src src
-
-# Single-threaded build with aggressive memory limit
-ENV MAVEN_OPTS="-Xmx512m"
-RUN ./mvnw clean package -Dmaven.test.skip=true -B -T 1C
-
-# Stage 3: Runtime (ultra-minimal for 1GB VPS)
+# Dockerfile optimized for GHA pre-built JAR and 1GB VPS
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Install curl for health checking or utility purposes
 RUN apk add --no-cache curl
 
-COPY --from=builder /build/target/*.jar app.jar
+# Copy the pre-compiled JAR file built by the GitHub Actions runner
+COPY target/*.jar app.jar
 
+# Run as unprivileged user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup -s /sbin/nologin && \
     mkdir -p /app/Data && \
     chown -R appuser:appgroup /app
