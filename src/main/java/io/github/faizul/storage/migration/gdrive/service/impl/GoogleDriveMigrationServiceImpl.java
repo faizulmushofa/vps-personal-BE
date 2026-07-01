@@ -314,6 +314,63 @@ public class GoogleDriveMigrationServiceImpl implements GoogleDriveMigrationServ
         Path tempDir = storageConfig.tempDir(userId, fileId);
 
         String targetFolder = task.getTargetFolderId();
+        if (fileSize == 0) {
+            Path tempEmptyFile = tempDir.resolve("empty-file");
+            return Mono.fromCallable(() -> {
+                Files.createDirectories(tempEmptyFile.getParent());
+                if (!Files.exists(tempEmptyFile)) {
+                    Files.createFile(tempEmptyFile);
+                }
+                return tempEmptyFile;
+            })
+            .flatMap(path -> googleDriveClient.uploadFile(targetAccountId, path, fileName, detectMimeType(fileName), targetFolder)
+                    .doFinally(signalType -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            log.warn("Failed to delete temp empty file", e);
+                        }
+                    })
+            )
+            .flatMap(googleFileId -> {
+                if (googleFileId == null || googleFileId.isEmpty()) {
+                    return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
+                }
+
+                Mono<Void> cleanupSource = Mono.empty();
+                if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                    cleanupSource = uploadStorageService.deleteFile(userId, fileId.toString())
+                            .onErrorResume(err -> {
+                                log.warn("Failed to delete physical file from Storage Node", err);
+                                return Mono.empty();
+                            });
+                }
+
+                return cleanupSource.then(Mono.defer(() -> {
+                    if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                        file.setProvider("GOOGLE_DRIVE");
+                        file.setStorageName(googleFileId);
+                        file.setExternalAccountId(targetAccountId);
+                        file.setFolderId(null);
+                        return fileRepository.save(file);
+                    } else {
+                         File copyFile = File.builder()
+                                 .id(UUID.randomUUID())
+                                 .userId(userId)
+                                 .originalFileName(fileName)
+                                 .storageName(googleFileId)
+                                 .size(fileSize)
+                                 .provider("GOOGLE_DRIVE")
+                                 .externalAccountId(targetAccountId)
+                                 .build();
+                        return fileRepository.save(copyFile);
+                    }
+                }));
+            })
+            .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null))
+            .then();
+        }
+
         return googleDriveClient.initiateResumableUpload(
                 targetAccountId,
                 fileName,
@@ -407,6 +464,61 @@ public class GoogleDriveMigrationServiceImpl implements GoogleDriveMigrationServ
         Path tempDir = storageConfig.tempDir(userId, fileId);
 
         String targetFolder = task.getTargetFolderId();
+        if (fileSize == 0) {
+            Path tempEmptyFile = tempDir.resolve("empty-file");
+            return Mono.fromCallable(() -> {
+                Files.createDirectories(tempEmptyFile.getParent());
+                if (!Files.exists(tempEmptyFile)) {
+                    Files.createFile(tempEmptyFile);
+                }
+                return tempEmptyFile;
+            })
+            .flatMap(path -> googleDriveClient.uploadFile(destAccountId, path, fileName, detectMimeType(fileName), targetFolder)
+                    .doFinally(signalType -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            log.warn("Failed to delete temp empty file", e);
+                        }
+                    })
+            )
+            .flatMap(newGoogleFileId -> {
+                if (newGoogleFileId == null || newGoogleFileId.isEmpty()) {
+                    return Mono.error(new IllegalStateException("Failed to retrieve uploaded Google File ID."));
+                }
+
+                Mono<Void> deleteSource = Mono.empty();
+                if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                    deleteSource = googleDriveClient.deleteFile(srcAccountId, googleFileId)
+                            .onErrorResume(err -> {
+                                log.warn("Failed to delete source file from GDrive A", err);
+                                return Mono.empty();
+                            });
+                }
+
+                return deleteSource.then(Mono.defer(() -> {
+                    if (Boolean.TRUE.equals(task.getDeleteSource())) {
+                        file.setStorageName(newGoogleFileId);
+                        file.setExternalAccountId(destAccountId);
+                        return fileRepository.save(file);
+                    } else {
+                        File copyFile = File.builder()
+                                 .id(UUID.randomUUID())
+                                 .userId(userId)
+                                 .originalFileName(fileName)
+                                 .storageName(newGoogleFileId)
+                                 .size(fileSize)
+                                 .provider("GOOGLE_DRIVE")
+                                 .externalAccountId(destAccountId)
+                                 .build();
+                        return fileRepository.save(copyFile);
+                    }
+                }));
+            })
+            .then(migrationService.updateTaskStatus(task.getId(), MigrationStatus.SUCCESS, 100.0, null))
+            .then();
+        }
+
         return googleDriveClient.initiateResumableUpload(
                 destAccountId,
                 fileName,

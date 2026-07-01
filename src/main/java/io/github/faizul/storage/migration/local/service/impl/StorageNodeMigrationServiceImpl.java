@@ -297,36 +297,44 @@ public class StorageNodeMigrationServiceImpl implements StorageNodeMigrationServ
 
         Path tempDir = storageConfig.tempDir(userId, targetFileId);
 
-        return Flux.range(0, totalChunks)
-                .concatMap(i -> {
-                    return migrationTaskRepository.findById(task.getId())
-                            .flatMap(currentTask -> {
-                                if (currentTask.getStatus() == MigrationStatus.FAILED) {
-                                    return Mono.error(new IllegalStateException("Migrasi dibatalkan oleh pengguna."));
-                                }
-                                long start = i * chunkSize;
-                                long end = Math.min(fileSize - 1, start + chunkSize - 1);
-                                Path tempFile = tempDir.resolve("chunk-" + i);
+        Mono<Void> uploadMono;
+        if (totalChunks == 0) {
+            uploadMono = Mono.empty();
+        } else {
+            uploadMono = Flux.range(0, totalChunks)
+                    .concatMap(i -> {
+                        return migrationTaskRepository.findById(task.getId())
+                                .flatMap(currentTask -> {
+                                    if (currentTask.getStatus() == MigrationStatus.FAILED) {
+                                        return Mono.error(new IllegalStateException("Migrasi dibatalkan oleh pengguna."));
+                                    }
+                                    long start = i * chunkSize;
+                                    long end = Math.min(fileSize - 1, start + chunkSize - 1);
+                                    Path tempFile = tempDir.resolve("chunk-" + i);
 
-                                Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(srcAccountId, googleFileId, start, end);
+                                    Flux<byte[]> dataRange = googleDriveClient.downloadFileRange(srcAccountId, googleFileId, start, end);
 
-                                return writeBytesToFile(dataRange, tempFile)
-                                        .then(Mono.defer(() -> uploadStorageService.sendBatch(userId, targetFileId, i, i)))
-                                        .then(Mono.fromCallable(() -> {
-                                            try {
-                                                Files.deleteIfExists(tempFile);
-                                            } catch (IOException e) {
-                                                log.warn("Failed to delete temp chunk {}", tempFile, e);
-                                            }
-                                            return true;
-                                        }))
-                                        .flatMap(ignored -> {
-                                            double progress = ((double) (i + 1) / totalChunks) * 100.0;
-                                            return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0));
-                                        });
-                            });
-                })
-                .last()
+                                    return writeBytesToFile(dataRange, tempFile)
+                                            .then(Mono.defer(() -> uploadStorageService.sendBatch(userId, targetFileId, i, i)))
+                                            .then(Mono.fromCallable(() -> {
+                                                try {
+                                                    Files.deleteIfExists(tempFile);
+                                                } catch (IOException e) {
+                                                    log.warn("Failed to delete temp chunk {}", tempFile, e);
+                                                }
+                                                return true;
+                                            }))
+                                            .flatMap(ignored -> {
+                                                double progress = ((double) (i + 1) / totalChunks) * 100.0;
+                                                return migrationService.updateTaskProgress(task.getId(), Math.min(progress, 99.0));
+                                            });
+                                });
+                    })
+                    .last()
+                    .then();
+        }
+
+        return uploadMono
                 .then(Mono.defer(() -> uploadStorageService.sendFinalSignal(userId, targetFileId, totalChunks)))
                 .then(Mono.defer(() -> {
                     Mono<Void> deleteSourceMono = Mono.empty();
