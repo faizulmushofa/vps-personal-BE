@@ -86,7 +86,8 @@ public class UploadCoordinatorServiceImpl implements UploadCoordinator {
                                                             return Mono.empty();
                                                         });
                                             }
-                                            return Mono.empty();
+                                            return uploadUnitService.getReceivedUnit(fileId)
+                                                    .flatMap(received -> uploadService.updateUploadProgress(fileId, received));
                                         });
                             });
                 }));

@@ -34,6 +34,7 @@ import io.github.faizul.storage.file.model.File;
 public class GoogleDriveDownloadServiceImpl implements GoogleDriveDownloadService {
 
     private static final java.util.Set<UUID> canceledSessions = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final java.util.Map<UUID, java.util.concurrent.atomic.AtomicLong> downloadProgressMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;
@@ -122,6 +123,7 @@ public class GoogleDriveDownloadServiceImpl implements GoogleDriveDownloadServic
                         .flatMapMany(file -> getValidSession(fileId, userId)
                                 .flatMap(this::updateSessionToStreaming)
                                 .flatMapMany(savedSession -> {
+                                    downloadProgressMap.put(savedSession.getId(), new java.util.concurrent.atomic.AtomicLong(0L));
                                     Flux<byte[]> dataStream = googleDriveClient.downloadFile(file.getExternalAccountId(), file.getStorageName());
                                     return processDataStream(dataStream, savedSession.getId());
                                 })
@@ -136,6 +138,12 @@ public class GoogleDriveDownloadServiceImpl implements GoogleDriveDownloadServic
 
     private Flux<byte[]> processDataStream(Flux<byte[]> dataStream, UUID sessionId) {
         return dataStream
+                .doOnNext(chunk -> {
+                    var progress = downloadProgressMap.get(sessionId);
+                    if (progress != null) {
+                        progress.addAndGet(chunk.length);
+                    }
+                })
                 .map(chunk -> {
                     if (canceledSessions.contains(sessionId)) {
                         throw new IllegalArgumentException("Download canceled by user");
@@ -144,7 +152,17 @@ public class GoogleDriveDownloadServiceImpl implements GoogleDriveDownloadServic
                 })
                 .doOnComplete(() -> finalizeSessionStatus(sessionId, FileStatus.COMPLETED, false))
                 .doOnError(err -> finalizeSessionStatus(sessionId, FileStatus.FAILED, true))
-                .doFinally(signalType -> canceledSessions.remove(sessionId));
+                .doFinally(signalType -> {
+                    canceledSessions.remove(sessionId);
+                    var progress = downloadProgressMap.remove(sessionId);
+                    if (progress != null) {
+                        downloadSessionRepository.findById(sessionId)
+                                .flatMap(s -> {
+                                    s.setBytesSent(progress.get());
+                                    return downloadSessionRepository.save(s);
+                                }).subscribe();
+                    }
+                });
     }
 
     private void finalizeSessionStatus(UUID sessionId, FileStatus targetStatus, boolean isError) {
@@ -180,16 +198,22 @@ public class GoogleDriveDownloadServiceImpl implements GoogleDriveDownloadServic
         return currentUserContext.getUserId()
                 .flatMap(userId -> getValidSession(fileId, userId))
                 .map(session -> {
+                    long bytesSent = session.getBytesSent();
+                    var activeProgress = downloadProgressMap.get(session.getId());
+                    if (activeProgress != null) {
+                        bytesSent = activeProgress.get();
+                    }
+                    
                     Double progress = 0.0;
                     if (session.getTotalBytes() > 0) {
-                        progress = (double) session.getBytesSent() / session.getTotalBytes();
+                        progress = (double) bytesSent / session.getTotalBytes();
                     }
                     return new DownloadStatusResponse(
                             session.getId(),
                             session.getFileId(),
                             session.getStatus(),
                             session.getTotalBytes(),
-                            session.getBytesSent(),
+                            bytesSent,
                             progress
                     );
                 });

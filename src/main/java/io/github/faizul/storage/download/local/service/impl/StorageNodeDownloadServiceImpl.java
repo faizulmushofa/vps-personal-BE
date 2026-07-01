@@ -31,6 +31,7 @@ import java.util.UUID;
 public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadService {
 
     private static final java.util.Set<UUID> canceledSessions = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final java.util.Map<UUID, java.util.concurrent.atomic.AtomicLong> downloadProgressMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final FileRepository fileRepository;
     private final FileSharedRepository fileSharedRepository;
@@ -54,7 +55,7 @@ public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadServic
                                 if (!hasAccess) {
                                     return Mono.error(new AccessDeniedException("Anda tidak memiliki akses untuk mengunduh berkas ini"));
                                 }
-
+ 
                                 UUID sessionId = UUID.randomUUID();
                                 DownloadSession session = DownloadSession.builder()
                                         .id(sessionId)
@@ -65,7 +66,7 @@ public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadServic
                                         .bytesSent(0L)
                                         .startedAt(Instant.now())
                                         .build();
-
+ 
                                 return downloadSessionRepository.save(session)
                                         .map(savedSession -> new DownloadInitResponse(
                                                 savedSession.getId(),
@@ -121,10 +122,18 @@ public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadServic
                                     return downloadSessionRepository.save(session);
                                 })
                                 .flatMapMany(savedSession -> {
+                                    downloadProgressMap.put(savedSession.getId(), new java.util.concurrent.atomic.AtomicLong(0L));
+                                    
                                     Flux<byte[]> dataStream = downloadStorageService.downloadFile(file.getUserId(), fileId)
                                             .map(chunk -> chunk.data());
 
                                     return dataStream
+                                            .doOnNext(chunk -> {
+                                                var progress = downloadProgressMap.get(savedSession.getId());
+                                                if (progress != null) {
+                                                    progress.addAndGet(chunk.length);
+                                                }
+                                            })
                                             .map(chunk -> {
                                                 if (canceledSessions.contains(savedSession.getId())) {
                                                     throw new IllegalArgumentException("Download canceled by user");
@@ -148,7 +157,17 @@ public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadServic
                                                         return downloadSessionRepository.save(s);
                                                     }).subscribe()
                                             )
-                                            .doFinally(signalType -> canceledSessions.remove(savedSession.getId()));
+                                            .doFinally(signalType -> {
+                                                canceledSessions.remove(savedSession.getId());
+                                                var progress = downloadProgressMap.remove(savedSession.getId());
+                                                if (progress != null) {
+                                                    downloadSessionRepository.findById(savedSession.getId())
+                                                            .flatMap(s -> {
+                                                                s.setBytesSent(progress.get());
+                                                                return downloadSessionRepository.save(s);
+                                                            }).subscribe();
+                                                }
+                                            });
                                 })
                         )
                 );
@@ -174,16 +193,22 @@ public class StorageNodeDownloadServiceImpl implements StorageNodeDownloadServic
         return currentUserContext.getUserId()
                 .flatMap(userId -> getValidSession(fileId, userId))
                 .map(session -> {
+                    long bytesSent = session.getBytesSent();
+                    var activeProgress = downloadProgressMap.get(session.getId());
+                    if (activeProgress != null) {
+                        bytesSent = activeProgress.get();
+                    }
+                    
                     Double progress = 0.0;
                     if (session.getTotalBytes() > 0) {
-                        progress = (double) session.getBytesSent() / session.getTotalBytes();
+                        progress = (double) bytesSent / session.getTotalBytes();
                     }
                     return new DownloadStatusResponse(
                             session.getId(),
                             session.getFileId(),
                             session.getStatus(),
                             session.getTotalBytes(),
-                            session.getBytesSent(),
+                            bytesSent,
                             progress
                     );
                 });
