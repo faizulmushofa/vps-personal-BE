@@ -1,6 +1,11 @@
 spring:
   application:
     name: vps-personal-backend
+  codec:
+    max-in-memory-size: 100MB
+  webflux:
+    multipart:
+      max-in-memory-size: 100MB
   r2dbc:
     url: ${DATABASE_URL}
   sql:
