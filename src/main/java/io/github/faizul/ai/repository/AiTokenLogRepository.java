@@ -33,4 +33,9 @@ public interface AiTokenLogRepository extends ReactiveCrudRepository<AiTokenLog,
     @Query("SELECT CAST(COALESCE(SUM(total_tokens), 0) AS BIGINT) " +
            "FROM ai_token_logs WHERE user_id = :userId AND created_at >= :start")
     Mono<Long> getSumTotalTokensByUserIdSince(Long userId, LocalDateTime start);
+
+    @Query("SELECT atl.*, u.username, u.email FROM ai_token_logs atl " +
+           "LEFT JOIN users u ON atl.user_id = u.id " +
+           "ORDER BY atl.created_at DESC")
+    Flux<io.github.faizul.admin.dtos.AiTokenLogResponse> findAllWithUserDetails();
 }

@@ -54,6 +54,38 @@ public class UserActivityServiceImpl implements UserActivityService {
     }
 
     @Override
+    public Flux<UserActivityResponse> getAllActivitiesWithUserDetails() {
+        return userActivityRepository.findAllWithUserDetails();
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    @Override
+    public Flux<String> exportActivitiesCsv() {
+        String header = "ID,User ID,Username,Email,Activity Type,Description,IP Address,Created At\n";
+        Flux<String> rows = getAllActivitiesWithUserDetails()
+                .map(a -> String.format("%d,%s,%s,%s,%s,%s,%s,%s\n",
+                        a.id(),
+                        a.userId() != null ? a.userId().toString() : "",
+                        escapeCsv(a.username()),
+                        escapeCsv(a.email()),
+                        escapeCsv(a.activityType()),
+                        escapeCsv(a.description()),
+                        escapeCsv(a.ipAddress()),
+                        a.createdAt() != null ? a.createdAt().toString() : ""
+                ));
+        return Flux.concat(Flux.just(header), rows);
+    }
+
+    @Override
     public Mono<Long> countActivities() {
         return userActivityRepository.count();
     }

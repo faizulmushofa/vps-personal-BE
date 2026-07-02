@@ -6,6 +6,7 @@ import io.github.faizul.user.model.User;
 import io.github.faizul.admin.dtos.AdminUserResponse;
 import io.github.faizul.admin.dtos.AiTokenStats;
 import io.github.faizul.admin.dtos.TokenHistoryEntry;
+import io.github.faizul.admin.dtos.AiTokenLogResponse;
 import io.github.faizul.security.role.repository.RoleRepository;
 import io.github.faizul.security.userrole.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -161,5 +162,60 @@ public class AdminService {
                             new java.util.ArrayList<>(mergedMap.values())
                     );
                 });
+    }
+
+    public Flux<AiTokenLogResponse> getAllAiTokenLogs() {
+        return aiTokenLogRepository.findAllWithUserDetails();
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    public Flux<String> exportUsersCsv() {
+        String header = "ID,Username,Email,Full Name,Storage Quota (Bytes),Used Storage (Bytes),Is Active,AI Daily Limit,Daily AI Requests,Roles,Migration Daily Limit,Migration Max File Size (Bytes),Subscription Tier,Subscription Expires At\n";
+        Flux<String> rows = getAllUsers()
+                .map(u -> String.format("%d,%s,%s,%s,%d,%d,%b,%d,%d,%s,%d,%d,%s,%s\n",
+                        u.id(),
+                        escapeCsv(u.username()),
+                        escapeCsv(u.email()),
+                        escapeCsv(u.fullName()),
+                        u.storageQuota() != null ? u.storageQuota() : 1073741824L,
+                        u.usedStorage() != null ? u.usedStorage() : 0L,
+                        u.isActive() != null ? u.isActive() : true,
+                        u.aiDailyLimit() != null ? u.aiDailyLimit() : 5,
+                        u.dailyAiRequests() != null ? u.dailyAiRequests() : 0,
+                        escapeCsv(u.roles() != null ? String.join("|", u.roles()) : "USER"),
+                        u.migrationDailyLimit() != null ? u.migrationDailyLimit() : 3,
+                        u.migrationMaxFileSize() != null ? u.migrationMaxFileSize() : 268435456L,
+                        escapeCsv(u.subscriptionTier() != null ? u.subscriptionTier() : "FREEMIUM"),
+                        u.subscriptionExpiresAt() != null ? u.subscriptionExpiresAt().toString() : ""
+                ));
+        return Flux.concat(Flux.just(header), rows);
+    }
+
+    public Flux<String> exportAiTokenLogsCsv() {
+        String header = "ID,User ID,Username,Email,Activity Type,Provider,Model Name,Input Tokens,Output Tokens,Total Tokens,Created At\n";
+        Flux<String> rows = getAllAiTokenLogs()
+                .map(l -> String.format("%d,%s,%s,%s,%s,%s,%s,%d,%d,%d,%s\n",
+                        l.id(),
+                        l.userId() != null ? l.userId().toString() : "",
+                        escapeCsv(l.username()),
+                        escapeCsv(l.email()),
+                        escapeCsv(l.activityType()),
+                        escapeCsv(l.provider()),
+                        escapeCsv(l.modelName()),
+                        l.inputTokens() != null ? l.inputTokens() : 0,
+                        l.outputTokens() != null ? l.outputTokens() : 0,
+                        l.totalTokens() != null ? l.totalTokens() : 0,
+                        l.createdAt() != null ? l.createdAt().toString() : ""
+                ));
+        return Flux.concat(Flux.just(header), rows);
     }
 }

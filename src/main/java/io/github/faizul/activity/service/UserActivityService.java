@@ -11,5 +11,7 @@ public interface UserActivityService {
     Mono<UserActivity> log(Long userId, String type, String description, ServerWebExchange exchange);
     Flux<UserActivity> getAllActivities(Pageable pageable);
     Flux<UserActivityResponse> getAllActivitiesWithUserDetails(Pageable pageable);
+    Flux<UserActivityResponse> getAllActivitiesWithUserDetails();
+    Flux<String> exportActivitiesCsv();
     Mono<Long> countActivities();
 }

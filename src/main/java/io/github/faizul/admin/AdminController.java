@@ -141,6 +141,27 @@ public class AdminController {
                 );
     }
 
+    @GetMapping(value = "/users/export", produces = "text/csv")
+    public org.springframework.http.ResponseEntity<Flux<String>> exportUsers() {
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=users_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
+                .body(adminService.exportUsersCsv());
+    }
+
+    @GetMapping(value = "/activities/export", produces = "text/csv")
+    public org.springframework.http.ResponseEntity<Flux<String>> exportActivities() {
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=activities_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
+                .body(userActivityService.exportActivitiesCsv());
+    }
+
+    @GetMapping(value = "/ai/token-logs/export", produces = "text/csv")
+    public org.springframework.http.ResponseEntity<Flux<String>> exportAiTokenLogs() {
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ai_token_logs_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
+                .body(adminService.exportAiTokenLogsCsv());
+    }
+
     // Inner request records
     public record ToggleStatusRequest(@NotNull(message = "Status aktif wajib diisi") Boolean isActive) {}
     public record UpdateAiLimitRequest(@NotNull(message = "AI limit wajib diisi") Integer aiLimit) {}

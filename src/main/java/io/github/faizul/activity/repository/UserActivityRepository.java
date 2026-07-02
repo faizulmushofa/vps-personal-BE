@@ -17,5 +17,10 @@ public interface UserActivityRepository extends ReactiveCrudRepository<UserActiv
            "LEFT JOIN users u ON ua.user_id = u.id " +
            "ORDER BY ua.created_at DESC LIMIT :#{#pageable.pageSize} OFFSET :#{#pageable.offset}")
     Flux<UserActivityResponse> findAllWithUserDetails(Pageable pageable);
+
+    @Query("SELECT ua.*, u.username, u.email FROM user_activities ua " +
+           "LEFT JOIN users u ON ua.user_id = u.id " +
+           "ORDER BY ua.created_at DESC")
+    Flux<UserActivityResponse> findAllWithUserDetails();
 }
 
