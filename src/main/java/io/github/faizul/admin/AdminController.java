@@ -142,24 +142,24 @@ public class AdminController {
     }
 
     @GetMapping(value = "/users/export", produces = "text/csv")
-    public org.springframework.http.ResponseEntity<Flux<String>> exportUsers() {
-        return org.springframework.http.ResponseEntity.ok()
+    public Mono<org.springframework.http.ResponseEntity<Flux<String>>> exportUsers() {
+        return Mono.just(org.springframework.http.ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=users_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
-                .body(adminService.exportUsersCsv());
+                .body(adminService.exportUsersCsv()));
     }
 
     @GetMapping(value = "/activities/export", produces = "text/csv")
-    public org.springframework.http.ResponseEntity<Flux<String>> exportActivities() {
-        return org.springframework.http.ResponseEntity.ok()
+    public Mono<org.springframework.http.ResponseEntity<Flux<String>>> exportActivities() {
+        return Mono.just(org.springframework.http.ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=activities_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
-                .body(userActivityService.exportActivitiesCsv());
+                .body(userActivityService.exportActivitiesCsv()));
     }
 
     @GetMapping(value = "/ai/token-logs/export", produces = "text/csv")
-    public org.springframework.http.ResponseEntity<Flux<String>> exportAiTokenLogs() {
-        return org.springframework.http.ResponseEntity.ok()
+    public Mono<org.springframework.http.ResponseEntity<Flux<String>>> exportAiTokenLogs() {
+        return Mono.just(org.springframework.http.ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ai_token_logs_export_" + java.time.Instant.now().getEpochSecond() + ".csv")
-                .body(adminService.exportAiTokenLogsCsv());
+                .body(adminService.exportAiTokenLogsCsv()));
     }
 
     // Inner request records
