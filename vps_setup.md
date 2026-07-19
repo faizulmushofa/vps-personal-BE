@@ -1,6 +1,6 @@
 # Panduan Bootstrap & Setup Awal VPS Horizon (Debian)
 
-Panduan ini berisi langkah-langkah untuk menyiapkan VPS baru Anda (`horizon` / `debian.tail8c6155.ts.net`) dari kondisi kosong (fresh install Debian) hingga siap menerima deployment otomatis dari GitHub Actions CD.
+Panduan ini berisi langkah-langkah untuk menyiapkan VPS baru Anda (`horizon` / `your-vps-ip-or-domain`) dari kondisi kosong (fresh install Debian) hingga siap menerima deployment otomatis dari GitHub Actions CD.
 
 ---
 
@@ -59,7 +59,7 @@ Kita perlu mengizinkan GitHub Actions masuk ke VPS tanpa password menggunakan SS
     ```
 2.  **Salin Public Key baru tersebut ke VPS:**
     ```bash
-    ssh-copy-id -i ~/.ssh/vps_horizon_deploy.pub horizon@debian.tail8c6155.ts.net
+    ssh-copy-id -i ~/.ssh/vps_horizon_deploy.pub horizon@your-vps-ip-or-domain
     ```
     *(Masukkan password user `horizon` sekali untuk menyalin).*
 3.  **Dapatkan Kunci Privat untuk GitHub Secrets:**
